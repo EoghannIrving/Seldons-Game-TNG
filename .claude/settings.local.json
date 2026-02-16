@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm create:*)",
+      "Bash(node --version:*)",
+      "Bash(npm:*)",
+      "Bash(export PATH=\"/c/Program Files/nodejs:$PATH\")",
+      "Bash(\"/c/Program Files/nodejs/node.exe\" --version)",
+      "Bash(cmd.exe /c \"node --version && npm --version\")",
+      "Bash(cmd.exe /c \"node --version\")",
+      "Bash(cmd /c \"npm run dev\")",
+      "Bash(where npm)",
+      "Bash(powershell -Command \"Get-Command npm -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source\")",
+      "Bash(where:*)",
+      "Bash(dir:*)",
+      "Bash(npx tsc:*)",
+      "Bash(ls:*)",
+      "Bash(npm.cmd run build)",
+      "Bash(npm.cmd run test:dynasty-family-tree)",
+      "Bash(npm.cmd run)",
+      "Bash(npm.cmd run test:detail-view-regression)",
+      "Bash(npm.cmd run test:encyclopedia-entry)",
+      "Bash(grep:*)"
+    ]
+  }
+}
