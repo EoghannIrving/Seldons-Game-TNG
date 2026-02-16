@@ -1,0 +1,166 @@
+/**
+ * Storage manager for saving/loading galaxy state
+ * Phase 0: LocalStorage implementation
+ */
+
+import { GalaxyState } from '../core/types';
+
+export interface SaveDataV1 {
+  version: string;
+  savedAt: string;
+  galaxyState: SerializedGalaxyState;
+}
+
+export interface SerializedGalaxyState {
+  config: {
+    seed: number;
+    starCount: number;
+    interactionFactor: number;
+  };
+  stars: Array<[string, any]>; // Serialized Map
+  phase: number;
+  zeitgeist: number;
+  activeCrises: any[];
+  regions?: any[]; // Phase 6
+  events?: any[];  // Phase 7
+  demographics?: any[]; // Phase 8
+  // Phase 9/7A: Dynasty family tree backbone
+  dynasties?: Array<[string, any]>;
+  dynasts?: Array<[string, any]>;
+  dynasticRelationships?: any[];
+  dynastySuccessionRecords?: any[];
+}
+
+/**
+ * Convert GalaxyState to serializable format.
+ * Shared by v1 storage manager and v2 repository.
+ */
+export function serializeGalaxyState(state: GalaxyState): SerializedGalaxyState {
+  return {
+    config: state.config,
+    stars: Array.from(state.stars.entries()),
+    phase: state.phase,
+    zeitgeist: state.zeitgeist || 0,
+    activeCrises: state.activeCrises || [],
+    regions: state.regions || [],
+    events: state.events || [],
+    demographics: state.demographics || [],
+    dynasties: Array.from(state.dynasties?.entries() || []),
+    dynasts: Array.from(state.dynasts?.entries() || []),
+    dynasticRelationships: state.dynasticRelationships || [],
+    dynastySuccessionRecords: state.dynastySuccessionRecords || [],
+  };
+}
+
+/**
+ * Convert serialized data back to GalaxyState format.
+ */
+export function deserializeSerializedGalaxyState(data: SerializedGalaxyState): GalaxyState {
+  // Cast config to GalaxyConfig since we're providing defaults
+  const config = {
+    ...data.config,
+    shape: (data.config as any).shape || 'spiral',
+    width: (data.config as any).width || 1000,
+    height: (data.config as any).height || 1000,
+  } as any;
+
+  return {
+    config,
+    stars: new Map(data.stars),
+    phase: data.phase,
+    zeitgeist: data.zeitgeist || 0,
+    activeCrises: data.activeCrises || [],
+    regions: data.regions || [],
+    events: data.events || [],
+    demographics: data.demographics || [],
+    dynasties: new Map(data.dynasties || []),
+    dynasts: new Map(data.dynasts || []),
+    dynasticRelationships: data.dynasticRelationships || [],
+    dynastySuccessionRecords: data.dynastySuccessionRecords || [],
+  };
+}
+
+export class StorageManager {
+  private readonly STORAGE_KEY = 'seldons-game-save';
+  private readonly VERSION = '0.7.0'; // Phase 8: Demographics
+
+  /**
+   * Save galaxy state to localStorage
+   */
+  save(galaxyState: GalaxyState): boolean {
+    try {
+      const saveData: SaveDataV1 = {
+        version: this.VERSION,
+        savedAt: new Date().toISOString(),
+        galaxyState: serializeGalaxyState(galaxyState),
+      };
+
+      const json = JSON.stringify(saveData);
+      localStorage.setItem(this.STORAGE_KEY, json);
+      console.log('✅ Game saved successfully');
+      return true;
+    } catch (error) {
+      console.error('❌ Failed to save:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Load galaxy state from localStorage
+   */
+  load(): SerializedGalaxyState | null {
+    try {
+      const saveData = this.loadSaveData();
+      if (!saveData) return null;
+
+      // Version compatibility check
+      if (saveData.version !== this.VERSION) {
+        console.warn('Save data version mismatch:', saveData.version, 'vs', this.VERSION);
+        // Could implement migration here
+      }
+
+      console.log('✅ Game loaded from', saveData.savedAt);
+      return saveData.galaxyState;
+    } catch (error) {
+      console.error('❌ Failed to load:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Load full v1 save envelope (metadata + state) from localStorage.
+   */
+  loadSaveData(): SaveDataV1 | null {
+    try {
+      const json = localStorage.getItem(this.STORAGE_KEY);
+      if (!json) {
+        console.log('No saved game found');
+        return null;
+      }
+
+      return JSON.parse(json) as SaveDataV1;
+    } catch (error) {
+      console.error('❌ Failed to parse save envelope:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Check if save exists
+   */
+  hasSave(): boolean {
+    return localStorage.getItem(this.STORAGE_KEY) !== null;
+  }
+
+  /**
+   * Delete saved game
+   */
+  deleteSave(): void {
+    localStorage.removeItem(this.STORAGE_KEY);
+    console.log('Save deleted');
+  }
+
+  deserializeGalaxyState(data: SerializedGalaxyState): GalaxyState {
+    return deserializeSerializedGalaxyState(data);
+  }
+}

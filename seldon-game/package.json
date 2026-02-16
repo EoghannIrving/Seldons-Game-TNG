@@ -1,0 +1,29 @@
+{
+  "name": "seldon-game",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "preview": "vite preview",
+    "test:encyclopedia-entry": "tsx tests/encyclopedia-entry-smoke.ts",
+    "test:detail-view-regression": "tsx tests/detail-view-regression-smoke.ts",
+    "test:narrative-detail": "tsx tests/narrative-detail-smoke.ts",
+    "test:narrative-campaign": "tsx tests/narrative-campaign-smoke.ts",
+    "test:determinism": "tsx tests/determinism-migration.ts",
+    "test:determinism:full": "set DETERMINISM_FULL=1&& tsx tests/determinism-migration.ts",
+    "test:perf": "tsx tests/performance-harness.ts",
+    "test:perf:gate": "set PERF_ENFORCE=1&& set PERF_STAR_COUNT=1000&& set PERF_PHASES=3000&& set PERF_ITERS=10&& tsx tests/performance-harness.ts"
+  },
+  "devDependencies": {
+    "terser": "^5.46.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.6.0",
+    "vite": "^5.4.0"
+  },
+  "dependencies": {
+    "three": "^0.169.0"
+  }
+}

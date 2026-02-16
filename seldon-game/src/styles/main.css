@@ -1,0 +1,368 @@
+:root {
+  /* Foundation Theme (Default) */
+  --bg-color: #000000;
+  --bg-gradient-start: #000000;
+  --bg-gradient-end: #0a0a2e;
+  --text-main: #00ffff;
+  --text-dim: #88bbdd;
+  --text-muted: #888888;
+  --accent: #00ffff;
+  --accent-dim: rgba(0, 255, 255, 0.5);
+  --border: #00ffff;
+  --panel-bg: rgba(0, 20, 40, 0.9);
+  --modal-bg: rgba(0, 0, 0, 0.85);
+  --modal-content-bg: linear-gradient(135deg, #001122 0%, #002244 100%);
+  --font-main: 'Courier New', monospace;
+  --shadow-color: rgba(0, 255, 255, 0.3);
+  --archive-tab-active-bg: #334455;
+  --archive-event-bg: rgba(255, 255, 255, 0.02);
+}
+
+body.theme-zx {
+  /* ZX Spectrum Theme */
+  --bg-color: #000000;
+  --bg-gradient-start: #000000;
+  --bg-gradient-end: #000000; /* No gradient */
+  --text-main: #FFFF00; /* Bright Yellow */
+  --text-dim: #00FFFF; /* Bright Cyan */
+  --text-muted: #D7D7D7; /* White */
+  --accent: #FFFF00; /* Yellow */
+  --accent-dim: #D7D700; /* Dim Yellow */
+  --border: #FFFF00;
+  --panel-bg: #000000; /* Solid black */
+  --modal-bg: rgba(0, 0, 0, 0.9);
+  --modal-content-bg: #000000;
+  --font-main: 'Courier New', monospace; /* Keep Courier, closest to system font */
+  --shadow-color: transparent; /* No soft shadows */
+  --archive-tab-active-bg: #303000;
+  --archive-event-bg: rgba(255, 255, 0, 0.08);
+}
+
+/* ZX Scanline Effect */
+body.theme-zx::after {
+  content: " ";
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(18, 16, 16, 0) 50%,
+    rgba(0, 0, 0, 0.25) 50%
+  );
+  background-size: 100% 4px;
+  z-index: 9999;
+  pointer-events: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg-color);
+  background: radial-gradient(circle at center, var(--bg-gradient-end) 0%, var(--bg-gradient-start) 100%);
+  color: var(--text-main);
+  font-family: var(--font-main);
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+}
+
+/* Layout */
+#gameArea {
+  display: flex;
+  height: 100%;
+  width: 100%;
+}
+
+#leftPanel {
+  width: 280px;
+  background: rgba(0, 10, 20, 0.8);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+  gap: 10px;
+  overflow-y: auto;
+  z-index: 100;
+  backdrop-filter: blur(5px);
+}
+
+#centerPanel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+#header {
+  height: 60px;
+  background: rgba(0, 20, 40, 0.8);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 20px;
+  z-index: 50;
+}
+
+#gameContainer {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: black;
+}
+
+#canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Header Elements */
+.header-main h1 {
+  font-size: 24px;
+  margin: 0;
+  color: var(--accent);
+  text-shadow: 0 0 10px var(--shadow-color);
+  letter-spacing: 2px;
+}
+
+.header-stats {
+  display: flex;
+  gap: 20px;
+}
+
+.hud-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.hud-label {
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+}
+
+.hud-value {
+  font-size: 18px;
+  font-weight: bold;
+  color: #fff;
+}
+
+/* UI Elements */
+.panel {
+  padding: 10px;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+  transition: all 0.3s ease;
+}
+
+.panel h3 {
+  font-size: 14px;
+  margin: 0 0 8px 0;
+  color: var(--accent);
+  border-bottom: 1px solid var(--text-muted);
+  padding-bottom: 4px;
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.panel h3::after {
+  content: "▼";
+  font-size: 10px;
+  transition: transform 0.2s ease;
+}
+
+.panel.collapsed h3::after {
+  transform: rotate(-90deg);
+}
+
+.panel.collapsed > :not(h3) {
+  display: none;
+}
+
+.stat {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
+  font-size: 12px;
+}
+
+.stat-label {
+  color: var(--text-dim);
+}
+
+.stat-value {
+  color: #fff;
+  font-weight: bold;
+}
+
+button {
+  background: rgba(0, 50, 100, 0.3);
+  border: 1px solid var(--border);
+  color: var(--text-main);
+  padding: 6px 10px;
+  font-family: var(--font-main);
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+button:hover {
+  background: rgba(0, 100, 200, 0.5);
+  box-shadow: 0 0 10px var(--shadow-color);
+}
+
+button:active {
+  transform: translateY(1px);
+}
+
+.primary-btn {
+  background: rgba(0, 100, 200, 0.6);
+  border-color: #fff;
+  color: #fff;
+  font-weight: bold;
+}
+
+input, select {
+  background: #001122;
+  border: 1px solid var(--text-dim);
+  color: var(--text-main);
+  font-family: var(--font-main);
+  padding: 4px;
+}
+
+/* Modals */
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 1000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  backdrop-filter: blur(5px);
+}
+
+.modal-content {
+  background: var(--modal-content-bg);
+  border: 2px solid var(--border);
+  padding: 20px;
+  width: 400px;
+  max-width: 90%;
+  box-shadow: 0 0 30px var(--shadow-color);
+}
+
+.modal-content h2 {
+  margin-top: 0;
+  color: var(--accent);
+  border-bottom: 1px solid var(--text-dim);
+  padding-bottom: 10px;
+}
+
+.setting-group {
+  margin-bottom: 15px;
+}
+
+.setting-group label {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--text-dim);
+}
+
+.setting-group select, .setting-group input {
+  width: 100%;
+  padding: 8px;
+}
+
+.modal-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+/* Ensure canvas receives events */
+canvas {
+  pointer-events: auto !important;
+  z-index: 10;
+}
+
+/* Ensure UI elements are clickable */
+.panel, button, input, select {
+  pointer-events: auto;
+  z-index: 20;
+}
+
+/* Notifications */
+.notification-toast {
+  background: rgba(0, 20, 40, 0.95);
+  border: 1px solid var(--border);
+  color: #fff;
+  padding: 12px 20px;
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  font-family: var(--font-main);
+  font-size: 14px;
+  min-width: 300px;
+  max-width: 500px;
+  text-align: center;
+  animation: slideIn 0.3s ease-out forwards;
+  pointer-events: auto;
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.notification-toast.success {
+  border-left: 4px solid #44ff44;
+}
+
+.notification-toast.warning {
+  border-left: 4px solid #ffaa00;
+}
+
+.notification-toast.danger {
+  border-left: 4px solid #ff4444;
+}
+
+.notification-toast.info {
+  border-left: 4px solid #00ccff;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateY(-20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
