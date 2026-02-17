@@ -1,0 +1,74 @@
+.hud-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.hud-label {
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+}
+
+.hud-value {
+  font-size: 18px;
+  font-weight: bold;
+  color: #fff;
+}
+
+.hud-stat-zeitgeist {
+  min-width: 140px;
+  align-items: stretch;
+}
+
+.zeitgeist-bar-container {
+  height: 6px;
+  background: #001122;
+  border: 1px solid #334455;
+  position: relative;
+  margin-top: 5px;
+  border-radius: 3px;
+}
+
+.zeitgeist-bar-marker {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: #445566;
+}
+
+.zeitgeist-bar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0%;
+  left: 50%;
+  background: #00ccff;
+  transition: width 0.2s, left 0.2s, background-color 0.2s;
+}
+
+.zeitgeist-bar.order {
+  background-color: #00ccff;
+}
+
+.zeitgeist-bar.chaos {
+  background-color: #ff4444;
+}
+
+.stat {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
+  font-size: 12px;
+}
+
+.stat-label {
+  color: var(--text-dim);
+}
+
+.stat-value {
+  color: #fff;
+  font-weight: bold;
+}

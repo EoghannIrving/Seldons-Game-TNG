@@ -15,6 +15,8 @@ import { Theme, THEME_FOUNDATION, THEME_ZX } from './theme';
 
 // --- THEME DEFINITIONS MOVED TO theme.ts ---
 
+type DetailTab = 'entry' | 'narrative' | 'events' | 'relations' | 'lineage';
+
 
 export class GalaxyRenderer {
   private static readonly DETAIL_VISUAL_PREFS_KEY = 'seldon-detail-visual-prefs-v1';
@@ -23,7 +25,7 @@ export class GalaxyRenderer {
   private hoveredStar: string | null = null;
   private selectedStar: string | null = null;
   private filteredStars: string[] = []; // Phase 1: Search/filter
-  private detailViewTab: 'entry' | 'narrative' | 'events' | 'relations' | 'lineage' = 'entry';
+  private detailViewTab: DetailTab = 'entry';
   private showStarSystem: boolean = false; // Toggle between minimap and star system view
   private detailScroll = { entryLeft: 0, entryRight: 0, narrative: 0, events: 0, relations: 0, lineage: 0 };
   private detailContentMetrics = {
@@ -44,11 +46,14 @@ export class GalaxyRenderer {
   private selectedVisualByStarId: Record<string, 'star_system' | 'capital_city'> = {};
   private detailVisualToggleHitboxes: Array<{ x: number; y: number; w: number; h: number; type: 'star_system' | 'capital_city' }> = [];
   private detailCloseHitbox: { x: number; y: number; w: number; h: number } | null = null;
+  private detailBreadcrumbHitboxes: Array<{ x: number; y: number; w: number; h: number; target: 'galaxy' | DetailTab }> = [];
+  private detailRelatedHitboxes: Array<{ x: number; y: number; w: number; h: number; tab: DetailTab }> = [];
   private detailWrapCache = new Map<string, string[]>();
   private readonly detailWrapCacheMaxEntries = 3000;
   
   // Animation state
   private animationFrame: number = 0;
+  private pulseAnimation: number = 0;
 
   // Theme state
   private currentTheme: Theme = THEME_FOUNDATION;
@@ -227,6 +232,13 @@ export class GalaxyRenderer {
   }
 
   /**
+   * Get which star is being hovered over
+   */
+  getHoveredStar(): string | null {
+    return this.hoveredStar;
+  }
+
+  /**
    * Set which star is being hovered over
    */
   setHoveredStar(starId: string | null): void {
@@ -245,6 +257,29 @@ export class GalaxyRenderer {
     } else {
       this.resetDetailScroll();
     }
+  }
+
+  /**
+   * Open star detail directly on a specific tab.
+   */
+  openStarDetail(starId: string, tab: DetailTab = 'entry'): void {
+    this.setSelectedStar(starId);
+    this.detailViewTab = tab;
+    if (tab === 'entry') {
+      this.resetDetailScroll('entryLeft');
+      this.resetDetailScroll('entryRight');
+    } else {
+      this.resetDetailScroll(tab);
+    }
+    this.showStarSystem = false;
+  }
+
+  /**
+   * Center camera on a specific star
+   */
+  centerOnStar(star: Star): void {
+    this.camera.x = star.position.x;
+    this.camera.y = star.position.y;
   }
 
   /**
@@ -379,7 +414,40 @@ export class GalaxyRenderer {
   }
 
   checkDetailInteractionClick(x: number, y: number): boolean {
-    if (!this.selectedStar || this.detailViewTab !== 'entry') return false;
+    if (!this.selectedStar) return false;
+
+    for (const hitbox of this.detailBreadcrumbHitboxes) {
+      if (this.pointInRect(x, y, hitbox)) {
+        if (hitbox.target === 'galaxy') {
+          this.selectedStar = null;
+          return true;
+        }
+
+        this.detailViewTab = hitbox.target;
+        if (this.detailViewTab === 'entry') {
+          this.resetDetailScroll('entryLeft');
+          this.resetDetailScroll('entryRight');
+        } else {
+          this.resetDetailScroll(this.detailViewTab);
+        }
+        return true;
+      }
+    }
+
+    for (const hitbox of this.detailRelatedHitboxes) {
+      if (this.pointInRect(x, y, hitbox)) {
+        this.detailViewTab = hitbox.tab;
+        if (this.detailViewTab === 'entry') {
+          this.resetDetailScroll('entryLeft');
+          this.resetDetailScroll('entryRight');
+        } else {
+          this.resetDetailScroll(this.detailViewTab);
+        }
+        return true;
+      }
+    }
+
+    if (this.detailViewTab !== 'entry') return false;
 
     for (const hitbox of this.detailEntryIndexHitboxes) {
       if (this.pointInRect(x, y, hitbox)) {
@@ -415,7 +483,7 @@ export class GalaxyRenderer {
     const tabH = 24;
     const tabW = 100;
 
-    const tabs: Array<'entry' | 'narrative' | 'events' | 'relations' | 'lineage'> = ['entry', 'narrative', 'events', 'relations', 'lineage'];
+    const tabs: DetailTab[] = ['entry', 'narrative', 'events', 'relations', 'lineage'];
 
     for (let i = 0; i < tabs.length; i++) {
       const tx = pad + (i * (tabW + 4));
@@ -451,7 +519,8 @@ export class GalaxyRenderer {
     const h = this.canvas.height;
     const pad = 25;
     const titleSize = Math.max(20, Math.min(30, Math.floor(h * 0.048)));
-    const sepY = pad + titleSize + 8 + 24 + 8;
+    const breadcrumbH = 14;
+    const sepY = pad + titleSize + 8 + 24 + 6 + breadcrumbH + 6;
     const contentY = sepY + 12;
     const footerH = 30;
     const contentH = h - contentY - footerH - 10;
@@ -1086,6 +1155,26 @@ export class GalaxyRenderer {
         }
       }
 
+      if (isSel) {
+        const pulseFactor = (Math.sin(this.pulseAnimation) + 1) / 2; // Oscillates between 0 and 1
+        const ringSize = starSize * (3.0 + pulseFactor * 0.5);
+        const ringOpacity = 0.5 + pulseFactor * 0.3;
+
+        this.ctx.save();
+        this.ctx.strokeStyle = `rgba(${this.hexToRgb(starColor)}, ${ringOpacity})`;
+        this.ctx.lineWidth = 2 * theme.effects.lineWidthMultiplier;
+        
+        if (theme.effects.enableGlow) {
+          this.ctx.shadowBlur = 25;
+          this.ctx.shadowColor = starColor;
+        }
+        
+        this.ctx.beginPath();
+        this.ctx.arc(pos.x, pos.y, ringSize, 0, Math.PI * 2);
+        this.ctx.stroke();
+        this.ctx.restore();
+      }
+
       // Phase 5.5: Active Crisis Visualization
       const activeCrisis = galaxy.state.activeCrises?.find(c => c.targetStarId === star.id && !c.resolved);
       if (activeCrisis) {
@@ -1457,7 +1546,7 @@ export class GalaxyRenderer {
     const tabY = pad + titleSize + 8;
     const tabH = 24;
     const tabW = 100;
-    const tabs = [
+    const tabs: Array<{ id: DetailTab; label: string }> = [
       { id: 'entry' as const, label: 'ENTRY' },
       { id: 'narrative' as const, label: 'NARRATIVE' },
       { id: 'events' as const, label: 'EVENTS' },
@@ -1488,8 +1577,45 @@ export class GalaxyRenderer {
       this.ctx.fillText(tab.label, tx + tabW / 2, tabY + tabH / 2);
     }
 
+    // Breadcrumb row
+    const breadcrumbY = tabY + tabH + 6;
+    const breadcrumbH = 14;
+    this.detailBreadcrumbHitboxes = [];
+    const activeTabLabel = tabs.find((tab) => tab.id === this.detailViewTab)?.label || this.detailViewTab.toUpperCase();
+    const breadcrumbSegments: Array<{ label: string; target: 'galaxy' | DetailTab; active: boolean }> = [
+      { label: 'GALAXY', target: 'galaxy', active: false },
+      { label: star.name.toUpperCase(), target: 'entry', active: this.detailViewTab === 'entry' },
+      { label: activeTabLabel, target: this.detailViewTab, active: true },
+    ];
+    this.ctx.save();
+    this.ctx.textBaseline = 'middle';
+    this.ctx.font = Math.floor(10 * theme.effects.fontSizeMultiplier) + 'px ' + theme.effects.font;
+    let breadcrumbX = pad;
+    for (let i = 0; i < breadcrumbSegments.length; i++) {
+      const segment = breadcrumbSegments[i]!;
+      const labelWidth = this.ctx.measureText(segment.label).width;
+      const segmentW = Math.ceil(labelWidth + 12);
+      this.ctx.fillStyle = segment.active ? theme.colors.ui.tabActiveBg : theme.colors.ui.tabInactiveBg;
+      this.ctx.fillRect(breadcrumbX, breadcrumbY, segmentW, breadcrumbH);
+      this.ctx.strokeStyle = segment.active ? theme.colors.ui.tabActiveBorder : theme.colors.ui.tabInactiveBorder;
+      this.ctx.lineWidth = 1;
+      this.ctx.strokeRect(breadcrumbX, breadcrumbY, segmentW, breadcrumbH);
+      this.ctx.fillStyle = segment.active ? theme.colors.ui.tabTextActive : theme.colors.ui.tabTextInactive;
+      this.ctx.textAlign = 'center';
+      this.ctx.fillText(segment.label, breadcrumbX + segmentW / 2, breadcrumbY + breadcrumbH / 2);
+      this.detailBreadcrumbHitboxes.push({ x: breadcrumbX, y: breadcrumbY, w: segmentW, h: breadcrumbH, target: segment.target });
+      breadcrumbX += segmentW + 6;
+      if (i < breadcrumbSegments.length - 1) {
+        this.ctx.fillStyle = theme.colors.dimText;
+        this.ctx.textAlign = 'left';
+        this.ctx.fillText('>', breadcrumbX - 2, breadcrumbY + breadcrumbH / 2);
+        breadcrumbX += 6;
+      }
+    }
+    this.ctx.restore();
+
     // Separator
-    const sepY = tabY + tabH + 8;
+    const sepY = breadcrumbY + breadcrumbH + 6;
     this.ctx.strokeStyle = theme.colors.ui.panelBorder;
     this.ctx.lineWidth = 1;
     this.ctx.beginPath();
@@ -1548,6 +1674,7 @@ export class GalaxyRenderer {
     }
 
     this.detailVisualToggleHitboxes = [];
+    this.detailRelatedHitboxes = [];
 
     // Border for map/system area
     this.ctx.save();
@@ -1863,11 +1990,34 @@ export class GalaxyRenderer {
           return headerH + (inventoryRows * rowH) + sectionGapH;
         }
         if (section.kind === 'governance') {
-          const payload = section.payload as { isIndependent: boolean; loyalty?: number };
-          const rows = (!payload.isIndependent && payload.loyalty !== undefined) ? 5 : 4;
+          const payload = section.payload as {
+            isIndependent: boolean;
+            loyalty?: number;
+            foundationTier?: number;
+            decadence?: number;
+            geniusLeader?: any;
+            darkAge?: boolean;
+            severeDarkAge?: boolean;
+          };
+          let rows = 4; // Base: Status, Ruler, Subjects, Vitality
+          if (!payload.isIndependent && payload.loyalty !== undefined) rows += 1; // Loyalty
+          if (payload.decadence !== undefined && payload.decadence > 0.6) rows += 1; // Decadence
+          if (payload.foundationTier) rows += 1; // Foundation Status
+          if (payload.geniusLeader) rows += 3; // Leader, Bonus, Duration
+          if (payload.darkAge || payload.severeDarkAge) rows += 1; // Dark Age
           return headerH + (rows * rowH) + sectionGapH;
         }
-        if (section.kind === 'relations_summary') return headerH + (5 * rowH) + sectionGapH;
+        if (section.kind === 'relations_summary') {
+          const payload = section.payload as {
+            activeCrises?: Array<any>;
+          };
+          let rows = 5; // Base: Allies, Trade, Wars, Events, Crises
+          if (payload.activeCrises && payload.activeCrises.length > 0) {
+            // Each crisis adds 2 rows (header + description)
+            rows += payload.activeCrises.length * 2;
+          }
+          return headerH + (rows * rowH) + sectionGapH;
+        }
         if (section.kind === 'ecology_profile') return headerH + (9 * rowH) + sectionGapH;
         if (section.kind === 'dynasty_family_tree') {
           const rows = section.dataState === 'complete' ? 3 : 4;
@@ -1956,13 +2106,56 @@ export class GalaxyRenderer {
             subjectCount: number;
             vitality: number;
             loyalty?: number;
+            foundationTier?: number;
+            decadence?: number;
+            geniusLeader?: {
+              name: string;
+              bonusMultiplier: number;
+              expiresAt: number;
+              remainingPhases: number;
+            };
+            darkAge?: boolean;
+            severeDarkAge?: boolean;
           };
           compactRow('Status', payload.isIndependent ? 'Independent' : 'Subject', payload.isIndependent ? theme.colors.ui.success : theme.colors.ui.warning, x);
           compactRow('Ruler', payload.rulerName, undefined, x);
           compactRow('Subjects', String(payload.subjectCount), payload.subjectCount > 0 ? theme.colors.ui.info : undefined, x);
-          compactRow('Vitality', `${Math.round(payload.vitality * 100)}%`, theme.colors.ui.warning, x);
+
+          // Vitality with health indicator
+          const vitalityLabel = `${Math.round(payload.vitality * 100)}%`;
+          const vitalityStatus = payload.vitality < 0.3 ? ' ⚠️ (Declining)' :
+                                payload.vitality < 0.6 ? ' (Moderate)' : ' (Healthy)';
+          compactRow('Vitality', vitalityLabel + vitalityStatus,
+                    payload.vitality < 0.3 ? theme.colors.ui.danger : theme.colors.ui.warning, x);
+
+          // Decadence
+          if (payload.decadence !== undefined && payload.decadence > 0.6) {
+            const decadenceLabel = `${Math.round(payload.decadence * 100)}% 💔`;
+            const decadenceStatus = payload.decadence > 0.8 ? ' (Collapsing)' : ' (Crumbling)';
+            compactRow('Decadence', decadenceLabel + decadenceStatus, theme.colors.ui.danger, x);
+          }
+
           if (!payload.isIndependent && payload.loyalty !== undefined) {
             compactRow('Loyalty', `${Math.round(payload.loyalty * 100)}%`, theme.colors.ui.warning, x);
+          }
+
+          // Foundation status
+          if (payload.foundationTier) {
+            compactRow('Foundation Status', `⭐ Tier ${payload.foundationTier} (Psychohistorically significant)`, '#FFD700', x);
+          }
+
+          // Genius leader
+          if (payload.geniusLeader) {
+            compactRow('Current Leader', `👑 ${payload.geniusLeader.name}`, '#FFD700', x);
+            compactRow('Admin Bonus', `${payload.geniusLeader.bonusMultiplier}x capacity`, theme.colors.ui.success, x);
+            compactRow('Reign Duration', `${payload.geniusLeader.remainingPhases} phases remaining`, theme.colors.dimText, x);
+          }
+
+          // Dark age
+          if (payload.severeDarkAge) {
+            compactRow('Dark Age', '🌑 Severe (Scientific stagnation)', theme.colors.ui.danger, x);
+          } else if (payload.darkAge) {
+            compactRow('Dark Age', '🌑 Active', theme.colors.ui.warning, x);
           }
         } else if (section.kind === 'ecology_profile') {
           const payload = section.payload as {
@@ -2007,12 +2200,43 @@ export class GalaxyRenderer {
             wars: number;
             activeEventCount: number;
             activeCrisisCount: number;
+            activeCrises?: Array<{
+              id: string;
+              type: string;
+              severity: number;
+              startPhase: number;
+              duration: number;
+              remainingPhases: number;
+              description: string;
+            }>;
           };
           compactRow('Allies', String(payload.allies), payload.allies > 0 ? theme.colors.ui.success : undefined, x);
           compactRow('Trade Routes', String(payload.tradeRoutes), payload.tradeRoutes > 0 ? theme.colors.ui.warning : undefined, x);
           compactRow('Wars', String(payload.wars), payload.wars > 0 ? theme.colors.ui.danger : undefined, x);
           compactRow('Active Events', String(payload.activeEventCount), payload.activeEventCount > 0 ? theme.colors.ui.info : undefined, x);
           compactRow('Active Crises', String(payload.activeCrisisCount), payload.activeCrisisCount > 0 ? theme.colors.ui.danger : undefined, x);
+
+          // Show crisis details if any
+          if (payload.activeCrises && payload.activeCrises.length > 0) {
+            for (const crisis of payload.activeCrises) {
+              const crisisIcon = crisis.type === 'technological' ? '🔬' :
+                                crisis.type === 'economic' ? '💰' :
+                                crisis.type === 'religious' ? '⛪' :
+                                crisis.type === 'succession' ? '👑' :
+                                crisis.type === 'external' ? '👽' : '⚠️';
+
+              const severityLabel = crisis.severity > 0.7 ? 'Critical' :
+                                   crisis.severity > 0.4 ? 'High' : 'Moderate';
+              const severityColor = crisis.severity > 0.7 ? theme.colors.ui.danger :
+                                   crisis.severity > 0.4 ? '#ff6600' : theme.colors.ui.warning;
+
+              const crisisName = crisis.type.charAt(0).toUpperCase() + crisis.type.slice(1);
+
+              // Use compactRow for crisis information
+              compactRow(`${crisisIcon} ${crisisName}`, `${severityLabel} (Phase ${crisis.startPhase}, ${crisis.remainingPhases} left)`, severityColor, x);
+              compactRow('Description', `"${crisis.description}"`, theme.colors.dimText, x);
+            }
+          }
         } else if (section.kind === 'capital_administration') {
           const payload = section.payload as {
             hasCapitalSurvey: boolean;
@@ -2080,6 +2304,7 @@ export class GalaxyRenderer {
       for (const section of leftSections) {
         leftSectionOffsets.push({ title: section.title.toUpperCase(), offset: Math.max(0, Math.floor(iy - leftStartY)) });
         renderSection(section, leftColX);
+        iy += 4; // Section gap
       }
       this.ctx.restore();
       this.detailContentMetrics.entryLeft.contentH = Math.max(1, iy - leftStartY + topPad);
@@ -2095,6 +2320,7 @@ export class GalaxyRenderer {
       for (const section of rightSections) {
         rightSectionOffsets.push({ title: section.title.toUpperCase(), offset: Math.max(0, Math.floor(iy - rightStartY)) });
         renderSection(section, rightColX);
+        iy += 4; // Section gap
       }
       this.ctx.restore();
       this.detailContentMetrics.entryRight.contentH = Math.max(1, iy - rightStartY + topPad);
@@ -2656,6 +2882,58 @@ export class GalaxyRenderer {
       this.clampDetailScroll('lineage');
       this.drawDetailScrollbar('lineage', viewportX, viewportY, viewportW, viewportH);
     }
+    // Related content quick-links
+    const relationCount =
+      (star.allies?.length || 0) +
+      (star.tradeRoutes?.length || 0) +
+      (star.atWarWith?.length || 0) +
+      stars.filter((s) => s.id !== star.id && s.ruler === star.id).length;
+    const dynastySectionForRelated = encyclopediaEntry.sections.find((s) => s.kind === 'dynasty_family_tree');
+    const dynastyPayloadForRelated = dynastySectionForRelated?.payload as { lineage?: unknown[] } | undefined;
+    const lineageCount = dynastyPayloadForRelated?.lineage?.length ?? 0;
+    const relatedTargets: Array<{ tab: DetailTab; label: string }> = [];
+    if (this.detailViewTab !== 'events' && (star.history?.length || 0) > 0) {
+      relatedTargets.push({ tab: 'events', label: `EVENTS (${star.history.length})` });
+    }
+    if (this.detailViewTab !== 'relations' && relationCount > 0) {
+      relatedTargets.push({ tab: 'relations', label: `RELATIONS (${relationCount})` });
+    }
+    if (this.detailViewTab !== 'lineage' && lineageCount > 0) {
+      relatedTargets.push({ tab: 'lineage', label: `LINEAGE (${lineageCount})` });
+    }
+    if (this.detailViewTab !== 'narrative') {
+      relatedTargets.push({ tab: 'narrative', label: 'NARRATIVE' });
+    }
+
+    if (relatedTargets.length > 0) {
+      const railY = h - footerH - 4;
+      let railX = pad;
+      this.ctx.save();
+      this.ctx.font = Math.floor(10 * theme.effects.fontSizeMultiplier) + 'px ' + theme.effects.font;
+      this.ctx.textBaseline = 'middle';
+      this.ctx.fillStyle = theme.colors.dimText;
+      this.ctx.textAlign = 'left';
+      this.ctx.fillText('RELATED:', railX, railY);
+      railX += 58;
+
+      for (const target of relatedTargets.slice(0, 4)) {
+        const labelW = Math.ceil(this.ctx.measureText(target.label).width);
+        const chipW = labelW + 12;
+        const chipH = 16;
+        this.ctx.fillStyle = theme.colors.ui.tabInactiveBg;
+        this.ctx.fillRect(railX, railY - 8, chipW, chipH);
+        this.ctx.strokeStyle = theme.colors.ui.tabInactiveBorder;
+        this.ctx.lineWidth = 1;
+        this.ctx.strokeRect(railX, railY - 8, chipW, chipH);
+        this.ctx.fillStyle = theme.colors.ui.tabTextInactive;
+        this.ctx.textAlign = 'center';
+        this.ctx.fillText(target.label, railX + chipW / 2, railY);
+        this.detailRelatedHitboxes.push({ x: railX, y: railY - 8, w: chipW, h: chipH, tab: target.tab });
+        railX += chipW + 8;
+      }
+      this.ctx.restore();
+    }
+
     // Footer hint
     this.ctx.save();
     this.ctx.fillStyle = theme.colors.dimText;
@@ -4246,6 +4524,7 @@ export class GalaxyRenderer {
    * Render current view (galaxy or detail)
    */
   render(galaxy: Galaxy): void {
+    this.pulseAnimation += 0.05;
     // Update galaxy dimensions
     this.galaxyWidth = galaxy.state.config.width || 31;
     this.galaxyHeight = galaxy.state.config.height || 21;

@@ -24,6 +24,10 @@
     "vite": "^5.4.0"
   },
   "dependencies": {
-    "three": "^0.169.0"
+    "@emotion/css": "^11.13.5",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "three": "^0.169.0",
+    "zustand": "^5.0.11"
   }
 }

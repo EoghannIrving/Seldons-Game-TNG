@@ -1,0 +1,63 @@
+.news-panel {
+  flex: 1;
+  min-height: 100px;
+  max-height: 250px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.news-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.news-header h3 {
+  margin: 0;
+}
+.encyclopedia-btn {
+  font-size: 10px;
+  padding: 2px 6px;
+}
+.news-feed-content {
+  font-size: 11px;
+  color: #aaa;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+.news-feed-placeholder {
+  padding: 5px;
+  color: #666;
+  font-style: italic;
+}
+.news-item {
+  padding: 4px 0;
+  border-bottom: 1px solid #223344;
+  font-size: 11px;
+}
+
+.news-event-icon {
+  display: inline-block;
+  width: 14px;
+  text-align: center;
+  margin-right: 4px;
+}
+
+.news-encyclopedia-link {
+  margin-top: 4px;
+  background: transparent;
+  border: 1px solid #334455;
+  color: #88bbdd;
+  font-size: 10px;
+  padding: 2px 6px;
+  cursor: pointer;
+}
+
+.news-encyclopedia-link:hover {
+  background: #112233;
+  color: #ffffff;
+}
+.news-panel-padding {
+  padding: 5px;
+}

@@ -1,0 +1,35 @@
+.tooltip-title {
+  font-weight: bold;
+  margin-bottom: 5px;
+  color: #fff;
+}
+.tooltip-subtitle {
+  color: #aaa;
+  font-size: 10px;
+  margin-bottom: 5px;
+}
+.tooltip-content {
+  color: #88bbdd;
+}
+.tooltip-section {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid #334455;
+  font-size: 11px;
+  color: #99bbdd;
+}
+
+.tooltip-relationships-title {
+  color: #d9f5ff;
+  font-weight: 700;
+  margin-bottom: 3px;
+}
+
+.tooltip-relationship-row {
+  margin-bottom: 2px;
+  line-height: 1.35;
+}
+
+.tooltip-relationship-label {
+  color: #8fc9e8;
+}

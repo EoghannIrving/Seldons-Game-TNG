@@ -9,177 +9,21 @@
     <div id="gameArea">
       <!-- Left Panel -->
       <div id="leftPanel">
-
-        <div class="panel" id="timePanel">
-          <h3>CONTROL CENTER</h3>
-          
-          <!-- Playback Controls -->
-          <div style="margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #334455;">
-            <div style="display: flex; gap: 5px; margin-bottom: 6px;">
-              <button id="rewindBtn" style="flex: 1;" title="Rewind 10 phases">⏪</button>
-              <button id="playBtn" style="flex: 2;" title="Play/Pause">▶ Play</button>
-              <button id="ffBtn" style="flex: 1;" title="Fast Forward">⏩</button>
-            </div>
-            
-            <div style="display: flex; align-items: center; gap: 8px; font-size: 11px; margin-bottom: 6px;">
-              <span style="color: #88bbdd;">Speed:</span>
-              <select id="speedSelect" style="flex: 1; background: #001122; color: #0ff; border: 1px solid #0088cc; padding: 2px;">
-                <option value="1000">1x (Slow)</option>
-                <option value="500">2x (Normal)</option>
-                <option value="200" selected>5x (Fast)</option>
-                <option value="50">20x (Turbo)</option>
-              </select>
-            </div>
-
-            <div style="display: flex; align-items: center; gap: 5px;">
-              <input type="range" id="phaseScrubber" min="0" max="0" value="0" list="phaseMarkers" style="width: 100%;">
-              <datalist id="phaseMarkers"></datalist>
-            </div>
-            <div style="text-align: right; font-size: 10px; color: #6688aa; margin-top: 2px;">
-              History: <span id="historyRange">0</span> phases
-            </div>
-          </div>
-
-          <!-- Event Navigation -->
-          <div style="margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #334455;">
-            <div style="display: flex; gap: 5px; margin-bottom: 6px;">
-              <button id="prevEventBtn" style="flex: 1; font-size: 11px;" title="Previous Crisis">⏮ Event</button>
-              <button id="nextEventBtn" style="flex: 1; font-size: 11px;" title="Next Crisis">Event ⏭</button>
-            </div>
-            <div style="display: flex; gap: 5px;">
-              <button id="prevBookmarkBtn" style="flex: 1; font-size: 11px;" title="Previous Bookmark">⏮ Book</button>
-              <button id="bookmarkBtn" style="flex: 1;" title="Toggle Bookmark">🔖</button>
-              <button id="nextBookmarkBtn" style="flex: 1; font-size: 11px;" title="Next Bookmark">Book ⏭</button>
-            </div>
-          </div>
-
-          <!-- Core Actions (Merged) -->
-          <div id="controls" style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px;">
-            <button id="advanceBtn" style="grid-column: span 2;">Step Phase [SPACE]</button>
-            <button id="resetBtn">Reset</button>
-            <button id="settingsBtn">Settings</button>
-          </div>
+        <div id="global-nav">
+          <button id="nav-simulation" class="active">
+            <span class="nav-icon">🌌</span>
+            <span class="nav-label">Galaxy</span>
+          </button>
+          <button id="nav-encyclopedia">
+            <span class="nav-icon">📖</span>
+            <span class="nav-label">Encyclopedia</span>
+          </button>
+          <button id="nav-settings">
+            <span class="nav-icon">⚙️</span>
+          </button>
         </div>
-
-        <!-- News Feed -->
-        <div class="panel" id="newsPanel" style="flex: 1; min-height: 150px; overflow-y: auto; display: flex; flex-direction: column;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-            <h3 style="margin: 0;">GALACTIC NEWS</h3>
-            <button id="encyclopediaBtn" style="font-size: 10px; padding: 2px 6px;">📚 Encylopedia</button>
-          </div>
-          <div id="newsFeedContent" style="font-size: 11px; color: #aaa; flex: 1; overflow-y: auto;">
-            <div style="padding: 5px; color: #666; font-style: italic;">No recent events.</div>
-          </div>
-        </div>
-
-        <div class="panel collapsed" id="performancePanel">
-          <h3>PERFORMANCE</h3>
-          <div class="stat">
-            <div class="stat-label">Star Count</div>
-            <div class="stat-value" id="statStarCount">0</div>
-          </div>
-          <div class="stat">
-            <div class="stat-label">Phase Time</div>
-            <div class="stat-value" id="statPhaseTime">0ms</div>
-          </div>
-          <div class="stat">
-            <div class="stat-label">Render Time</div>
-            <div class="stat-value" id="statRenderTime">0ms</div>
-          </div>
-          <div class="stat">
-            <div class="stat-label">Camera Zoom</div>
-            <div class="stat-value" id="statZoom">1.0x</div>
-          </div>
-        </div>
-
-        <div class="panel collapsed" id="viewPanel">
-          <h3>VIEW OPTIONS</h3>
-          <div style="font-size: 11px;">
-            <label style="color: #88bbdd; display: block; margin-bottom: 6px; cursor: pointer;">
-              <input type="checkbox" id="showTrade" style="margin-right: 6px;">
-              Trade Routes
-            </label>
-            <label style="color: #88bbdd; display: block; margin-bottom: 6px; cursor: pointer;">
-              <input type="checkbox" id="showAlliances" checked style="margin-right: 6px;">
-              Alliances
-            </label>
-            <label style="color: #88bbdd; display: block; margin-bottom: 6px; cursor: pointer;">
-              <input type="checkbox" id="showWars" checked style="margin-right: 6px;">
-              Wars
-            </label>
-            <label style="color: #88bbdd; display: block; margin-bottom: 6px; cursor: pointer;">
-              <input type="checkbox" id="showPower" checked style="margin-right: 6px;">
-              Power/Tribute
-            </label>
-            <label style="color: #6688aa; display: block;">
-              <input type="checkbox" id="showGrid" style="margin-right: 6px;">
-              Coordinate Grid
-            </label>
-          </div>
-        </div>
-
-        <div class="panel collapsed" id="searchPanel">
-          <h3>SEARCH & FILTER</h3>
-          <!-- Search/Filter -->
-          <div style="margin-top: 5px;">
-            <input
-              type="text"
-              id="starSearch"
-              placeholder="Search stars..."
-              style="width: 100%; padding: 6px; background: #001122; border: 1px solid #0088cc; color: #0ff; font-family: 'Courier New', monospace; font-size: 12px;"
-            />
-            <div style="margin-top: 8px; font-size: 11px;">
-              <!-- Tier Filter -->
-              <div style="margin-bottom: 6px;">
-                <label style="color: #88bbdd; display: block; margin-bottom: 2px;">Tier:</label>
-                <select id="filterTier" style="width: 100%; background: #001122; color: #0ff; border: 1px solid #0088cc;">
-                  <option value="all">All Stars</option>
-                  <option value="major">Major Powers Only</option>
-                  <option value="regional">Major & Regional</option>
-                  <option value="minor">Minor Systems</option>
-                </select>
-              </div>
-
-              <!-- Status Filter -->
-              <div style="margin-bottom: 6px;">
-                <label style="color: #88bbdd; display: block; margin-bottom: 2px;">Status:</label>
-                <select id="filterStatus" style="width: 100%; background: #001122; color: #0ff; border: 1px solid #0088cc;">
-                  <option value="all">All Statuses</option>
-                  <option value="independent">Independent</option>
-                  <option value="subject">Subjects</option>
-                  <option value="capital">Capitals</option>
-                </select>
-              </div>
-
-              <!-- Region Filter (Phase 6) -->
-              <div style="margin-bottom: 6px;">
-                <label style="color: #88bbdd; display: block; margin-bottom: 2px;">Region:</label>
-                <select id="filterRegion" style="width: 100%; background: #001122; color: #0ff; border: 1px solid #0088cc;">
-                  <option value="all">All Regions</option>
-                  <!-- Populated dynamically -->
-                </select>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="panel collapsed" id="helpPanel">
-          <h3>HELP</h3>
-          <div style="font-size: 11px; color: #888; line-height: 1.5;">
-            <strong style="color: #0ff;">Mouse:</strong><br>
-            • Hover: View star info<br>
-            • Click: Detail view<br>
-            • Drag: Pan camera<br>
-            • Scroll: Zoom<br>
-            <br>
-            <strong style="color: #0ff;">Keyboard:</strong><br>
-            • SPACE: Next phase<br>
-            • TAB: Cycle filtered stars<br>
-            • ESC: Exit detail view<br>
-            • Arrows: Pan<br>
-            • +/-: Zoom<br>
-            • Home: Reset camera
-          </div>
+        <div id="contextual-nav">
+          <!-- Content is dynamically inserted by main.ts -->
         </div>
       </div>
 
@@ -188,7 +32,12 @@
         <div id="header">
           <div class="header-main">
             <h1>SELDON'S GAME</h1>
-            <h2 style="color: #88bbdd; font-size: 11px; margin: 0; font-weight: normal; letter-spacing: 2px;">PSYCHOHISTORY SIMULATION</h2>
+            <h2 class="color-dim font-size-11 no-margin letter-spacing-2">PSYCHOHISTORY SIMULATION</h2>
+          </div>
+          <div class="header-controls">
+            <button id="headerPlayBtn" class="header-control-btn" aria-label="Play or Pause">▶ Play</button>
+            <button id="headerStepBtn" class="header-control-btn" aria-label="Step one phase">Step</button>
+            <button id="headerSpeedBtn" class="header-control-btn header-speed-btn" aria-label="Playback speed">5x</button>
           </div>
           <div class="header-stats">
             <div class="hud-stat">
@@ -207,14 +56,14 @@
               <span class="hud-label">CENTRALIZATION</span>
               <span class="hud-value" id="statCentralization">0.00</span>
             </div>
-            <div class="hud-stat" style="min-width: 140px; align-items: stretch;">
-              <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+            <div class="hud-stat hud-stat-zeitgeist">
+              <div class="flex justify-between items-end">
                  <span class="hud-label">ZEITGEIST</span>
-                 <span class="hud-label" id="zeitgeistValue" style="color: #fff;">0.00</span>
+                 <span class="hud-label color-white" id="zeitgeistValue">0.00</span>
               </div>
-              <div style="height: 6px; background: #001122; border: 1px solid #334455; position: relative; margin-top: 5px; border-radius: 3px;">
-                 <div style="position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: #445566;"></div>
-                 <div id="zeitgeistBar" style="position: absolute; top: 0; bottom: 0; width: 0%; left: 50%; background: #00ccff; transition: width 0.2s, left 0.2s, background-color 0.2s;"></div>
+              <div class="zeitgeist-bar-container">
+                 <div class="zeitgeist-bar-marker"></div>
+                 <div id="zeitgeistBar" class="zeitgeist-bar"></div>
               </div>
             </div>
           </div>
@@ -226,13 +75,13 @@
     </div>
 
     <!-- Settings Modal -->
-    <div id="settingsModal" class="modal" style="display: none;">
+    <div id="settingsModal" class="modal">
       <div class="modal-content">
         <h2>Galaxy Settings</h2>
 
         <div class="setting-group">
           <label for="themeSelect">Visual Theme:</label>
-          <select id="themeSelect">
+          <select id="themeSelect" aria-label="Select visual theme">
             <option value="foundation" selected>Foundation (Modern)</option>
             <option value="zx">ZX Spectrum (Retro)</option>
           </select>
@@ -240,7 +89,7 @@
 
         <div class="setting-group">
           <label for="starCountSelect">Star Count:</label>
-          <select id="starCountSelect">
+          <select id="starCountSelect" aria-label="Select number of stars">
             <option value="26">26 Stars (Classic)</option>
             <option value="50">50 Stars</option>
             <option value="100" selected>100 Stars</option>
@@ -251,7 +100,7 @@
 
         <div class="setting-group">
           <label for="galaxySizeSelect">Galaxy Size:</label>
-          <select id="galaxySizeSelect">
+          <select id="galaxySizeSelect" aria-label="Select galaxy size">
             <option value="small" selected>Small (Classic)</option>
             <option value="medium">Medium</option>
             <option value="large">Large</option>
@@ -260,7 +109,7 @@
 
         <div class="setting-group">
           <label for="galaxyShapeSelect">Galaxy Shape:</label>
-          <select id="galaxyShapeSelect">
+          <select id="galaxyShapeSelect" aria-label="Select galaxy shape">
             <option value="random" selected>Random (Classic)</option>
             <option value="spiral">Spiral</option>
             <option value="cluster">Cluster</option>
@@ -270,26 +119,26 @@
 
         <div class="setting-group">
           <label for="seedInput">Seed (optional):</label>
-          <input type="text" id="seedInput" placeholder="Leave blank for random">
+          <input type="text" id="seedInput" placeholder="Leave blank for random" aria-label="Enter a seed for galaxy generation">
         </div>
 
-        <div style="margin-top: 20px; padding: 12px; background: rgba(255, 100, 50, 0.1); border: 1px solid rgba(255, 100, 50, 0.3); border-radius: 3px; font-size: 12px; color: #ff8866;">
+        <div class="warning-box">
           ⚠️ Creating a new galaxy will delete your current save
         </div>
 
-        <div style="margin-top: 12px; padding: 10px; background: rgba(50, 80, 120, 0.12); border: 1px solid rgba(90, 130, 180, 0.35); border-radius: 3px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 8px;">
-            <span style="font-size: 12px; color: #a8c5e2;">Save Integrity Diagnostics</span>
-            <button id="runIntegrityCheckBtn" style="padding: 4px 8px; font-size: 11px;">Run Integrity Check</button>
+        <div class="integrity-check-box">
+          <div class="flex justify-between items-center gap-10 margin-bottom-8">
+            <span class="font-size-12 color-dim">Save Integrity Diagnostics</span>
+            <button id="runIntegrityCheckBtn" class="font-size-11 padding-4-8" aria-label="Run save integrity check">Run Integrity Check</button>
           </div>
-          <div id="saveIntegrityReport" style="max-height: 120px; overflow-y: auto; font-size: 11px; color: #8aa8c6;">
+          <div id="saveIntegrityReport" class="integrity-report">
             No verification run yet.
           </div>
         </div>
 
         <div class="modal-buttons">
-          <button id="createGalaxyBtn" class="primary-btn">Create New Galaxy</button>
-          <button id="cancelSettingsBtn">Cancel</button>
+          <button type="button" id="createGalaxyBtn" class="primary-btn" aria-label="Create new galaxy">Create New Galaxy</button>
+          <button type="button" id="cancelSettingsBtn" aria-label="Cancel and close settings">Cancel</button>
         </div>
       </div>
     </div>
@@ -309,70 +158,8 @@
       align-items: center;
     "></div>
 
-    <!-- Encyclopedia Modal -->
-    <div id="encyclopediaModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--modal-bg); z-index: 1000; justify-content: center; align-items: center;">
-      <div style="width: 80%; height: 80%; background: var(--panel-bg); border: 1px solid var(--border); display: flex; flex-direction: column; padding: 20px; box-shadow: 0 0 20px var(--shadow-color);">
-        <div class="encyclopedia-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--text-dim); padding-bottom: 10px; margin-bottom: 10px;">
-          <h2 style="margin: 0; color: var(--accent); font-family: monospace;">Encyclopedia Galactica</h2>
-          <div style="display: flex; gap: 10px;">
-            <select id="exportFormatSelect" style="background: var(--bg-color); color: var(--text-main); border: 1px solid var(--text-dim); padding: 2px 6px; font-size: 12px;">
-              <option value="full">Full JSON</option>
-              <option value="compact-analysis-v1">Compact Analysis v1</option>
-            </select>
-            <button id="exportDataBtn" style="background: var(--panel-bg); color: var(--text-main); border: 1px solid var(--border); cursor: pointer; padding: 2px 8px; font-size: 12px;">⬇ Export JSON</button>
-            <button class="close-btn" id="closeEncyclopediaBtn" style="background: transparent; border: 1px solid var(--text-dim); color: var(--text-main); cursor: pointer;">×</button>
-          </div>
-        </div>
-        
-        <div class="encyclopedia-tabs" style="display: flex; gap: 10px; padding: 10px; border-bottom: 1px solid var(--text-dim);">
-          <button id="tabEvents" class="tab-btn active" style="background: var(--archive-tab-active-bg); color: var(--text-main); border: none; padding: 5px 10px; cursor: pointer;">Events</button>
-          <button id="tabDemographics" class="tab-btn" style="background: transparent; color: var(--text-dim); border: 1px solid var(--text-dim); padding: 5px 10px; cursor: pointer;">Demographics</button>
-          <button id="tabNarrative" class="tab-btn" style="background: transparent; color: var(--text-dim); border: 1px solid var(--text-dim); padding: 5px 10px; cursor: pointer;">Narrative</button>
-        </div>
-
-        <div id="encyclopediaEventsView" style="display: flex; flex-direction: column; flex: 1; min-height: 0;">
-          <div class="encyclopedia-controls" style="display: flex; gap: 10px; margin-bottom: 15px; padding: 10px;">
-            <input type="text" id="encyclopediaSearch" placeholder="Search archives..." style="flex: 1; background: var(--bg-color); color: var(--text-main); border: 1px solid var(--text-dim); padding: 5px;" />
-            <select id="encyclopediaTypeFilter" style="background: var(--bg-color); color: var(--text-main); border: 1px solid var(--text-dim); padding: 5px;">
-              <option value="all">All Records</option>
-              <option value="crisis">Crises</option>
-              <option value="war">Wars</option>
-              <option value="rebellion">Rebellions</option>
-              <option value="plague">Plagues</option>
-              <option value="leader">Leaders</option>
-              <option value="succession">Succession</option>
-            </select>
-          </div>
-          <div class="encyclopedia-content" id="encyclopediaContent" style="flex: 1; overflow-y: auto; background: var(--bg-color); border: 1px solid var(--text-dim); padding: 10px; font-family: monospace;">
-            <!-- Dynamic content -->
-          </div>
-        </div>
-
-        <div id="encyclopediaDemographicsView" style="display: none; padding: 20px; height: 100%;">
-          <div style="margin-bottom: 15px;">
-            <select id="chartMetricSelect" style="background: var(--bg-color); color: var(--text-main); border: 1px solid var(--text-dim); padding: 5px;">
-              <option value="totalPopulation">Total Population (Output)</option>
-              <option value="averageTech">Average Technology</option>
-              <option value="maxPower">Max Power (Strongest Star)</option>
-              <option value="imperialPower">Imperial Power (Largest Empire)</option>
-              <option value="activeWars">Active Conflicts</option>
-              <option value="politicalShare">Political Distribution (Pie Chart)</option>
-            </select>
-          </div>
-          <canvas id="demographicsChart" style="width: 100%; height: 300px; background: var(--bg-color); border: 1px solid var(--text-dim);"></canvas>
-        </div>
-
-        <div id="encyclopediaNarrativeView" style="display: none; padding: 20px; flex: 1; overflow-y: auto;">
-          <div id="narrativeContent" style="color: var(--text-muted); font-family: 'Georgia', serif; line-height: 1.6; max-width: 800px; margin: 0 auto;">
-             <!-- Dynamic Narrative -->
-          </div>
-        </div>
-      </div>
-    </div>
-
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
-
 
 

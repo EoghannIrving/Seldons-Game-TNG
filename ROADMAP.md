@@ -1,13 +1,42 @@
 # Development Roadmap - Future Features
 
-**Last Updated:** 2026-02-16
+**Last Updated:** 2026-02-17
 **Current Version:** v0.9.0 (Phase 9 Complete)
 
-This document contains features and enhancements that are planned but not yet implemented. For completed features, see `PRODUCTION_NOTES.md`.
+This document contains features and enhancements that are planned but not yet implemented. For completed features, see [`PRODUCTION_NOTES.md`](./PRODUCTION_NOTES.md).
 
 ---
 
 ## Immediate Priorities (Next Sprint)
+
+### WebUI Review Follow-ups (Tier 1)
+**Status:** COMPLETE
+**Source:** `Design Documents Archive/WebUI_Review_Report.md`
+
+1. **Add News Feed -> Encyclopedia deep links**
+   - Clicking a news item should support opening Encyclopedia with phase/type/star filters.
+2. **Add tooltips to header stats**
+   - Explain metric meaning, directionality, and range at point of use.
+3. **Add event type icons to news feed**
+   - Improve scan speed and visual categorization for major event types.
+4. **Add collapsed-panel content hints**
+   - Show lightweight hints on collapsed headers (for example, control counts).
+
+**Completed from Tier 1 in this sprint:**
+- Expand critical panels by default (`SEARCH & FILTER` onboarding expansion + first-load pulse)
+- Add News Feed -> Encyclopedia deep links (contextual archive filters from news row actions)
+- Add header stat tooltips (in-place metric explanations and ranges)
+- Add event type icons to news feed (faster scan and categorization)
+- Add collapsed-panel content hints (`VIEW OPTIONS` and `SEARCH & FILTER`)
+
+**Completed architecture foundation from WebUI review:**
+- Phase A: Architecture Correction (single encyclopedia entry path, Focus Mode shell, persistent back path, context-preserving state)
+- Phase C: Core Navigation (deep links + star-detail breadcrumbs + related-content widgets)
+- Phase C reliability patch: Encyclopedia `Star Detail ->` now uses phase-safe star resolution with context fallback, so detail view opens reliably after archive navigation.
+- Phase D: Encyclopedia Focus + Mini Galaxy (persistent mini map context card, bidirectional star/event/chapter sync, map-context jump action, chapterized narrative rails)
+- Phase E: Visual Enhancements (interactive demographics chart, events timeline visualization mode, encyclopedia search autocomplete)
+- Phase F: Advanced Features (interactive navigator tab, narrative progressive disclosure rails, internal phase/star linking in encyclopedia content)
+- Phase G: Polish & Delight (rotating "Did You Know?" sidebar factoids with jump actions, hover-based relationship previews in star tooltip)
 
 ### Phase 10: Government & Succession System
 **Status:** NEXT
@@ -125,7 +154,7 @@ This document contains features and enhancements that are planned but not yet im
     - **Seldon Index Display:** Juxtapose model predictions vs actual human cost for major events, creating uncomfortable tension between mathematical accuracy and moral weight.
     - **Implementation:** Population tracking, casualty calculation, cultural/economic loss tracking, generational trauma modeling, human-story templates for all major event types.
     - **Thematic Goal:** Make viewers question whether statistical certainty justifies individual suffering - "The model was correct. Was it worth it?"
-    - **See:** `Design Documents Archive/Human-Scale Narrative - Certainty vs Suffering.md` for full design
+    - **See:** [`Design Documents Archive/Human-Scale Narrative - Certainty vs Suffering.md`](./Design%20Documents%20Archive/Human-Scale%20Narrative%20-%20Certainty%20vs%20Suffering.md) for full design
 
 **Milestones:**
 1. Narrative data model and cross-link schema.
@@ -134,11 +163,11 @@ This document contains features and enhancements that are planned but not yet im
 4. Reader mode polish and usability validation.
 
 **Module Ownership (initial):**
-- `src/core/narrative.ts`: narrative pipeline and chapter generation
-- `src/core/encyclopedia.ts`: query model, indexing adapters, dossier assembly
-- `src/core/diplomacy.ts`: relationship history inputs
-- `src/core/leaders.ts`: leader/dynasty narrative metadata
-- `src/main.ts`: archive UX orchestration and tab wiring
+- [`src/core/narrative.ts`](./seldon-game/src/core/narrative.ts): narrative pipeline and chapter generation
+- [`src/core/encyclopedia.ts`](./seldon-game/src/core/encyclopedia.ts): query model, indexing adapters, dossier assembly
+- [`src/core/diplomacy.ts`](./seldon-game/src/core/diplomacy.ts): relationship history inputs
+- [`src/core/leaders.ts`](./seldon-game/src/core/leaders.ts): leader/dynasty narrative metadata
+- [`src/main.ts`](./seldon-game/src/main.ts): archive UX orchestration and tab wiring
 
 ---
 
@@ -168,11 +197,11 @@ This document contains features and enhancements that are planned but not yet im
 4. Content QA dashboard and balancing pass.
 
 **Module Ownership (initial):**
-- `src/data/star-names.ts`: star/dynasty/leader name pools and generators
-- `src/core/events.ts`: event text variants and context selectors
-- `src/core/crises.ts`: crisis narrative variants
-- `src/core/leaders.ts`: leader naming/titles/legacy strings
-- `src/core/narrative.ts`: continuity-aware phrasing and longform consistency
+- [`src/data/star-names.ts`](./seldon-game/src/data/star-names.ts): star/dynasty/leader name pools and generators
+- [`src/core/events.ts`](./seldon-game/src/core/events.ts): event text variants and context selectors
+- [`src/core/crises.ts`](./seldon-game/src/core/crises.ts): crisis narrative variants
+- [`src/core/leaders.ts`](./seldon-game/src/core/leaders.ts): leader naming/titles/legacy strings
+- [`src/core/narrative.ts`](./seldon-game/src/core/narrative.ts): continuity-aware phrasing and longform consistency
 
 ---
 ### Experimental Concepts
@@ -282,4 +311,3 @@ This document contains features and enhancements that are planned but not yet im
 - Foundation concepts (10-14) preserve psychohistory's core: large-scale prediction works despite individual unpredictability, knowledge endures across dark ages, hidden forces correct deviations, prophecy validates mathematics.
 
 ---
-

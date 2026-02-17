@@ -20,7 +20,9 @@
       "Bash(npm.cmd run)",
       "Bash(npm.cmd run test:detail-view-regression)",
       "Bash(npm.cmd run test:encyclopedia-entry)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(git fetch:*)",
+      "Bash(git ls-tree:*)"
     ]
   }
 }

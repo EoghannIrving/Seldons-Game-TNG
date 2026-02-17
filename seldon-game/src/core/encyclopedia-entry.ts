@@ -72,6 +72,16 @@ interface GovernancePayload {
   subjectCount: number;
   vitality: number;
   loyalty?: number;
+  foundationTier?: number;
+  decadence?: number;
+  geniusLeader?: {
+    name: string;
+    bonusMultiplier: number;
+    expiresAt: number;
+    remainingPhases: number;
+  };
+  darkAge?: boolean;
+  severeDarkAge?: boolean;
 }
 
 interface RelationsSummaryPayload {
@@ -80,6 +90,15 @@ interface RelationsSummaryPayload {
   wars: number;
   activeEventCount: number;
   activeCrisisCount: number;
+  activeCrises?: Array<{
+    id: string;
+    type: string;
+    severity: number;
+    startPhase: number;
+    duration: number;
+    remainingPhases: number;
+    description: string;
+  }>;
 }
 
 interface SystemInventoryPayload {
@@ -288,6 +307,16 @@ export function buildGovernanceSection(star: Star, galaxyState: GalaxyState): En
       subjectCount: star.subjects.length,
       vitality: star.vitality,
       loyalty: isIndependent ? undefined : star.loyalty,
+      foundationTier: star.foundationTier > 0 ? star.foundationTier : undefined,
+      decadence: star.decadence,
+      geniusLeader: star.geniusLeader ? {
+        name: star.geniusLeader.name,
+        bonusMultiplier: star.geniusLeader.bonusMultiplier,
+        expiresAt: star.geniusLeader.expiresAt,
+        remainingPhases: star.geniusLeader.expiresAt - galaxyState.phase,
+      } : undefined,
+      darkAge: star.darkAge,
+      severeDarkAge: star.severeDarkAge,
     },
   };
 }
@@ -299,9 +328,12 @@ export function buildRelationsSummarySection(
   const activeEventCount = galaxyState.events.filter(
     (event) => !event.resolved && event.targetStarIds.includes(star.id)
   ).length;
-  const activeCrisisCount = galaxyState.activeCrises.filter(
+
+  const starActiveCrises = galaxyState.activeCrises.filter(
     (crisis) => !crisis.resolved && crisis.targetStarId === star.id
-  ).length;
+  );
+
+  const activeCrisisCount = starActiveCrises.length;
 
   return {
     id: 'relations-summary',
@@ -316,6 +348,15 @@ export function buildRelationsSummarySection(
       wars: star.atWarWith.length,
       activeEventCount,
       activeCrisisCount,
+      activeCrises: starActiveCrises.map(c => ({
+        id: c.id,
+        type: c.type,
+        severity: c.severity,
+        startPhase: c.startPhase,
+        duration: c.duration,
+        remainingPhases: c.duration - (galaxyState.phase - c.startPhase),
+        description: c.description,
+      })),
     },
   };
 }

@@ -1,0 +1,34 @@
+.playback-controls .flex-1 {
+  flex: 1;
+}
+.playback-controls .flex-2 {
+  flex: 2;
+}
+.speed-select {
+  flex: 1;
+  background: #001122;
+  color: #0ff;
+  border: 1px solid #0088cc;
+  padding: 2px;
+}
+.phase-scrubber {
+  width: 100%;
+}
+.history-range {
+  text-align: right;
+  font-size: 10px;
+  color: #6688aa;
+  margin-top: 2px;
+}
+.event-nav-btn {
+  flex: 1;
+  font-size: 11px;
+}
+.core-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+}
+.core-actions .span-2 {
+  grid-column: span 2;
+}

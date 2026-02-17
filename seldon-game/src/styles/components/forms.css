@@ -1,0 +1,49 @@
+.star-search-input {
+  padding: 6px;
+  background: #001122;
+  border: 1px solid #0088cc;
+  color: #0ff;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+}
+.filter-select {
+  background: #001122;
+  color: #0ff;
+  border: 1px solid #0088cc;
+}
+
+button {
+  background: rgba(0, 50, 100, 0.3);
+  border: 1px solid var(--border);
+  color: var(--text-main);
+  padding: 6px 10px;
+  font-family: var(--font-main);
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+button:hover {
+  background: rgba(0, 100, 200, 0.5);
+  box-shadow: 0 0 10px var(--shadow-color);
+}
+
+button:active {
+  transform: translateY(1px);
+}
+
+.primary-btn {
+  background: rgba(0, 100, 200, 0.6);
+  border-color: #fff;
+  color: #fff;
+  font-weight: bold;
+}
+
+input, select {
+  background: #001122;
+  border: 1px solid var(--text-dim);
+  color: var(--text-main);
+  font-family: var(--font-main);
+  padding: 4px;
+}

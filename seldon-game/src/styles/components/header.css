@@ -1,0 +1,61 @@
+#header {
+  height: 60px;
+  background: rgba(0, 20, 40, 0.8);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 20px;
+  gap: 20px;
+  z-index: 50;
+}
+
+.header-main h1 {
+  font-size: 24px;
+  margin: 0;
+  color: var(--accent);
+  text-shadow: 0 0 10px var(--shadow-color);
+  letter-spacing: 2px;
+}
+
+.header-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.header-control-btn {
+  background: rgba(0, 40, 80, 0.8);
+  border: 1px solid var(--border);
+  color: var(--text-main);
+  padding: 6px 12px;
+  font-family: var(--font-main);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.header-control-btn:hover {
+  background: rgba(0, 60, 120, 0.9);
+  border-color: var(--accent);
+}
+
+.header-control-btn:active {
+  background: rgba(0, 80, 160, 1);
+}
+
+.header-speed-btn {
+  min-width: 45px;
+  text-align: center;
+  font-weight: bold;
+}
+
+.header-stats {
+  display: flex;
+  gap: 20px;
+}
+
+body.encyclopedia-focus-mode .header-controls {
+  opacity: 0.55;
+}

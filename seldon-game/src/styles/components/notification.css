@@ -1,0 +1,56 @@
+/* Notifications */
+.notification-toast {
+  background: rgba(0, 20, 40, 0.95);
+  border: 1px solid var(--border);
+  color: #fff;
+  padding: 12px 20px;
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  font-family: var(--font-main);
+  font-size: 14px;
+  min-width: 300px;
+  max-width: 500px;
+  text-align: center;
+  animation: slideIn 0.3s ease-out forwards;
+  pointer-events: auto;
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.notification-toast.success {
+  border-left: 4px solid #44ff44;
+}
+
+.notification-toast.warning {
+  border-left: 4px solid #ffaa00;
+}
+
+.notification-toast.danger {
+  border-left: 4px solid #ff4444;
+}
+
+.notification-toast.info {
+  border-left: 4px solid #00ccff;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateY(-20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}

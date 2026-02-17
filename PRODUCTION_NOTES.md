@@ -1,7 +1,7 @@
 # Seldon's Game TNG - Production Notes
 
 **Version:** 0.9.0 (Phase 9 Complete)
-**Date:** 2026-02-16
+**Date:** 2026-02-17
 
 This document tracks the technical evolution, design decisions, and implementation details of the project. It serves as a knowledge base for current and future developers.
 
@@ -11,6 +11,118 @@ This document tracks the technical evolution, design decisions, and implementati
 
 **Focus:** Government & Succession System
 **Status:** Not Started
+
+---
+
+## WebUI Review: Tier 1 Quick Wins (In Progress)
+
+**Source:** `Design Documents Archive/WebUI_Review_Report.md`
+**Status:** Items 1-5 complete (Feb 17, 2026)
+
+### Phase A Delivered: Architecture Correction (Focus Mode Baseline)
+1. Removed legacy modal encyclopedia shell from `seldon-game/index.html` to eliminate modal/panel dual-path conflict.
+2. Added explicit view-mode transition state in `seldon-game/src/main.ts`:
+   - `simulation` vs `encyclopedia` mode tracking.
+   - Context capture before entering Encyclopedia (`selectedStarId`, `phase`, `eventCategory`).
+3. Added persistent `Back to Simulation` action in Encyclopedia Focus Mode:
+   - New back button in the Encyclopedia panel header.
+   - Returning restores simulation context (phase + selected star).
+4. Added focus-mode presentation cues:
+   - Encyclopedia context badges now show preserved navigation context.
+   - Header controls are visually de-emphasized while in focus mode.
+
+### Item 1 Delivered: Expand Search and Filter Panel by Default
+1. Added onboarding-first default behavior for `SEARCH & FILTER` in `seldon-game/src/main.ts`:
+   - Panel now defaults to expanded for a user's first 3 sessions.
+   - Session exposures are tracked with localStorage key `seldon-search-panel-exposure-count`.
+2. Added persistent user preference for panel collapse state:
+   - Manual toggle writes `seldon-search-panel-pref-collapsed` and takes precedence over onboarding defaults.
+3. Added first-load attention cue:
+   - Subtle header pulse animation is applied once with class `panel-attention-pulse`.
+   - Pulse completion is persisted via `seldon-search-panel-pulse-seen`.
+4. Added styling in `seldon-game/src/styles/components/panel.css`:
+   - `@keyframes searchPanelPulse`
+   - `.panel.panel-attention-pulse h3` animation rule
+
+### Item 2 Delivered: News Feed -> Encyclopedia Deep Links
+1. Added deep-link metadata and action in `seldon-game/src/ui/updates.ts`:
+   - News rows now include `data-event-type`, `data-phase`, and `data-star-ids`.
+   - Added per-item `View in Encyclopedia ->` action.
+2. Added deep-link routing in `seldon-game/src/main.ts`:
+   - Clicking `View in Encyclopedia ->` now opens Encyclopedia mode with contextual filters.
+   - Deep links pass event category, phase, and related stars.
+3. Added Encyclopedia filter state and query UI in `seldon-game/src/main.ts`:
+   - Search text filter, category filter, and clear-filters action.
+   - Filter summary badges show active phase/star context.
+4. Added UI styling for link and filters:
+   - `seldon-game/src/styles/components/news-feed.css`
+   - `seldon-game/src/styles/components/panel.css`
+
+### Phase B Delivered: Quick Wins
+1. Added header metric tooltips in `seldon-game/src/main.ts` using shared tooltip component APIs:
+   - `PHASE`, `POWER`, `INDEPENDENT`, `CENTRALIZATION`, and `ZEITGEIST` now have hover explanations.
+2. Added event type icons to the news feed in `seldon-game/src/ui/updates.ts`:
+   - Deterministic icon mapping by event type improves scan speed and category recognition.
+3. Added collapsed-panel content hints in Simulation view headers:
+   - `VIEW OPTIONS` now shows `[5 toggles + zoom]` when collapsed.
+   - `SEARCH & FILTER` now shows `[Search + 3 filters]` when collapsed.
+4. Added supporting styling updates:
+   - `seldon-game/src/styles/components/news-feed.css`
+   - `seldon-game/src/styles/components/panel.css`
+
+### Phase C Delivered: Core Navigation
+1. Added star-detail breadcrumbs in `seldon-game/src/rendering/galaxy-renderer.ts`:
+   - Breadcrumb rail now shows `GALAXY > STAR > TAB`.
+   - Breadcrumb segments are clickable for backtracking and tab switching.
+2. Added related-content quick links in star detail:
+   - Footer action chips (for example `EVENTS`, `RELATIONS`, `LINEAGE`, `NARRATIVE`) are rendered contextually.
+   - Clicking a chip switches to the corresponding detail tab.
+3. Added related-content actions in Encyclopedia entries:
+   - `Star Detail ->` returns to simulation context at the related phase/star.
+   - `Similar Events ->` pivots category filter to matching event type.
+4. Phase C dependency status:
+   - News Feed -> Encyclopedia deep links (Solution 2) was delivered in Item 2 and now composes with these navigation additions.
+5. Post-Phase C reliability fix (Feb 17, 2026):
+   - Hardened Encyclopedia `Star Detail ->` transition in `seldon-game/src/main.ts`.
+   - Navigation now validates target phase transitions, tries multiple related star candidates, and falls back to captured simulation context when a phase/star mismatch occurs.
+   - Added name-based star resolution fallback when historical `starId` lookup misses after phase transitions.
+   - Fixed phase navigation callsite bug: `main.ts` now uses `galaxy.goToPhase(...)` (existing engine API) instead of non-existent `galaxy.loadStateFromHistory(...)`.
+   - Prevents silent failures where the app returned to simulation without opening the target star detail panel.
+
+### Phase D Delivered: Encyclopedia Focus + Mini Galaxy
+1. Added persistent mini galaxy context card in Encyclopedia Focus Mode (`seldon-game/src/main.ts` + `seldon-game/src/styles/components/panel.css`):
+   - Mini map renders all stars from current simulation coordinates.
+   - Active archive context (selected star, chapter stars, filter stars) is highlighted.
+   - Encyclopedia now keeps existing global navigation while using a center-panel workspace for heavy archive content (left panel is controls-focused).
+2. Added synchronized archive-map selection flow:
+   - Clicking an event row now sets selected phase/star and updates mini map highlights.
+   - Clicking a mini map star now sets a star-focused archive filter (`starFilters`) and refreshes event/chapter context.
+3. Added map-context jump action in Focus Mode:
+   - `Jump to Map Context` exits Focus Mode and restores simulation at selected archive context (phase + star).
+4. Added chapterized narrative rails for long-form exploration:
+   - Encyclopedia now has `Events` and `Narrative` sub-tabs in Focus Mode.
+   - Narrative chapters are generated in fixed phase windows with deterministic summaries from `NarrativeGenerator.generatePhaseNarrative(...)`.
+   - Chapter selection synchronizes narrative content, mini map highlighting, and map jump targets.
+5. Added Atlas/Split display modes in Encyclopedia Focus Mode:
+   - `Atlas` keeps archive content full-width in the center workspace.
+   - `Split Reality` shows live galaxy map + archive side-by-side with synchronized context.
+   - Clicking a star on the split map now pivots archive filters to that star context.
+6. Added Encyclopedia filmstrip timeline:
+   - Horizontal era-cluster chips (10-phase bins) are rendered from filtered archive events.
+   - Clicking a cluster focuses archive content to that era window.
+   - `All Eras` resets the timeline filter.
+7. Added Phase E visual enhancements in Encyclopedia workspace:
+   - Interactive Demographics tab with metric selector, crisis markers, hover tooltips, and click-to-phase navigation.
+   - Events tab view toggle (`List View` / `Timeline View`) with clickable timeline nodes for phase-centric exploration.
+   - Encyclopedia search autocomplete suggestions (stars, event types, event snippets) with click/enter selection.
+8. Added Phase F advanced navigation and reading features:
+   - `Navigator` tab with a grouped galaxy sitemap (ruler blocs + clickable star entries).
+   - Narrative progressive disclosure (`details` section) for chapter support events.
+   - Internal linkification for phase/star references in event and narrative text (`Phase X`, star names) with in-place navigation actions.
+9. Added Phase G polish and discovery improvements:
+   - New rotating `DID YOU KNOW?` simulation sidebar panel with deterministic factoids derived from live galaxy state (dynasty age, empire size, rebellion hotspot, technology peak, active-war hotspot, population giant).
+   - Factoid action buttons support direct pivots (`Open Star Detail`, `View ... Events` in Encyclopedia, phase jump).
+   - Star hover tooltip now includes compact relationship preview rows (`Ruler`, `Allies`, `Enemies`, `Subjects`) with name lists and overflow indicators.
 
 ---
 

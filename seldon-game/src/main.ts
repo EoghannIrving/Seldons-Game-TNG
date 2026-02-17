@@ -5,7 +5,7 @@
 
 import { Galaxy } from './core/galaxy';
 import { GalaxyRenderer } from './rendering/galaxy-renderer';
-import { EventType, GalaxyShape } from './core/types';
+import { EventType, GalaxyShape, Star } from './core/types';
 import { STAR_TYPE_PROPERTIES, TRAIT_PROPERTIES } from './core/star-properties';
 import { clearHistoricalTracking } from './core/event-tracking';
 import { feedbackSystem } from './core/feedback';
@@ -14,9 +14,14 @@ import { DemographicSnapshot } from './core/types';
 import { NarrativeGenerator } from './core/narrative';
 import { createDefaultSaveRepository, DEFAULT_GAME_ID } from './utils/save-repository-v2';
 import { ArchiveWorkerClient } from './utils/archive-worker-client';
-import { EncyclopediaEntry } from './core/encyclopedia';
+import { Encyclopedia, EncyclopediaEntry } from './core/encyclopedia';
 import { SaveIntegrityReport } from './utils/storage-v2';
 import { buildCompactAnalysisExportV1 } from './utils/compact-export';
+import { updateNewsFeed, updateStats, formatLargeNumber } from './ui/updates';
+import { showNotification } from './ui/notifications';
+import { showModal } from './ui/modals';
+import { showTooltip, hideTooltip, showInfoTooltip, updateTooltipPosition } from './components/tooltip';
+import { useStore } from './store';
 import './styles/main.css';
 
 const saveRepository = createDefaultSaveRepository();
@@ -52,15 +57,574 @@ async function hydrateGalaxyFromSave(): Promise<void> {
   const loadedGalaxy = new Galaxy(savedState.config);
   loadedGalaxy.state = savedState;
   galaxy = loadedGalaxy;
+  // Scrubber and markers are updated here because we now know the galaxy's history.
   updateScrubber();
   updatePhaseMarkers();
-  render();
   console.log('📂 Loaded saved game at phase', loadedGalaxy.state.phase);
 }
 
-void hydrateGalaxyFromSave().catch((error) => {
-  console.warn('Failed to hydrate save; continuing with new galaxy:', error);
-});
+const navSimulation = document.getElementById('nav-simulation');
+const navEncyclopedia = document.getElementById('nav-encyclopedia');
+const navSettings = document.getElementById('nav-settings');
+const contextualNav = document.getElementById('contextual-nav');
+const gameContainer = document.getElementById('gameContainer') as HTMLDivElement | null;
+
+function getEncyclopediaWorkspace(): HTMLDivElement | null {
+  if (!gameContainer) return null;
+  let workspace = gameContainer.querySelector('#encyclopediaWorkspace') as HTMLDivElement | null;
+  if (!workspace) {
+    workspace = document.createElement('div');
+    workspace.id = 'encyclopediaWorkspace';
+    gameContainer.appendChild(workspace);
+  }
+  return workspace;
+}
+
+// --- Simulation View Elements ---
+// These are initialized when the simulation view is rendered.
+let phaseScrubber: HTMLInputElement | null = null;
+let resetBtn: HTMLButtonElement | null = null;
+let prevEventBtn: HTMLButtonElement | null = null;
+let nextEventBtn: HTMLButtonElement | null = null;
+let prevBookmarkBtn: HTMLButtonElement | null = null;
+let bookmarkBtn: HTMLButtonElement | null = null;
+let nextBookmarkBtn: HTMLButtonElement | null = null;
+let starSearch: HTMLInputElement | null = null;
+let searchSuggestions: HTMLDivElement | null = null;
+let filterTier: HTMLSelectElement | null = null;
+let filterStatus: HTMLSelectElement | null = null;
+let filterRegion: HTMLSelectElement | null = null;
+let showTradeRoutesCheckbox: HTMLInputElement | null = null;
+let showAlliancesCheckbox: HTMLInputElement | null = null;
+let showWarsCheckbox: HTMLInputElement | null = null;
+let showPowerCheckbox: HTMLInputElement | null = null;
+let showGridCheckbox: HTMLInputElement | null = null;
+
+// Header controls
+let headerPlayBtn: HTMLButtonElement | null = null;
+let headerStepBtn: HTMLButtonElement | null = null;
+let headerSpeedBtn: HTMLButtonElement | null = null;
+
+// Speed cycling
+const SPEEDS = [1000, 500, 200, 50];
+const SPEED_LABELS = ['1x', '2x', '5x', '20x'];
+let currentSpeedIndex = 2; // Start at 5x
+
+const SEARCH_PANEL_EXPOSURE_COUNT_KEY = 'seldon-search-panel-exposure-count';
+const SEARCH_PANEL_PREF_COLLAPSED_KEY = 'seldon-search-panel-pref-collapsed';
+const SEARCH_PANEL_PULSE_SEEN_KEY = 'seldon-search-panel-pulse-seen';
+const SEARCH_PANEL_EXPANDED_SESSION_LIMIT = 3;
+let hasTrackedSearchPanelExposureThisSession = false;
+const DID_YOU_KNOW_ROTATION_MS = 30_000;
+
+type EncyclopediaEventCategory = 'all' | 'war' | 'crisis' | 'rebellion' | 'plague' | 'leader' | 'succession';
+type DemographicMetricKey = 'totalPopulation' | 'averageTech' | 'maxPower' | 'imperialPower' | 'activeWars' | 'activeCrises';
+
+interface EncyclopediaViewState {
+  searchText: string;
+  eventCategory: EncyclopediaEventCategory;
+  phaseFilter: number | null;
+  timelineClusterId: string | null;
+  starFilters: string[];
+  visibleCount: number;
+  displayMode: 'atlas' | 'split';
+  activeTab: 'events' | 'narrative' | 'demographics' | 'navigator';
+  eventsViewMode: 'list' | 'timeline';
+  demographicsMetric: DemographicMetricKey;
+  navigatorExpandedGroupIds: string[];
+  selectedStarId: string | null;
+  selectedPhase: number | null;
+  selectedChapterId: string | null;
+}
+
+type AppViewMode = 'simulation' | 'encyclopedia';
+interface SimulationNavigationContext {
+  selectedStarId: string | null;
+  phase: number;
+  eventCategory: EncyclopediaEventCategory;
+}
+
+interface DidYouKnowFactoid {
+  id: string;
+  headline: string;
+  detail: string;
+  actionLabel: string;
+  actionStarId?: string;
+  actionPhase?: number;
+  actionCategory?: EncyclopediaEventCategory;
+  openEncyclopedia?: boolean;
+}
+
+const DEFAULT_ENCYCLOPEDIA_VIEW_STATE: EncyclopediaViewState = {
+  searchText: '',
+  eventCategory: 'all',
+  phaseFilter: null,
+  timelineClusterId: null,
+  starFilters: [],
+  visibleCount: 120,
+  displayMode: 'atlas',
+  activeTab: 'events',
+  eventsViewMode: 'list',
+  demographicsMetric: 'totalPopulation',
+  navigatorExpandedGroupIds: [],
+  selectedStarId: null,
+  selectedPhase: null,
+  selectedChapterId: null,
+};
+
+let encyclopediaViewState: EncyclopediaViewState = { ...DEFAULT_ENCYCLOPEDIA_VIEW_STATE };
+let currentViewMode: AppViewMode = 'simulation';
+let simulationNavigationContext: SimulationNavigationContext = {
+  selectedStarId: null,
+  phase: 0,
+  eventCategory: 'all',
+};
+let encyclopediaCachedPhase = -1;
+let encyclopediaCachedStateRef: typeof galaxy.state | null = null;
+let encyclopediaCachedEvents: EncyclopediaEntry[] = [];
+let encyclopediaRenderToken = 0;
+let simulationFactoids: DidYouKnowFactoid[] = [];
+let simulationFactoidIndex = 0;
+let didYouKnowRotationTimer: number | null = null;
+
+function getCachedEncyclopediaEvents(): EncyclopediaEntry[] {
+  if (encyclopediaCachedStateRef === galaxy.state && encyclopediaCachedPhase === galaxy.state.phase) {
+    return encyclopediaCachedEvents;
+  }
+  encyclopediaCachedEvents = Encyclopedia.getAllEvents(galaxy.state);
+  encyclopediaCachedPhase = galaxy.state.phase;
+  encyclopediaCachedStateRef = galaxy.state;
+  return encyclopediaCachedEvents;
+}
+
+function renderEncyclopediaLoadingState(): void {
+  if (!contextualNav) return;
+  contextualNav.innerHTML = `
+    <div class="panel">
+      <h3>ENCYCLOPEDIA CONTROLS</h3>
+      <div class="encyclopedia-content">
+        <p>Preparing filters...</p>
+      </div>
+    </div>
+  `;
+
+  const workspace = getEncyclopediaWorkspace();
+  if (workspace) {
+    workspace.innerHTML = `
+      <div class="encyclopedia-workspace-loading">
+        <h2>Encyclopedia Workspace</h2>
+        <p>Loading archive...</p>
+      </div>
+    `;
+  }
+}
+
+function captureSimulationNavigationContext(eventCategory: EncyclopediaEventCategory = 'all'): void {
+  simulationNavigationContext = {
+    selectedStarId: renderer.getSelectedStar(),
+    phase: galaxy.state.phase,
+    eventCategory,
+  };
+}
+
+function restoreSimulationNavigationContext(): void {
+  if (galaxy.state.phase !== simulationNavigationContext.phase) {
+    goToPhase(simulationNavigationContext.phase);
+  }
+
+  renderer.setSelectedStar(simulationNavigationContext.selectedStarId);
+  if (simulationNavigationContext.selectedStarId) {
+    const star = galaxy.getStar(simulationNavigationContext.selectedStarId);
+    if (star) {
+      renderer.panToStar(star);
+    }
+  }
+}
+
+function readSearchPanelExposureCount(): number {
+  const raw = localStorage.getItem(SEARCH_PANEL_EXPOSURE_COUNT_KEY);
+  const parsed = raw ? Number.parseInt(raw, 10) : 0;
+  if (Number.isNaN(parsed) || parsed < 0) {
+    return 0;
+  }
+  return parsed;
+}
+
+function writeSearchPanelExposureCount(count: number): void {
+  const normalized = Math.max(0, Math.floor(count));
+  localStorage.setItem(SEARCH_PANEL_EXPOSURE_COUNT_KEY, normalized.toString());
+}
+
+function readSearchPanelPreference(): boolean | null {
+  const raw = localStorage.getItem(SEARCH_PANEL_PREF_COLLAPSED_KEY);
+  if (raw === 'true') return true;
+  if (raw === 'false') return false;
+  return null;
+}
+
+function writeSearchPanelPreference(collapsed: boolean): void {
+  localStorage.setItem(SEARCH_PANEL_PREF_COLLAPSED_KEY, collapsed ? 'true' : 'false');
+}
+
+function hasShownSearchPanelPulse(): boolean {
+  return localStorage.getItem(SEARCH_PANEL_PULSE_SEEN_KEY) === 'true';
+}
+
+function markSearchPanelPulseShown(): void {
+  localStorage.setItem(SEARCH_PANEL_PULSE_SEEN_KEY, 'true');
+}
+
+function compareStarsByMetricDesc(a: Star, b: Star, metric: (star: Star) => number): number {
+  const metricDelta = metric(b) - metric(a);
+  if (metricDelta !== 0) return metricDelta;
+  return a.name.localeCompare(b.name);
+}
+
+function buildDidYouKnowFactoids(): DidYouKnowFactoid[] {
+  const stars = galaxy.getAllStars();
+  if (stars.length === 0) return [];
+
+  const facts: DidYouKnowFactoid[] = [];
+
+  const dynastyLeader = [...stars].sort((a, b) => compareStarsByMetricDesc(a, b, (star) => star.dynastyAge))[0];
+  if (dynastyLeader && dynastyLeader.dynastyAge > 0) {
+    facts.push({
+      id: 'longest-dynasty',
+      headline: 'Longest Dynasty',
+      detail: `${dynastyLeader.name} has held its line for ${dynastyLeader.dynastyAge} phases.`,
+      actionLabel: 'Open Star Detail ->',
+      actionStarId: dynastyLeader.id,
+    });
+  }
+
+  const empireLeader = stars
+    .filter((star) => star.ruler === star.id)
+    .sort((a, b) => compareStarsByMetricDesc(a, b, (star) => star.subjects.length))[0];
+  if (empireLeader && empireLeader.subjects.length > 0) {
+    facts.push({
+      id: 'largest-empire',
+      headline: 'Largest Empire',
+      detail: `${empireLeader.name} currently rules ${empireLeader.subjects.length} subject stars.`,
+      actionLabel: 'View Empire Events ->',
+      actionStarId: empireLeader.id,
+      actionCategory: 'war',
+      openEncyclopedia: true,
+    });
+  }
+
+  const rebellionLeader = stars
+    .map((star) => ({
+      star,
+      count: (star.history || []).filter((event) => mapEventTypeToEncyclopediaCategory(event.type) === 'rebellion').length,
+    }))
+    .sort((a, b) => (b.count - a.count) || a.star.name.localeCompare(b.star.name))[0];
+  if (rebellionLeader && rebellionLeader.count > 0) {
+    facts.push({
+      id: 'rebellion-hotspot',
+      headline: 'Rebellion Hotspot',
+      detail: `${rebellionLeader.star.name} has recorded ${rebellionLeader.count} rebellion events.`,
+      actionLabel: 'Inspect Rebellions ->',
+      actionStarId: rebellionLeader.star.id,
+      actionCategory: 'rebellion',
+      openEncyclopedia: true,
+    });
+  }
+
+  const techLeader = [...stars].sort((a, b) => compareStarsByMetricDesc(a, b, (star) => star.tech || 0))[0];
+  if (techLeader) {
+    facts.push({
+      id: 'technology-peak',
+      headline: 'Technology Peak',
+      detail: `${techLeader.name} leads with tech ${(techLeader.tech || 0).toFixed(1)} at phase ${galaxy.state.phase}.`,
+      actionLabel: 'Open Star Detail ->',
+      actionStarId: techLeader.id,
+    });
+  }
+
+  const warLeader = [...stars].sort((a, b) => compareStarsByMetricDesc(a, b, (star) => star.atWarWith.length))[0];
+  if (warLeader && warLeader.atWarWith.length > 0) {
+    facts.push({
+      id: 'war-hotspot',
+      headline: 'War Hotspot',
+      detail: `${warLeader.name} is engaged in ${warLeader.atWarWith.length} active war fronts.`,
+      actionLabel: 'View War Events ->',
+      actionStarId: warLeader.id,
+      actionCategory: 'war',
+      openEncyclopedia: true,
+    });
+  }
+
+  const populationLeader = [...stars].sort((a, b) => compareStarsByMetricDesc(a, b, (star) => star.population || 0))[0];
+  if (populationLeader) {
+    facts.push({
+      id: 'population-giant',
+      headline: 'Population Giant',
+      detail: `${populationLeader.name} hosts ${formatLargeNumber(populationLeader.population || 0)} population.`,
+      actionLabel: 'Center on Star ->',
+      actionStarId: populationLeader.id,
+    });
+  }
+
+  if (facts.length === 0) {
+    facts.push({
+      id: 'baseline',
+      headline: 'Simulation Insight',
+      detail: `Phase ${galaxy.state.phase} currently tracks ${stars.length} stars across the galaxy.`,
+      actionLabel: 'Jump to Current Phase ->',
+      actionPhase: galaxy.state.phase,
+    });
+  }
+
+  return facts;
+}
+
+function getActiveFactoid(): DidYouKnowFactoid | null {
+  if (simulationFactoids.length === 0) return null;
+  const safeIndex = Math.max(0, Math.min(simulationFactoidIndex, simulationFactoids.length - 1));
+  return simulationFactoids[safeIndex] ?? null;
+}
+
+function updateDidYouKnowPanelContent(): void {
+  const titleEl = document.getElementById('didYouKnowHeadline');
+  const detailEl = document.getElementById('didYouKnowDetail');
+  const counterEl = document.getElementById('didYouKnowCounter');
+  const actionBtn = document.getElementById('didYouKnowActionBtn') as HTMLButtonElement | null;
+  if (!titleEl || !detailEl || !counterEl || !actionBtn) return;
+
+  const active = getActiveFactoid();
+  if (!active) {
+    titleEl.textContent = 'No factoids available';
+    detailEl.textContent = 'Advance the simulation to collect notable milestones.';
+    counterEl.textContent = '0/0';
+    actionBtn.textContent = 'No action';
+    actionBtn.disabled = true;
+    actionBtn.dataset.actionStarId = '';
+    actionBtn.dataset.actionPhase = '';
+    actionBtn.dataset.actionCategory = '';
+    actionBtn.dataset.openEncyclopedia = '';
+    return;
+  }
+
+  titleEl.textContent = active.headline;
+  detailEl.textContent = active.detail;
+  counterEl.textContent = `${simulationFactoidIndex + 1}/${simulationFactoids.length}`;
+  actionBtn.textContent = active.actionLabel;
+  actionBtn.disabled = false;
+  actionBtn.dataset.actionStarId = active.actionStarId ?? '';
+  actionBtn.dataset.actionPhase = typeof active.actionPhase === 'number' ? String(active.actionPhase) : '';
+  actionBtn.dataset.actionCategory = active.actionCategory ?? '';
+  actionBtn.dataset.openEncyclopedia = active.openEncyclopedia ? 'true' : '';
+}
+
+function rotateDidYouKnowFactoid(): void {
+  if (currentViewMode !== 'simulation') return;
+  simulationFactoids = buildDidYouKnowFactoids();
+  if (simulationFactoids.length === 0) {
+    simulationFactoidIndex = 0;
+    updateDidYouKnowPanelContent();
+    return;
+  }
+  simulationFactoidIndex = (simulationFactoidIndex + 1) % simulationFactoids.length;
+  updateDidYouKnowPanelContent();
+}
+
+function ensureDidYouKnowRotation(): void {
+  if (didYouKnowRotationTimer !== null) return;
+  didYouKnowRotationTimer = window.setInterval(() => {
+    if (currentViewMode !== 'simulation') return;
+    if (simulationFactoids.length < 2) return;
+    rotateDidYouKnowFactoid();
+  }, DID_YOU_KNOW_ROTATION_MS);
+}
+
+async function main() {
+  // Initialize header controls first (they're always present)
+  initializeHeaderControls();
+  initializeHeaderStatTooltips();
+
+  // Attempt to load a saved game first.
+  try {
+    await hydrateGalaxyFromSave();
+  } catch (error) {
+    console.warn('Failed to hydrate save; continuing with new galaxy:', error);
+  }
+
+  // Perform the initial render to show the starting state.
+  try {
+    renderSimulationView(); // Render the main UI
+    render(); // Render the galaxy canvas
+    updateScrubber();
+    updatePhaseMarkers();
+    console.log('✅ Initial render complete');
+  } catch (e) {
+    console.error('❌ Initial render failed:', e);
+  }
+
+  // Start the game loop for animations and auto-advance.
+  requestAnimationFrame(gameLoop_new);
+}
+
+function initializeHeaderControls() {
+  headerPlayBtn = document.getElementById('headerPlayBtn') as HTMLButtonElement;
+  headerStepBtn = document.getElementById('headerStepBtn') as HTMLButtonElement;
+  headerSpeedBtn = document.getElementById('headerSpeedBtn') as HTMLButtonElement;
+
+  // Play/Pause button
+  headerPlayBtn?.addEventListener('click', () => {
+    useStore.getState().togglePlay();
+  });
+
+  // Step button
+  headerStepBtn?.addEventListener('click', () => {
+    advancePhase_new();
+    render();
+  });
+
+  // Speed button - cycles through speeds
+  headerSpeedBtn?.addEventListener('click', () => {
+    currentSpeedIndex = (currentSpeedIndex + 1) % SPEEDS.length;
+    if (headerSpeedBtn) {
+      headerSpeedBtn.textContent = SPEED_LABELS[currentSpeedIndex];
+    }
+    // Also update the speed select in the panel if it exists
+    if (speedSelect) {
+      speedSelect.value = SPEEDS[currentSpeedIndex].toString();
+    }
+  });
+}
+
+function initializeHeaderStatTooltips() {
+  const bindTooltip = (
+    selector: string,
+    getTitle: () => string,
+    getLines: () => string[]
+  ) => {
+    const target = document.querySelector(selector) as HTMLElement | null;
+    if (!target || target.dataset.tooltipBound === 'true') return;
+
+    target.dataset.tooltipBound = 'true';
+    target.style.cursor = 'help';
+
+    target.addEventListener('mouseenter', (event) => {
+      const mouseEvent = event as MouseEvent;
+      showInfoTooltip(getTitle(), getLines(), mouseEvent.clientX, mouseEvent.clientY);
+    });
+    target.addEventListener('mousemove', (event) => {
+      const mouseEvent = event as MouseEvent;
+      updateTooltipPosition(mouseEvent.clientX, mouseEvent.clientY);
+    });
+    target.addEventListener('mouseleave', () => {
+      hideTooltip();
+    });
+  };
+
+  bindTooltip(
+    '#statPhase',
+    () => 'PHASE',
+    () => [
+      `Current: ${galaxy.state.phase}`,
+      'Each phase advances simulation history by one step.',
+      'Use timeline controls to scrub historical phases.',
+    ]
+  );
+
+  bindTooltip(
+    '#statPower',
+    () => 'POWER',
+    () => {
+      const stats = galaxy.getStatistics();
+      return [
+        `Current: ${formatLargeNumber(stats.totalPower)}`,
+        'Total galactic power across all star systems.',
+        'Higher values indicate stronger aggregate empires.',
+      ];
+    }
+  );
+
+  bindTooltip(
+    '#statIndependent',
+    () => 'INDEPENDENT',
+    () => {
+      const stats = galaxy.getStatistics();
+      return [
+        `Current: ${stats.independentStars}`,
+        'Count of self-ruled stars (not subjects).',
+        'Fewer independents usually means stronger centralization.',
+      ];
+    }
+  );
+
+  bindTooltip(
+    '#statCentralization',
+    () => 'CENTRALIZATION',
+    () => {
+      const stats = galaxy.getStatistics();
+      return [
+        `Current: ${stats.averageCentralization.toFixed(2)}`,
+        'Range: 0.00 (fragmented) to 1.00 (highly centralized).',
+        'Tracks concentration of authority across the galaxy.',
+      ];
+    }
+  );
+
+  bindTooltip(
+    '.hud-stat-zeitgeist',
+    () => 'ZEITGEIST',
+    () => {
+      const zg = (galaxy.state as any).zeitgeist || 0;
+      const leaning = zg >= 0 ? 'Order' : 'Chaos';
+      return [
+        `Current: ${zg.toFixed(2)} (${leaning})`,
+        'Range: -1.00 (Chaos) to +1.00 (Order).',
+        'Signals galaxy-wide drift toward fragmentation or unity.',
+      ];
+    }
+  );
+}
+
+// --- Main Execution ---
+void main();
+
+function advancePhase_new() {
+  const startTime = performance.now();
+  galaxy.advancePhase();
+  lastPhaseTime = performance.now() - startTime;
+
+  // Persist every 10 phases or on major events to avoid perf hit
+  if (galaxy.state.phase % 10 === 0 || galaxy.getStatistics().majorEvents > 0) {
+    void persistGameState();
+  }
+
+  updateScrubber();
+  updatePhaseMarkers(); // Keep markers fresh
+}
+
+function gameLoop_new() {
+  try {
+    if (useStore.getState().isPlaying) {
+      advancePhase_new();
+    }
+    // Always render to keep animations smooth, even when paused
+    render();
+  } catch (error) {
+    console.error('💥 Critical error in game loop:', error);
+    renderFailed = true;
+    // If the game was playing, stop it.
+    if (useStore.getState().isPlaying) {
+      useStore.getState().togglePlay();
+    }
+    // Ensure the button text reflects the stopped state.
+    if (playBtn) playBtn.textContent = '▶ Play';
+  } finally {
+    if (!renderFailed) {
+      animationId = requestAnimationFrame(gameLoop_new);
+    }
+  }
+}
+
+// Game loop for auto-advance and animation
+let animationId: number;
+let renderFailed = false;
 
 async function persistGameState(): Promise<void> {
   try {
@@ -117,23 +681,9 @@ function applyTheme(themeName: 'foundation' | 'zx') {
   render();
 }
 
-// View Options (Phase 4)
-const showTradeRoutesCheckbox = document.getElementById('showTrade') as HTMLInputElement;
-const showAlliancesCheckbox = document.getElementById('showAlliances') as HTMLInputElement;
-const showWarsCheckbox = document.getElementById('showWars') as HTMLInputElement;
-const showPowerCheckbox = document.getElementById('showPower') as HTMLInputElement;
-const showGridCheckbox = document.getElementById('showGrid') as HTMLInputElement;
-
 // Zeitgeist UI
 const zeitgeistBar = document.getElementById('zeitgeistBar');
 const zeitgeistValue = document.getElementById('zeitgeistValue');
-
-// Set initial state
-if (showTradeRoutesCheckbox) showTradeRoutesCheckbox.checked = false;
-if (showAlliancesCheckbox) showAlliancesCheckbox.checked = true;
-if (showWarsCheckbox) showWarsCheckbox.checked = true;
-if (showPowerCheckbox) showPowerCheckbox.checked = true;
-if (showGridCheckbox) showGridCheckbox.checked = false;
 
 function updateViewOptions() {
   renderer.setOptions({
@@ -147,216 +697,708 @@ function updateViewOptions() {
   render();
 }
 
-if (showTradeRoutesCheckbox) showTradeRoutesCheckbox.addEventListener('change', updateViewOptions);
-if (showAlliancesCheckbox) showAlliancesCheckbox.addEventListener('change', updateViewOptions);
-if (showWarsCheckbox) showWarsCheckbox.addEventListener('change', updateViewOptions);
-if (showPowerCheckbox) showPowerCheckbox.addEventListener('change', updateViewOptions);
-if (showGridCheckbox) showGridCheckbox.addEventListener('change', updateViewOptions);
-
-// Initialize view options
-updateViewOptions();
-
 // Theme Management (moved after UI init)
 const savedTheme = localStorage.getItem('seldon-theme') || 'foundation';
 applyTheme(savedTheme as 'foundation' | 'zx');
 
-// Collapsible Panels
-document.querySelectorAll('.panel h3').forEach((header) => {
-  header.addEventListener('click', () => {
-    const panel = header.parentElement;
-    if (panel) {
-      panel.classList.toggle('collapsed');
+function handleStarSearch() {
+    if (!starSearch || !searchSuggestions) return;
+
+    const query = starSearch.value.toLowerCase().trim();
+
+    if (query.length < 1) {
+        searchSuggestions.style.display = 'none';
+        // Clear search filter
+        renderer.setFilteredStars([]);
+        render();
+        return;
+    }
+
+    const allStars = galaxy.getAllStars();
+    const matches = allStars
+        .filter(star => star.name.toLowerCase().includes(query))
+        .slice(0, 10); // Limit to 10 results
+
+    if (matches.length === 0) {
+        searchSuggestions.innerHTML = '<div class="search-suggestion">No matches found</div>';
+        searchSuggestions.style.display = 'block';
+        renderer.setFilteredStars([]);
+        render();
+        return;
+    }
+
+    // Show suggestions
+    searchSuggestions.innerHTML = matches
+        .map(star => {
+            const isCapital = star.ruler === star.id;
+            const statusIcon = isCapital ? '👑' : '•';
+            return `<div class="search-suggestion" data-star-id="${star.id}">
+                ${statusIcon} ${star.name}
+            </div>`;
+        })
+        .join('');
+
+    searchSuggestions.style.display = 'block';
+
+    // Add click handlers to suggestions
+    searchSuggestions.querySelectorAll('.search-suggestion').forEach(el => {
+        el.addEventListener('click', () => {
+            const starId = (el as HTMLElement).dataset.starId;
+            if (starId) {
+                const star = galaxy.getStar(starId);
+                if (star) {
+                    renderer.setSelectedStar(starId);
+                    renderer.centerOnStar(star);
+                    if (starSearch) starSearch.value = star.name;
+                    searchSuggestions.style.display = 'none';
+                    render();
+                }
+            }
+        });
+    });
+
+    // Filter visible stars
+    renderer.setFilteredStars(matches.map(s => s.id));
+    render();
+}
+
+function applyFilters() {
+    if (!filterTier || !filterStatus || !filterRegion) return;
+
+    const allStars = galaxy.getAllStars();
+    let filtered = allStars;
+
+    // Tier filter
+    const tierValue = filterTier.value;
+    if (tierValue !== 'all') {
+        filtered = filtered.filter(star => {
+            if (tierValue === 'major') return star.tier === 'major';
+            if (tierValue === 'regional') return star.tier === 'major' || star.tier === 'regional';
+            if (tierValue === 'minor') return star.tier === 'minor';
+            return true;
+        });
+    }
+
+    // Status filter
+    const statusValue = filterStatus.value;
+    if (statusValue !== 'all') {
+        filtered = filtered.filter(star => {
+            if (statusValue === 'independent') return star.ruler === star.id;
+            if (statusValue === 'subject') return star.ruler !== star.id;
+            if (statusValue === 'capital') return star.ruler === star.id && star.subjects.length > 0;
+            return true;
+        });
+    }
+
+    // Region filter
+    const regionValue = filterRegion.value;
+    if (regionValue !== 'all') {
+        // Filter by region (implementation depends on region data structure)
+        // For now, skip if not implemented
+    }
+
+    renderer.setFilteredStars(filtered.map(s => s.id));
+    render();
+}
+
+function initializeSimulationUI() {
+  // Collapsible Panels
+  document.querySelectorAll('#contextual-nav .panel h3').forEach((header) => {
+    header.addEventListener('click', () => {
+      const panel = header.parentElement;
+      if (panel) {
+        panel.classList.toggle('collapsed');
+        if (panel.id === 'searchPanel') {
+          writeSearchPanelPreference(panel.classList.contains('collapsed'));
+        }
+      }
+    });
+  });
+
+  // Re-initialize other UI elements and event listeners here
+  const newsFeedContent = document.getElementById('newsFeedContent');
+  if (newsFeedContent) {
+    newsFeedContent.addEventListener('click', (e) => {
+      const target = e.target;
+      if (!(target instanceof Element)) return;
+
+      const newsItem = target.closest('.news-item') as HTMLDivElement | null;
+      if (!newsItem) return;
+
+      if (target.closest('.news-encyclopedia-link')) {
+        e.preventDefault();
+        const eventType = newsItem.dataset.eventType || '';
+        const phase = Number.parseInt(newsItem.dataset.phase || '', 10);
+        const starIds = newsItem.dataset.starIds?.split(',').filter(Boolean) || [];
+        openEncyclopedia({
+          eventCategory: mapEventTypeToEncyclopediaCategory(eventType),
+          phaseFilter: Number.isNaN(phase) ? null : phase,
+          starFilters: starIds,
+        });
+        return;
+      }
+
+      if (newsItem) {
+        const starIds = newsItem.dataset.starIds?.split(',');
+        if (starIds && starIds.length > 0) {
+          const starId = starIds[0];
+          const star = galaxy.getStar(starId);
+          if (star) {
+            renderer.panToStar(star);
+            renderer.setSelectedStar(starId);
+            render();
+          }
+        }
+      }
+    });
+  }
+
+  const factoidActionBtn = document.getElementById('didYouKnowActionBtn') as HTMLButtonElement | null;
+  factoidActionBtn?.addEventListener('click', () => {
+    const starId = factoidActionBtn.dataset.actionStarId || null;
+    const phaseRaw = factoidActionBtn.dataset.actionPhase;
+    const phase = phaseRaw ? Number.parseInt(phaseRaw, 10) : Number.NaN;
+    const categoryRaw = factoidActionBtn.dataset.actionCategory || 'all';
+    const category: EncyclopediaEventCategory =
+      categoryRaw === 'war' || categoryRaw === 'crisis' || categoryRaw === 'rebellion' || categoryRaw === 'plague' || categoryRaw === 'leader' || categoryRaw === 'succession'
+        ? categoryRaw
+        : 'all';
+    const shouldOpenEncyclopedia = factoidActionBtn.dataset.openEncyclopedia === 'true';
+
+    if (shouldOpenEncyclopedia) {
+      openEncyclopedia({
+        activeTab: 'events',
+        eventCategory: category,
+        phaseFilter: Number.isNaN(phase) ? null : phase,
+        selectedPhase: Number.isNaN(phase) ? null : phase,
+        starFilters: starId ? [starId] : [],
+        selectedStarId: starId,
+      });
+      return;
+    }
+
+    if (starId) {
+      const star = galaxy.getStar(starId);
+      if (!star) return;
+      renderer.openStarDetail(starId, 'entry');
+      renderer.panToStar(star);
+      render();
+      return;
+    }
+
+    if (!Number.isNaN(phase)) {
+      goToPhase(phase);
+      render();
     }
   });
-});
 
-// Tooltip element
-let tooltip: HTMLDivElement | null = null;
-function createTooltip() {
-  tooltip = document.createElement('div');
-  tooltip.id = 'tooltip';
-  tooltip.style.position = 'fixed';
-  tooltip.style.display = 'none';
-  tooltip.style.background = 'rgba(0, 10, 20, 0.95)';
-  tooltip.style.border = '2px solid #0ff';
-  tooltip.style.padding = '10px 14px';
-  tooltip.style.pointerEvents = 'none';
-  tooltip.style.zIndex = '10000';
-  tooltip.style.fontSize = '12px';
-  tooltip.style.fontFamily = '"Courier New", monospace';
-  tooltip.style.color = '#0ff';
-  tooltip.style.boxShadow = '0 0 20px rgba(0, 255, 255, 0.7)';
-  tooltip.style.maxWidth = '280px';
-  tooltip.style.borderRadius = '3px';
-  document.body.appendChild(tooltip);
+  const factoidNextBtn = document.getElementById('didYouKnowNextBtn') as HTMLButtonElement | null;
+  factoidNextBtn?.addEventListener('click', () => {
+    rotateDidYouKnowFactoid();
+  });
+
+  console.log('Simulation UI Initialized');
 }
-createTooltip();
 
-// Number formatting helper
-function formatLargeNumber(n: number): string {
-  if (!isFinite(n)) return 'MAX';
-  if (n >= 1e15) return (n / 1e15).toFixed(1) + 'Q';
-  if (n >= 1e12) return (n / 1e12).toFixed(1) + 'T';
-  if (n >= 1e9) return (n / 1e9).toFixed(1) + 'B';
-  if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
-  if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
-  if (n >= 10) return n.toFixed(1);
-  return n.toFixed(2);
+function initializeSimulationControls() {
+    // --- TIMELINE CONTROLS ---
+    phaseScrubber = document.getElementById('phaseScrubber') as HTMLInputElement;
+    resetBtn = document.getElementById('resetBtn') as HTMLButtonElement;
+    prevEventBtn = document.getElementById('prevEventBtn') as HTMLButtonElement;
+    nextEventBtn = document.getElementById('nextEventBtn') as HTMLButtonElement;
+    prevBookmarkBtn = document.getElementById('prevBookmarkBtn') as HTMLButtonElement;
+    bookmarkBtn = document.getElementById('bookmarkBtn') as HTMLButtonElement;
+    nextBookmarkBtn = document.getElementById('nextBookmarkBtn') as HTMLButtonElement;
+
+    // --- VIEW OPTIONS ---
+    showTradeRoutesCheckbox = document.getElementById('showTrade') as HTMLInputElement;
+    showAlliancesCheckbox = document.getElementById('showAlliances') as HTMLInputElement;
+    showWarsCheckbox = document.getElementById('showWars') as HTMLInputElement;
+    showPowerCheckbox = document.getElementById('showPower') as HTMLInputElement;
+    showGridCheckbox = document.getElementById('showGrid') as HTMLInputElement;
+
+    // --- SEARCH & FILTER ---
+    starSearch = document.getElementById('starSearch') as HTMLInputElement;
+    searchSuggestions = document.getElementById('search-suggestions') as HTMLDivElement;
+    filterTier = document.getElementById('filterTier') as HTMLSelectElement;
+    filterStatus = document.getElementById('filterStatus') as HTMLSelectElement;
+    filterRegion = document.getElementById('filterRegion') as HTMLSelectElement;
+
+    // --- Set initial state for checkboxes ---
+    if (showTradeRoutesCheckbox) showTradeRoutesCheckbox.checked = renderer.options.showTradeRoutes;
+    if (showAlliancesCheckbox) showAlliancesCheckbox.checked = renderer.options.showAlliances;
+    if (showWarsCheckbox) showWarsCheckbox.checked = renderer.options.showWars;
+    if (showPowerCheckbox) showPowerCheckbox.checked = renderer.options.showPowerGlow;
+    if (showGridCheckbox) showGridCheckbox.checked = renderer.options.showGrid;
+
+    // --- Attach Event Listeners ---
+    if (showTradeRoutesCheckbox) showTradeRoutesCheckbox.addEventListener('change', updateViewOptions);
+    if (showAlliancesCheckbox) showAlliancesCheckbox.addEventListener('change', updateViewOptions);
+    if (showWarsCheckbox) showWarsCheckbox.addEventListener('change', updateViewOptions);
+    if (showPowerCheckbox) showPowerCheckbox.addEventListener('change', updateViewOptions);
+    if (showGridCheckbox) showGridCheckbox.addEventListener('change', updateViewOptions);
+
+    phaseScrubber?.addEventListener('input', (e) => {
+        const target = e.target as HTMLInputElement;
+        goToPhase(parseInt(target.value, 10));
+    });
+
+    // --- Search & Filter ---
+    if (starSearch) {
+        starSearch.addEventListener('input', handleStarSearch);
+        starSearch.addEventListener('focus', handleStarSearch);
+        starSearch.addEventListener('blur', () => {
+            // Delay hiding to allow clicking on suggestions
+            setTimeout(() => {
+                if (searchSuggestions) searchSuggestions.style.display = 'none';
+            }, 200);
+        });
+    }
+
+    if (filterTier) filterTier.addEventListener('change', applyFilters);
+    if (filterStatus) filterStatus.addEventListener('change', applyFilters);
+    if (filterRegion) filterRegion.addEventListener('change', applyFilters);
+
+    // --- Keyboard Shortcuts ---
+    document.addEventListener('keydown', (e) => {
+        if (e.code === 'Space' && !e.target.matches('input, select, button')) {
+            e.preventDefault();
+            advancePhase_new();
+            render();
+        }
+    });
+
+    initializeSimulationUI(); // For collapsible panels etc.
+    updateViewOptions(); // Apply initial view options
+}
+
+function renderSimulationView() {
+    if (!contextualNav) return;
+    currentViewMode = 'simulation';
+    document.body.classList.remove('encyclopedia-focus-mode');
+    document.body.classList.remove('encyclopedia-split-mode');
+    resizeCanvas();
+    const workspace = getEncyclopediaWorkspace();
+    if (workspace) {
+      workspace.innerHTML = '';
+    }
+    navSimulation?.classList.add('active');
+    navEncyclopedia?.classList.remove('active');
+    navSettings?.classList.remove('active');
+
+    const storedSearchPanelPreference = readSearchPanelPreference();
+    const searchPanelExposureCount = readSearchPanelExposureCount();
+    const shouldExpandForOnboarding =
+      storedSearchPanelPreference === null &&
+      searchPanelExposureCount < SEARCH_PANEL_EXPANDED_SESSION_LIMIT;
+    const searchPanelCollapsed = storedSearchPanelPreference ?? !shouldExpandForOnboarding;
+    const shouldPulseSearchPanel =
+      storedSearchPanelPreference === null &&
+      searchPanelExposureCount === 0 &&
+      !hasShownSearchPanelPulse();
+
+    if (!hasTrackedSearchPanelExposureThisSession) {
+      hasTrackedSearchPanelExposureThisSession = true;
+      if (storedSearchPanelPreference === null && searchPanelExposureCount < SEARCH_PANEL_EXPANDED_SESSION_LIMIT) {
+        writeSearchPanelExposureCount(searchPanelExposureCount + 1);
+      }
+    }
+
+    if (shouldPulseSearchPanel) {
+      markSearchPanelPulseShown();
+    }
+
+    const searchPanelClasses = [
+      'panel',
+      searchPanelCollapsed ? 'collapsed' : '',
+      shouldPulseSearchPanel ? 'panel-attention-pulse' : '',
+    ].filter(Boolean).join(' ');
+    simulationFactoids = buildDidYouKnowFactoids();
+    if (simulationFactoids.length === 0) {
+      simulationFactoidIndex = 0;
+    } else {
+      simulationFactoidIndex = simulationFactoidIndex % simulationFactoids.length;
+    }
+
+    contextualNav.innerHTML = `
+      <div class="panel collapsed" id="timePanel">
+        <h3>TIMELINE</h3>
+
+        <!-- Phase Scrubber -->
+        <div class="border-bottom-dim padding-bottom-8 margin-bottom-8">
+          <div class="flex items-center gap-5 margin-bottom-4">
+            <input type="range" id="phaseScrubber" min="0" max="0" value="0" list="phaseMarkers" class="w-full" aria-label="Phase scrubber">
+            <datalist id="phaseMarkers"></datalist>
+          </div>
+          <div class="history-range font-size-11 color-dim">
+            History: <span id="historyRange">0</span> phases
+          </div>
+        </div>
+
+        <!-- Event Navigation -->
+        <div class="border-bottom-dim padding-bottom-8 margin-bottom-8">
+          <div class="flex gap-5 margin-bottom-6">
+            <button id="prevEventBtn" class="event-nav-btn" title="Previous Crisis" aria-label="Previous Crisis">⏮ Event</button>
+            <button id="nextEventBtn" class="event-nav-btn" title="Next Crisis" aria-label="Next Crisis">Event ⏭</button>
+          </div>
+          <div class="flex gap-5">
+            <button id="prevBookmarkBtn" class="event-nav-btn" title="Previous Bookmark" aria-label="Previous Bookmark">⏮ Book</button>
+            <button id="bookmarkBtn" class="flex-1" title="Toggle Bookmark" aria-label="Toggle Bookmark">🔖</button>
+            <button id="nextBookmarkBtn" class="event-nav-btn" title="Next Bookmark" aria-label="Next Bookmark">Book ⏭</button>
+          </div>
+        </div>
+
+        <!-- Reset Action -->
+        <div id="controls" class="core-actions">
+          <button id="resetBtn" class="span-2" aria-label="Reset simulation">Reset Galaxy</button>
+        </div>
+      </div>
+
+      <!-- News Feed -->
+      <div class="panel news-panel" id="newsPanel">
+        <h3>GALACTIC NEWS</h3>
+        <div id="newsFeedContent" class="news-feed-content">
+          <div class="news-feed-placeholder">No recent events.</div>
+        </div>
+      </div>
+
+      <div class="panel" id="didYouKnowPanel">
+        <h3>DID YOU KNOW?</h3>
+        <div class="did-you-know-content">
+          <div id="didYouKnowHeadline" class="did-you-know-headline"></div>
+          <div id="didYouKnowDetail" class="did-you-know-detail"></div>
+          <div class="did-you-know-footer">
+            <span id="didYouKnowCounter" class="did-you-know-counter">1/1</span>
+            <div class="did-you-know-actions">
+              <button id="didYouKnowActionBtn" class="did-you-know-btn" type="button">Explore -></button>
+              <button id="didYouKnowNextBtn" class="did-you-know-btn secondary" type="button">Next</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel collapsed" id="viewPanel">
+        <h3>VIEW OPTIONS <span class="panel-content-hint">[5 toggles + zoom]</span></h3>
+        <div class="font-size-11">
+          <label class="view-options-label">
+            <input type="checkbox" id="showTrade" class="view-options-checkbox" aria-label="Show trade routes">
+            Trade Routes
+          </label>
+          <label class="view-options-label">
+            <input type="checkbox" id="showAlliances" checked class="view-options-checkbox" aria-label="Show alliances">
+            Alliances
+          </label>
+          <label class="view-options-label">
+            <input type="checkbox" id="showWars" checked class="view-options-checkbox" aria-label="Show wars">
+            Wars
+          </label>
+          <label class="view-options-label">
+            <input type="checkbox" id="showPower" checked class="view-options-checkbox" aria-label="Show power and tribute">
+            Power/Tribute
+          </label>
+          <label class="color-muted display-block">
+            <input type="checkbox" id="showGrid" class="view-options-checkbox" aria-label="Show coordinate grid">
+            Coordinate Grid
+          </label>
+
+          <div class="stat margin-top-8 padding-top-8 border-top-dim">
+            <div class="stat-label color-dim">Camera Zoom</div>
+            <div class="stat-value" id="statZoom">1.0x</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="${searchPanelClasses}" id="searchPanel">
+        <h3>SEARCH & FILTER <span class="panel-content-hint">[Search + 3 filters]</span></h3>
+        <!-- Search/Filter -->
+        <div class="search-container margin-top-5">
+          <input
+            type="text"
+            id="starSearch"
+            placeholder="Search stars..."
+            class="w-full star-search-input"
+            aria-label="Search for a star"
+            autocomplete="off"
+          />
+          <div id="search-suggestions" class="search-suggestions"></div>
+        </div>
+          <div class="margin-top-8 font-size-11">
+            <!-- Tier Filter -->
+            <div class="margin-bottom-6">
+              <label class="color-dim display-block margin-bottom-2">Tier:</label>
+              <select id="filterTier" class="w-full filter-select" aria-label="Filter by star tier">
+                <option value="all">All Stars</option>
+                <option value="major">Major Powers Only</option>
+                <option value="regional">Major & Regional</option>
+                <option value="minor">Minor Systems</option>
+              </select>
+            </div>
+
+            <!-- Status Filter -->
+            <div class="margin-bottom-6">
+              <label class="color-dim display-block margin-bottom-2">Status:</label>
+              <select id="filterStatus" class="w-full filter-select" aria-label="Filter by star status">
+                <option value="all">All Statuses</option>
+                <option value="independent">Independent</option>
+                <option value="subject">Subjects</option>
+                <option value="capital">Capitals</option>
+              </select>
+            </div>
+
+            <!-- Region Filter (Phase 6) -->
+            <div class="margin-bottom-6">
+              <label class="color-dim display-block margin-bottom-2">Region:</label>
+              <select id="filterRegion" class="w-full filter-select" aria-label="Filter by region">
+                <option value="all">All Regions</option>
+                <!-- Populated dynamically -->
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    `;
+    
+    initializeSimulationControls();
+    updateDidYouKnowPanelContent();
+    ensureDidYouKnowRotation();
+}
+
+function mapEventTypeToEncyclopediaCategory(eventTypeRaw: string): EncyclopediaEventCategory {
+  const eventType = eventTypeRaw.toLowerCase();
+  if (eventType.includes('war') || eventType.includes('conquest') || eventType.includes('peace')) return 'war';
+  if (eventType.includes('crisis') || eventType.includes('anarchy') || eventType.includes('mule') || eventType.includes('external')) return 'crisis';
+  if (eventType.includes('rebellion') || eventType.includes('revolution') || eventType.includes('liberation') || eventType.includes('collapse')) return 'rebellion';
+  if (eventType.includes('plague')) return 'plague';
+  if (eventType.includes('leader') || eventType.includes('great-person') || eventType.includes('dynasty')) return 'leader';
+  if (eventType.includes('succession')) return 'succession';
+  return 'all';
+}
+
+function resolveStarIdAtCurrentPhase(candidateStarIds: string[], candidateStarNames: string[] = []): string | null {
+  for (const starId of candidateStarIds) {
+    if (galaxy.getStar(starId)) return starId;
+  }
+
+  if (candidateStarNames.length === 0) return null;
+  const normalizedNameSet = new Set(
+    candidateStarNames
+      .map((name) => name.trim().toLowerCase())
+      .filter((name) => name.length > 0)
+  );
+  if (normalizedNameSet.size === 0) return null;
+
+  const stars = galaxy.getAllStars();
+  const byName = stars.find((star) => normalizedNameSet.has(star.name.trim().toLowerCase()));
+  return byName?.id ?? null;
+}
+
+function eventMatchesCategory(eventTypeRaw: string, category: EncyclopediaEventCategory): boolean {
+  if (category === 'all') return true;
+  return mapEventTypeToEncyclopediaCategory(eventTypeRaw) === category;
+}
+
+function openEncyclopedia(overrides?: Partial<EncyclopediaViewState>) {
+    const resolvedEventCategory = overrides?.eventCategory ?? 'all';
+    if (currentViewMode === 'simulation') {
+      captureSimulationNavigationContext(resolvedEventCategory);
+    }
+
+    encyclopediaViewState = {
+      ...DEFAULT_ENCYCLOPEDIA_VIEW_STATE,
+      ...overrides,
+      starFilters: overrides?.starFilters ? [...overrides.starFilters] : [],
+      selectedStarId: overrides?.selectedStarId ?? overrides?.starFilters?.[0] ?? null,
+      selectedPhase: overrides?.selectedPhase ?? overrides?.phaseFilter ?? null,
+      visibleCount: overrides?.visibleCount ?? DEFAULT_ENCYCLOPEDIA_VIEW_STATE.visibleCount,
+    };
+
+    currentViewMode = 'encyclopedia';
+    document.body.classList.add('encyclopedia-focus-mode');
+    navSimulation?.classList.remove('active');
+    navEncyclopedia?.classList.add('active');
+    navSettings?.classList.remove('active');
+    const renderToken = ++encyclopediaRenderToken;
+    renderEncyclopediaLoadingState();
+    requestAnimationFrame(() => {
+      if (currentViewMode !== 'encyclopedia' || renderToken !== encyclopediaRenderToken) return;
+      renderEncyclopedia();
+    });
+}
+
+function returnToSimulationFromEncyclopedia(target?: {
+  starId?: string | null;
+  fallbackStarIds?: string[];
+  starName?: string | null;
+  fallbackStarNames?: string[];
+  phase?: number | null;
+  detailTab?: 'entry' | 'narrative' | 'events' | 'relations' | 'lineage';
+}): void {
+    renderSimulationView();
+
+    const targetPhase = target?.phase;
+    const shouldUseTargetPhase = typeof targetPhase === 'number' && !Number.isNaN(targetPhase);
+    let movedToRequestedPhase = true;
+
+    if (shouldUseTargetPhase && galaxy.state.phase !== targetPhase) {
+      movedToRequestedPhase = goToPhase(targetPhase);
+    } else {
+      restoreSimulationNavigationContext();
+    }
+
+    const candidateStarIds = [
+      target?.starId ?? null,
+      ...(target?.fallbackStarIds ?? []),
+      simulationNavigationContext.selectedStarId,
+    ].filter((value, index, array): value is string => Boolean(value) && array.indexOf(value) === index);
+    const candidateStarNames = [
+      target?.starName ?? null,
+      ...(target?.fallbackStarNames ?? []),
+    ].filter((value, index, array): value is string => Boolean(value) && array.indexOf(value) === index);
+
+    let resolvedStarId = resolveStarIdAtCurrentPhase(candidateStarIds, candidateStarNames);
+
+    // If the requested phase transition failed or has no matching star, recover from the captured context.
+    if (!resolvedStarId || (shouldUseTargetPhase && !movedToRequestedPhase)) {
+      restoreSimulationNavigationContext();
+      resolvedStarId = resolveStarIdAtCurrentPhase(candidateStarIds, candidateStarNames);
+    }
+
+    if (resolvedStarId) {
+      const star = galaxy.getStar(resolvedStarId);
+      if (star) {
+        renderer.openStarDetail(resolvedStarId, target?.detailTab ?? 'entry');
+        renderer.panToStar(star);
+      }
+    } else if (candidateStarIds.length > 0 || candidateStarNames.length > 0) {
+      console.warn('Unable to resolve encyclopedia star detail target', {
+        candidateStarIds,
+        candidateStarNames,
+        phase: galaxy.state.phase,
+      });
+    }
+
+    render();
+}
+
+if (navSimulation) {
+    navSimulation.addEventListener('click', () => {
+        if (currentViewMode === 'encyclopedia') {
+          returnToSimulationFromEncyclopedia();
+          return;
+        }
+        renderSimulationView();
+    });
+}
+
+if (navEncyclopedia) {
+    navEncyclopedia.addEventListener('click', () => {
+        openEncyclopedia();
+    });
+}
+
+function handleEncyclopediaRelatedButtonClick(relatedBtn: HTMLButtonElement, event: Event): void {
+  if (currentViewMode !== 'encyclopedia') return;
+
+  event.preventDefault();
+  event.stopPropagation();
+
+  const relatedType = relatedBtn.dataset.relatedType;
+  if (relatedType) {
+    encyclopediaViewState = {
+      ...encyclopediaViewState,
+      activeTab: 'events',
+      eventCategory: mapEventTypeToEncyclopediaCategory(relatedType),
+      timelineClusterId: null,
+      selectedChapterId: null,
+    };
+    renderEncyclopedia();
+    return;
+  }
+
+  const relatedStarId = relatedBtn.dataset.relatedStarId;
+  const relatedStarNameRaw = relatedBtn.dataset.relatedStarName;
+  const relatedStars = relatedBtn.dataset.relatedStars?.split(',').filter(Boolean) || [];
+  const relatedPhase = Number.parseInt(relatedBtn.dataset.relatedPhase || '', 10);
+  let relatedStarName: string | null = null;
+  if (relatedStarNameRaw) {
+    try {
+      relatedStarName = decodeURIComponent(relatedStarNameRaw);
+    } catch {
+      relatedStarName = relatedStarNameRaw;
+    }
+  }
+
+  const candidateStars = [relatedStarId, ...relatedStars].filter((value): value is string => Boolean(value));
+  const resolvedStarId = resolveStarIdAtCurrentPhase(candidateStars, relatedStarName ? [relatedStarName] : []);
+  if (!resolvedStarId) return;
+
+  if (!Number.isNaN(relatedPhase)) {
+    simulationNavigationContext.phase = relatedPhase;
+  }
+  simulationNavigationContext.selectedStarId = resolvedStarId;
+  returnToSimulationFromEncyclopedia({
+    starId: resolvedStarId,
+    fallbackStarIds: candidateStars,
+    starName: relatedStarName,
+    phase: Number.isNaN(relatedPhase) ? null : relatedPhase,
+    detailTab: 'events',
+  });
+}
+
+if (contextualNav) {
+  contextualNav.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement | null;
+    const relatedBtn = target?.closest('.encyclopedia-related-btn') as HTMLButtonElement | null;
+    if (!relatedBtn) return;
+    handleEncyclopediaRelatedButtonClick(relatedBtn, event);
+  });
+}
+
+const encyclopediaWorkspaceDelegate = getEncyclopediaWorkspace();
+if (encyclopediaWorkspaceDelegate) {
+  encyclopediaWorkspaceDelegate.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement | null;
+    const relatedBtn = target?.closest('.encyclopedia-related-btn') as HTMLButtonElement | null;
+    if (!relatedBtn) return;
+    handleEncyclopediaRelatedButtonClick(relatedBtn, event);
+  });
+}
+
+if (navSettings) {
+    navSettings.addEventListener('click', () => {
+        showModal('settingsModal');
+    });
 }
 
 // Notification System
 const notificationArea = document.getElementById('notificationArea');
 
-function showNotification(text: string, type: 'info' | 'success' | 'warning' | 'danger' = 'info', starId?: string) {
-  if (!notificationArea) return;
-
-  const el = document.createElement('div');
-  el.className = `notification-toast ${type}`;
-  
-  // Add icon based on type
-  let icon = 'ℹ️';
-  if (type === 'success') icon = '👑'; // Using crown for success (leaders)
-  if (type === 'warning') icon = '⚠️'; // Warning for deaths/crisis
-  if (type === 'danger') icon = '🔥'; // Danger for collapse/war
-  
-  el.innerHTML = `<span style="font-size: 1.2em;">${icon}</span> <span>${text}</span>`;
-  
-  if (starId) {
-    el.style.cursor = 'pointer';
-    el.title = 'Click to view star';
-    // Add "view" hint
-    const hint = document.createElement('span');
-    hint.textContent = ' 🔍';
-    hint.style.opacity = '0.7';
-    hint.style.fontSize = '0.8em';
-    el.appendChild(hint);
-    
-    el.onclick = () => {
-      const star = galaxy.getStar(starId);
-      if (star) {
-        renderer.panToStar(star);
-        renderer.setSelectedStar(starId);
-        render();
-        // Remove notification immediately on click
-        if (el.parentNode) el.parentNode.removeChild(el);
-      }
-    };
-  }
-  
-  notificationArea.appendChild(el);
-  
-  // Remove after 5 seconds
-  setTimeout(() => {
-    el.style.animation = 'fadeOut 0.5s ease-out forwards';
-    setTimeout(() => {
-      if (el.parentNode) el.parentNode.removeChild(el);
-    }, 500);
-  }, 5000);
-}
-
 function processNotifications() {
+  // V2: Only run if the main simulation view is active
+  if (!navSimulation?.classList.contains('active')) {
+    return;
+  }
+
   // Process all pending notifications from the galaxy engine
   const queue = (galaxy as any).notificationQueue;
   if (queue) {
     while (queue.length > 0) {
       const note = queue.shift();
       if (note) {
-        showNotification(note.text, note.type, note.starId);
+        const onClick = note.starId
+          ? () => {
+              const star = galaxy.getStar(note.starId);
+              if (star) {
+                renderer.panToStar(star);
+                renderer.setSelectedStar(note.starId);
+                render();
+              }
+            }
+          : undefined;
+
+        showNotification(note.text, note.type, onClick);
       }
-    }
-  }
-}
-
-// Phase 7: Update News Feed
-function updateNewsFeed() {
-  const newsPanel = document.getElementById('newsFeedContent');
-  if (!newsPanel) return;
-
-  const events = galaxy.state.events || [];
-  if (events.length === 0) {
-    newsPanel.innerHTML = '<div style="padding: 5px; color: #666; font-style: italic;">No recent events.</div>';
-    return;
-  }
-
-  // Show last 20 events, reversed
-  const recentEvents = events.slice(-20).reverse();
-  
-  let html = '';
-  for (const event of recentEvents) {
-    // Only show names for first 3 stars to avoid clutter
-    const displayCount = 3;
-    const targets = event.targetStarIds.slice(0, displayCount);
-    let starNames = targets.map(id => galaxy.getStar(id)?.name || id).join(', ');
-    if (event.targetStarIds.length > displayCount) {
-      starNames += ` +${event.targetStarIds.length - displayCount} more`;
-    }
-
-    const color = event.severity === 'critical' ? '#ff4444' : 
-                  event.severity === 'high' ? '#ffaa00' : 
-                  event.severity === 'medium' ? '#ffff00' : '#88ccff';
-    
-    html += `
-      <div style="padding: 4px 0; border-bottom: 1px solid #223344; font-size: 11px;">
-        <div style="color: ${color}; font-weight: bold;">${event.title}</div>
-        <div style="color: #ccc; margin-bottom: 2px;">${event.description}</div>
-        <div style="color: #6688aa; font-size: 10px;">
-          Phase ${event.startPhase} • ${starNames}
-          ${event.resolved ? '<span style="color: #44ff44; margin-left: 5px;">(RESOLVED)</span>' : ''}
-        </div>
-      </div>
-    `;
-  }
-  newsPanel.innerHTML = html;
-}
-
-// Update stats panel
-function updateStats() {
-  processNotifications();
-  updateNewsFeed();
-  const stats = galaxy.getStatistics();
-
-  // Update individual stat values
-  const phaseEl = document.getElementById('statPhase');
-  const powerEl = document.getElementById('statPower');
-  const independentEl = document.getElementById('statIndependent');
-  const centralizationEl = document.getElementById('statCentralization');
-
-  if (phaseEl) phaseEl.textContent = stats.phase.toString();
-  if (powerEl) powerEl.textContent = formatLargeNumber(stats.totalPower);
-  if (independentEl) independentEl.textContent = stats.independentStars.toString();
-  if (centralizationEl)
-    centralizationEl.textContent = stats.averageCentralization.toFixed(2);
-
-  // Update performance stats
-  const starCountEl = document.getElementById('statStarCount');
-  const phaseTimeEl = document.getElementById('statPhaseTime');
-  const renderTimeEl = document.getElementById('statRenderTime');
-  const zoomEl = document.getElementById('statZoom');
-
-  if (starCountEl) starCountEl.textContent = galaxy.getAllStars().length.toString();
-  if (phaseTimeEl) phaseTimeEl.textContent = lastPhaseTime.toFixed(1) + 'ms';
-  if (renderTimeEl) renderTimeEl.textContent = lastRenderTime.toFixed(1) + 'ms';
-  if (zoomEl) {
-    const camera = renderer.getCamera();
-    zoomEl.textContent = camera.zoom.toFixed(2) + 'x';
-  }
-
-  // Update Zeitgeist UI
-  if (zeitgeistBar && zeitgeistValue) {
-    const zg = (galaxy.state as any).zeitgeist || 0;
-    zeitgeistValue.textContent = zg.toFixed(2);
-    
-    // Bar width: absolute value * 50%
-    // Bar position: left: 50% for positive, 50% - width for negative
-    const width = Math.abs(zg) * 50;
-    zeitgeistBar.style.width = `${width}%`;
-    
-    if (zg >= 0) {
-      zeitgeistBar.style.left = '50%';
-      zeitgeistBar.style.backgroundColor = '#00ccff'; // Order Blue
-    } else {
-      zeitgeistBar.style.left = `${50 - width}%`;
-      zeitgeistBar.style.backgroundColor = '#ff4444'; // Chaos Red
     }
   }
 }
@@ -366,7 +1408,9 @@ function render() {
   const startTime = performance.now();
   renderer.render(galaxy);
   lastRenderTime = performance.now() - startTime;
-  updateStats();
+  updateStats(galaxy.getStatistics(), galaxy, lastPhaseTime, lastRenderTime, renderer.getCamera());
+  updateNewsFeed(galaxy);
+  processNotifications();
 }
 
 // Mouse drag state for panning
@@ -409,95 +1453,19 @@ canvas.addEventListener('mousemove', (e) => {
 
     renderer.setHoveredStar(starId);
 
-    if (starId && !renderer.getSelectedStar()) {
-      // Show tooltip (only in galaxy view)
-      const star = galaxy.getStar(starId);
-      if (star && tooltip) {
-        const isIndependent = star.ruler === star.id;
-        const rulerStar = star.ruler ? galaxy.getStar(star.ruler) : null;
-        const rulerName = isIndependent
-          ? 'INDEPENDENT'
-          : rulerStar?.name || 'Unknown';
-        // Phase 3: Enhanced epoch display
-        const epochIcon = star.epoch === 0 ? '👑' : '🤝';
-        const epochName = star.epoch === 0 ? 'Imperial' : 'Communal';
-        const epochColor = star.epoch === 0 ? '#ff8844' : '#88ff88';
-
-        // Phase 2: Add star type and traits
-        const starTypeProps = STAR_TYPE_PROPERTIES[star.starType];
-        const traitsHTML = star.traits
-          .map((t) => {
-            const traitProps = TRAIT_PROPERTIES[t];
-            return `<span title="${traitProps.description}">${traitProps.icon} ${traitProps.name}</span>`;
-          })
-          .join(', ');
-
-        // Phase 2: Show most recent major event (if any)
-        const recentEvents = star.history.filter(e => e.type !== 'founding').slice(-3);
-        const eventsHTML = recentEvents.length > 0 ? `
-          <div style="margin-top: 6px; padding-top: 6px; border-top: 1px solid #334455; font-size: 10px; color: #aabbcc;">
-            ${recentEvents.map(e => {
-              const eventIcons: Record<string, string> = {
-                'conquest': '⚔️', 'liberation': '🗽', 'golden-age': '✨',
-                'dark-age': '💀', 'collapse': '💥', 'revolution': '🔄',
-                'alliance-formed': '🤝', 'alliance-broken': '💔',
-                'cultural-assimilation': '🎭', 'cultural-resistance': '🛡️',
-                'trade-route-established': '💰', 'trade-route-severed': '📉',
-                'war-declared': '⚔️', 'peace-treaty': '🕊️',
-                'crisis_started': '⚠️', 'crisis_resolved': '✅',
-              };
-              const icon = eventIcons[e.type] || '📌';
-              return `<div>${icon} Phase ${e.phase}</div>`;
-            }).join('')}
-          </div>
-        ` : '';
-
-        tooltip.innerHTML = `
-          <div style="font-weight: bold; margin-bottom: 5px; color: #fff;">
-            ★ ${star.name}
-          </div>
-          <div style="color: #aaa; font-size: 10px; margin-bottom: 5px;">
-            ${starTypeProps.name}
-          </div>
-          <div style="color: #88bbdd;">
-            ${epochIcon} <span style="color: ${epochColor};">${epochName}</span> |
-            Str: <span style="color: #0ff;">${formatLargeNumber(star.strength)}</span> |
-            Pwr: <span style="color: #0ff;">${formatLargeNumber(star.power)}</span><br>
-            Growth: <span style="color: #0ff;">${star.growth.toFixed(2)}</span> |
-            Central: <span style="color: #0ff;">${star.centralization.toFixed(2)}</span><br>
-            Ruler: <span style="color: ${isIndependent ? '#0f8' : '#f84'};">${rulerName}</span><br>
-            ${(star as any).geniusLeader ? `<span style="color: #FFD700">👑 Leader: ${(star as any).geniusLeader.name}</span><br>` : ''}
-            ${(star as any).foundationTier > 0 ? `<span style="color: #FFD700; font-weight: bold;">🏛️ FOUNDATION STATUS</span><br>` : ''}
-            ${(star as any).reformStatus?.active ? `<span style="color: #AAAAFF;">🛠️ Reform: ${(star as any).reformStatus.name} (${(star as any).reformStatus.remainingDuration})</span><br>` : ''}
-            ${(() => {
-              const activeCrisis = (galaxy.state as any).activeCrises?.find((c: any) => c.targetStarId === star.id && !c.resolved);
-              return activeCrisis ? `<span style="color: #ff3333; font-weight: bold;">⚠️ CRISIS: ${activeCrisis.type.toUpperCase()}</span><br><span style="color: #ffaaaa; font-size: 0.9em;">${activeCrisis.description}</span><br>` : '';
-            })()}
-            ${(star as any).decadence > 0.5 && isIndependent ? `<span style="color: #ff4444">⚠️ DECADENCE: ${Math.round((star as any).decadence * 100)}%</span><br>` : ''}
-            ${(star as any).infrastructureDamage > 0.05 ? `Infrastructure Damage: <span style="color: #ff9966;">${Math.round((star as any).infrastructureDamage * 100)}%</span><br>` : ''}
-            ${isIndependent && star.dynastyAge > 0 ? `Age: <span style="color: #8af;">${star.dynastyAge}</span> | Vitality: <span style="color: ${star.vitality < 0.4 ? '#f44' : star.vitality < 0.6 ? '#f80' : star.vitality < 0.8 ? '#ff8' : '#0f8'};">${Math.round((star.vitality || 1.0) * 100)}%</span><br>` : ''}
-            ${!isIndependent && star.loyalty > 0 ? `Loyalty: <span style="color: ${star.loyalty < 0.5 ? '#f88' : star.loyalty < 1.0 ? '#ff8' : '#8f8'};">${Math.round(star.loyalty * 100)}%</span><br>` : ''}
-            ${star.allies && star.allies.length > 0 ? `⚔️ ${star.allies.length} ` : ''}${star.tradeRoutes && star.tradeRoutes.length > 0 ? `📦 ${star.tradeRoutes.length} ` : ''}${star.atWarWith && star.atWarWith.length > 0 ? `⚡ ${star.atWarWith.length}` : ''}
-          </div>
-          <div style="margin-top: 6px; padding-top: 6px; border-top: 1px solid #334455; font-size: 11px; color: #99bbdd;">
-            ${traitsHTML}
-          </div>
-          ${eventsHTML}
-        `;
-        tooltip.style.display = 'block';
-        tooltip.style.left = e.clientX + 15 + 'px';
-        tooltip.style.top = e.clientY + 15 + 'px';
-      }
+    const star = galaxy.getStar(starId);
+    if (star) {
+      // Show tooltip if hovering over a star
+      showTooltip(star, e.clientX, e.clientY, galaxy);
     } else {
-      // Hide tooltip
-      if (tooltip) tooltip.style.display = 'none';
+      // Hide tooltip if not hovering over a star
+      hideTooltip();
     }
 
     render();
-  } else if (starId && tooltip) {
-    // Update tooltip position
-    tooltip.style.left = e.clientX + 15 + 'px';
-    tooltip.style.top = e.clientY + 15 + 'px';
+  } else if (starId) {
+    // Update tooltip position while hovering
+    updateTooltipPosition(e.clientX, e.clientY);
   }
 });
 
@@ -520,1196 +1488,1376 @@ canvas.addEventListener('mousedown', (e) => {
 // Mouse up - end drag
 canvas.addEventListener('mouseup', () => {
   isDragging = false;
-  canvas.style.cursor = 'default';
+  canvas.style.cursor = 'grab';
 });
 
-// Mouse leave - clear hover and end drag
+// Mouse leave - cancel drag
 canvas.addEventListener('mouseleave', () => {
   isDragging = false;
   canvas.style.cursor = 'default';
-  renderer.setHoveredStar(null);
-  if (tooltip) tooltip.style.display = 'none';
-  render();
+  hideTooltip();
+  if (renderer.getHoveredStar()) {
+    renderer.setHoveredStar(null);
+    render();
+  }
 });
 
-// Mouse click - select star / return to galaxy
+// Mouse click - select star
 canvas.addEventListener('click', (e) => {
+  if (isDragging) return;
+
   const rect = canvas.getBoundingClientRect();
   const x = e.clientX - rect.left;
   const y = e.clientY - rect.top;
 
-  // Scale coordinates if canvas has different internal vs display size
   const scaleX = canvas.width / rect.width;
   const scaleY = canvas.height / rect.height;
   const canvasX = x * scaleX;
   const canvasY = y * scaleY;
 
-  if (renderer.getSelectedStar()) {
-    // In detail view - check if clicking a tab first
-    if (renderer.checkTabClick(canvasX, canvasY)) {
-      // Tab was clicked, just re-render
-      render();
-      return;
+  if (currentViewMode === 'encyclopedia' && encyclopediaViewState.displayMode === 'split') {
+    const starId = renderer.findStarAt(canvasX, canvasY, galaxy);
+    if (starId) {
+      feedbackSystem.record(starId, 'select');
+      encyclopediaViewState = {
+        ...encyclopediaViewState,
+        selectedStarId: starId,
+        starFilters: [starId],
+        phaseFilter: null,
+        timelineClusterId: null,
+        selectedPhase: null,
+        selectedChapterId: null,
+        visibleCount: DEFAULT_ENCYCLOPEDIA_VIEW_STATE.visibleCount,
+      };
+      renderEncyclopedia();
     }
-
-    // Check if clicking the map/star system area
-    if (renderer.checkMapAreaClick(canvasX, canvasY)) {
-      // Map area toggled, just re-render
-      render();
-      return;
-    }
-
-    // Check detail interactions (entry index/scroll focus) before closing detail view
-    if (renderer.checkDetailInteractionClick(canvasX, canvasY)) {
-      render();
-      return;
-    }
-
-    // Explicit close affordance only (Esc remains available).
-    if (renderer.checkDetailCloseClick(canvasX, canvasY)) {
-      renderer.setSelectedStar(null);
-      if (tooltip) tooltip.style.display = 'none';
-      render();
-      return;
-    }
-
-    // Do not close detail view on arbitrary clicks.
     return;
-  } else {
-    // In galaxy view - select star (only if not dragging)
-    if (!isDragging) {
-      const starId = renderer.findStarAt(canvasX, canvasY, galaxy);
-      if (starId) {
-        // Phase 4: Record player interest
-        feedbackSystem.record(starId, 'select');
+  }
 
-        renderer.setSelectedStar(starId);
-        if (tooltip) tooltip.style.display = 'none';
-      }
+  // In detail view, only explicit detail UI interactions should be handled here.
+  if (renderer.getSelectedStar()) {
+    const didCloseDetail = renderer.checkDetailCloseClick(canvasX, canvasY);
+    if (didCloseDetail) {
+      renderer.setSelectedStar(null);
+      render();
+      return;
     }
+
+    const handledDetailInteraction =
+      renderer.checkTabClick(canvasX, canvasY) ||
+      renderer.checkMapAreaClick(canvasX, canvasY) ||
+      renderer.checkDetailInteractionClick(canvasX, canvasY);
+
+    if (handledDetailInteraction) {
+      render();
+    }
+    return;
+  }
+
+  const starId = renderer.findStarAt(canvasX, canvasY, galaxy);
+  renderer.setSelectedStar(starId);
+
+  if (starId) {
+    feedbackSystem.record(starId, 'select');
   }
 
   render();
 });
 
-// Mouse wheel - zoom
-canvas.addEventListener('wheel', (e) => {
-  if (renderer.getSelectedStar()) {
-    const consumed = renderer.handleDetailWheel(e.deltaY);
-    if (consumed) {
-      e.preventDefault();
-      render();
-    }
-    return;
-  }
+// Mouse wheel - zoom with momentum
+let lastWheelTime = 0;
+let wheelMomentum = 0;
 
+canvas.addEventListener('wheel', (e) => {
   e.preventDefault();
 
-  const rect = canvas.getBoundingClientRect();
-  const x = e.clientX - rect.left;
-  const y = e.clientY - rect.top;
+  if (renderer.getSelectedStar()) {
+    const handledDetailScroll = renderer.handleDetailWheel(e.deltaY);
+    if (handledDetailScroll) {
+      render();
+    }
+    return;
+  }
 
-  const scaleX = canvas.width / rect.width;
-  const scaleY = canvas.height / rect.height;
-  const centerX = x * scaleX;
-  const centerY = y * scaleY;
+  const now = performance.now();
+  const timeDelta = now - lastWheelTime;
 
-  // Zoom in/out based on wheel direction
-  const delta = e.deltaY > 0 ? -0.1 : 0.1;
-  renderer.zoomCamera(delta, centerX, centerY);
+  // If scrolling quickly (< 100ms between events), build momentum
+  if (timeDelta < 100) {
+    wheelMomentum = Math.min(wheelMomentum + 0.05, 0.5); // Cap at 0.5
+  } else {
+    // Reset momentum if scrolling stopped
+    wheelMomentum = 0;
+  }
 
+  lastWheelTime = now;
+
+  // Base zoom + momentum bonus
+  const baseZoom = 0.1;
+  const delta = (e.deltaY > 0 ? 1 : -1) * (baseZoom + wheelMomentum);
+
+  renderer.zoomCamera(delta);
   render();
 });
 
-// Playback state
-let isPlaying = false;
-let playbackSpeed = 200; // ms per phase
-let lastAutoAdvanceTime = 0;
-let majorEventPhases = new Set<number>();
-let bookmarks = new Set<number>();
-
-// Playback controls
-const playBtn = document.getElementById('playBtn');
-const rewindBtn = document.getElementById('rewindBtn');
-const ffBtn = document.getElementById('ffBtn');
-const prevEventBtn = document.getElementById('prevEventBtn');
-const nextEventBtn = document.getElementById('nextEventBtn');
-const prevBookmarkBtn = document.getElementById('prevBookmarkBtn');
-const nextBookmarkBtn = document.getElementById('nextBookmarkBtn');
-const bookmarkBtn = document.getElementById('bookmarkBtn');
-const speedSelect = document.getElementById('speedSelect') as HTMLSelectElement;
-const phaseScrubber = document.getElementById('phaseScrubber') as HTMLInputElement;
-const phaseMarkers = document.getElementById('phaseMarkers') as HTMLDataListElement;
-const historyRange = document.getElementById('historyRange');
-
-if (playBtn) {
-  playBtn.addEventListener('click', () => {
-    isPlaying = !isPlaying;
-    playBtn.textContent = isPlaying ? '⏸ Pause' : '▶ Play';
-    playBtn.style.background = isPlaying ? '#004488' : '';
-  });
-}
-
-if (rewindBtn) {
-  rewindBtn.addEventListener('click', () => {
-    // Rewind 10 phases
-    const targetPhase = Math.max(0, galaxy.state.phase - 10);
-    if (galaxy.restoreState(targetPhase)) {
-      render();
-      updateScrubber();
-      console.log(`⏪ Rewound to phase ${galaxy.state.phase}`);
+// --- State Management ---
+useStore.subscribe(
+  (isPlaying) => {
+    // Update header play button
+    if (headerPlayBtn) {
+      headerPlayBtn.textContent = isPlaying ? '❚❚ Pause' : '▶ Play';
     }
-  });
-}
+  },
+  (state) => state.isPlaying
+);
 
-if (ffBtn) {
-  ffBtn.addEventListener('click', () => {
-    // Advance 10 phases quickly
-    for (let i = 0; i < 10; i++) {
-      galaxy.advancePhase();
-    }
-    void persistGameState();
-    render();
-    updateScrubber();
-  });
-}
-
-// Enhanced Navigation
-if (prevEventBtn) {
-  prevEventBtn.addEventListener('click', () => {
-    const current = galaxy.state.phase;
-    const sorted = Array.from(majorEventPhases).sort((a, b) => a - b);
-    // Find largest phase < current
-    let target: number | undefined;
-    for (let i = sorted.length - 1; i >= 0; i--) {
-      const p = sorted[i];
-      if (p !== undefined && p < current) {
-        target = p;
-        break;
-      }
-    }
-    
-    if (target !== undefined) {
-      if (galaxy.goToPhase(target)) {
-        render();
-        updateScrubber();
-        console.log(`⏪ Jumped to event at phase ${target}`);
-      }
-    } else {
-      // Just go back 10 phases if no event
-      const fallback = Math.max(0, current - 10);
-      if (galaxy.goToPhase(fallback)) {
-        render();
-        updateScrubber();
-      }
-    }
-  });
-}
-
-if (nextEventBtn) {
-  nextEventBtn.addEventListener('click', () => {
-    const current = galaxy.state.phase;
-    const sorted = Array.from(majorEventPhases).sort((a, b) => a - b);
-    // Find smallest phase > current
-    let target: number | undefined;
-    for (let i = 0; i < sorted.length; i++) {
-      const p = sorted[i];
-      if (p !== undefined && p > current) {
-        target = p;
-        break;
-      }
-    }
-    
-    if (target !== undefined) {
-      if (galaxy.goToPhase(target)) {
-        render();
-        updateScrubber();
-        console.log(`⏩ Jumped to event at phase ${target}`);
-      }
-    } else {
-      // Just go forward 10 phases if no event
-      if (galaxy.goToPhase(current + 10)) {
-        render();
-        updateScrubber();
-      }
-    }
-  });
-}
-
-if (bookmarkBtn) {
-  bookmarkBtn.addEventListener('click', () => {
-    const current = galaxy.state.phase;
-    if (bookmarks.has(current)) {
-      bookmarks.delete(current);
-      console.log(`🔖 Removed bookmark at phase ${current}`);
-      bookmarkBtn.style.background = '';
-    } else {
-      bookmarks.add(current);
-      console.log(`🔖 Added bookmark at phase ${current}`);
-      bookmarkBtn.style.background = '#0088cc';
-    }
-    updatePhaseMarkers(); // Update markers to show/hide bookmark
-  });
-}
-
-if (prevBookmarkBtn) {
-  prevBookmarkBtn.addEventListener('click', () => {
-    const current = galaxy.state.phase;
-    const sorted = Array.from(bookmarks).sort((a, b) => a - b);
-    let target: number | undefined;
-    for (let i = sorted.length - 1; i >= 0; i--) {
-      const p = sorted[i];
-      if (p !== undefined && p < current) {
-        target = p;
-        break;
-      }
-    }
-    
-    if (target !== undefined) {
-      if (galaxy.goToPhase(target)) {
-        render();
-        updateScrubber();
-        console.log(`⏪ Jumped to bookmark at phase ${target}`);
-      }
-    }
-  });
-}
-
-if (nextBookmarkBtn) {
-  nextBookmarkBtn.addEventListener('click', () => {
-    const current = galaxy.state.phase;
-    const sorted = Array.from(bookmarks).sort((a, b) => a - b);
-    let target: number | undefined;
-    for (const p of sorted) {
-      if (p !== undefined && p > current) {
-        target = p;
-        break;
-      }
-    }
-    
-    if (target !== undefined) {
-      if (galaxy.goToPhase(target)) {
-        render();
-        updateScrubber();
-        console.log(`⏩ Jumped to bookmark at phase ${target}`);
-      }
-    }
-  });
-}
-
-if (speedSelect) {
-  speedSelect.addEventListener('change', () => {
-    playbackSpeed = parseInt(speedSelect.value);
-  });
-  // Set initial speed
-  playbackSpeed = parseInt(speedSelect.value);
-}
-
-if (phaseScrubber) {
-  phaseScrubber.addEventListener('input', () => {
-    const targetPhase = parseInt(phaseScrubber.value);
-    // Allow scrubbing backwards or forwards if snapshot exists
-    if (targetPhase !== galaxy.state.phase) {
-      if (galaxy.goToPhase(targetPhase)) {
-        render();
-        updateScrubber();
-      }
-    }
-  });
-}
-
+// --- History Scrubbing ---
 function updateScrubber() {
-  if (phaseScrubber && historyRange) {
-    const currentPhase = galaxy.state.phase;
-    const snapshots = galaxy.getSnapshotPhases();
-    const maxSnapshot = snapshots.length > 0 ? snapshots[snapshots.length - 1] : 0;
-    // Ensure max is at least current phase, or the furthest future snapshot we have
-    const maxPhase = Math.max(currentPhase, maxSnapshot!);
-    
+    if (!phaseScrubber) return;
+    const maxPhase = galaxy.state.phase;
     phaseScrubber.max = maxPhase.toString();
-    phaseScrubber.value = currentPhase.toString();
-    historyRange.textContent = maxPhase.toString();
-  }
+    phaseScrubber.value = galaxy.state.phase.toString();
+
+    const historyRange = document.getElementById('historyRange');
+    if (historyRange) {
+        historyRange.textContent = maxPhase.toString();
+    }
 }
 
 function updatePhaseMarkers() {
-  if (!phaseMarkers) return;
-  
-  majorEventPhases.clear();
-  majorEventPhases.add(0);
-  const scrubberEventTypes = new Set<EventType>([
-    EventType.CrisisStarted,
-    EventType.CrisisResolved,
-  ]);
-  
+    const phaseMarkers = document.getElementById('phaseMarkers') as HTMLDataListElement;
+    if (!phaseMarkers) return;
+
+    const crisisPhases = galaxy.getHistoricalEvents()
+        .filter(e => e.type === EventType.CrisisStarted || e.type === EventType.CrisisResolved)
+        .map(e => e.phase);
+
+    phaseMarkers.innerHTML = crisisPhases.map(p => `<option value="${p}"></option>`).join('');
+}
+
+function goToPhase(phase: number): boolean {
+    const success = galaxy.goToPhase(phase);
+    if (success) {
+        updateScrubber();
+        render();
+        return true;
+    } else {
+        console.warn(`Could not find history for phase ${phase}`);
+        return false;
+    }
+}
+
+const NARRATIVE_CHAPTER_PHASE_SPAN = 50;
+
+interface NarrativeChapter {
+  id: string;
+  startPhase: number;
+  endPhase: number;
+  anchorPhase: number;
+  eventCount: number;
+  starIds: string[];
+  anchorStarId: string | null;
+  summary: string;
+}
+
+function buildNarrativeChapters(events: EncyclopediaEntry[]): NarrativeChapter[] {
+  const chapters: NarrativeChapter[] = [];
+  const maxPhase = Math.max(galaxy.state.phase, ...events.map((event) => event.phase));
+
+  for (let endPhase = maxPhase; endPhase >= 0; endPhase -= NARRATIVE_CHAPTER_PHASE_SPAN) {
+    const startPhase = Math.max(0, endPhase - (NARRATIVE_CHAPTER_PHASE_SPAN - 1));
+    const chapterEvents = events.filter((event) => event.phase >= startPhase && event.phase <= endPhase);
+    if (chapterEvents.length === 0) continue;
+
+    const eventsByPhase = new Map<number, EncyclopediaEntry[]>();
+    for (const event of chapterEvents) {
+      const bucket = eventsByPhase.get(event.phase) ?? [];
+      bucket.push(event);
+      eventsByPhase.set(event.phase, bucket);
+    }
+
+    const rankedPhases = Array.from(eventsByPhase.entries())
+      .sort((a, b) => {
+        if (b[1].length !== a[1].length) return b[1].length - a[1].length;
+        return b[0] - a[0];
+      })
+      .map(([phase]) => phase);
+
+    const anchorPhase = rankedPhases[0] ?? endPhase;
+    const anchorEvents = eventsByPhase.get(anchorPhase) ?? [];
+    const anchorStarId = anchorEvents[0]?.starId ?? chapterEvents[0]?.starId ?? null;
+
+    const phaseNarratives = rankedPhases.slice(0, 3).map((phase) => {
+      const generated = NarrativeGenerator.generatePhaseNarrative(galaxy.state, phase).trim();
+      if (generated.length > 0) return generated;
+      const fallback = eventsByPhase.get(phase)?.[0]?.description ?? `Phase ${phase} recorded major archival activity.`;
+      return `Phase ${phase}: ${fallback}`;
+    });
+
+    const starsInChapter = Array.from(
+      new Set(
+        chapterEvents
+          .flatMap((event) => [event.starId, ...event.relatedStars])
+          .filter((starId): starId is string => starId.length > 0)
+      )
+    );
+
+    chapters.push({
+      id: `chapter-${startPhase}-${endPhase}`,
+      startPhase,
+      endPhase,
+      anchorPhase,
+      eventCount: chapterEvents.length,
+      starIds: starsInChapter,
+      anchorStarId,
+      summary: phaseNarratives.join(' '),
+    });
+  }
+
+  return chapters.sort((a, b) => b.endPhase - a.endPhase);
+}
+
+interface MiniMapPoint {
+  starId: string;
+  x: number;
+  y: number;
+}
+
+interface TimelineCluster {
+  id: string;
+  startPhase: number;
+  endPhase: number;
+  eventCount: number;
+  dominantCategory: EncyclopediaEventCategory;
+  starIds: string[];
+}
+
+const FILMSTRIP_CLUSTER_SPAN = 10;
+
+function buildTimelineClusters(events: EncyclopediaEntry[]): TimelineCluster[] {
+  if (events.length === 0) return [];
+  const byBucket = new Map<string, EncyclopediaEntry[]>();
+
+  for (const event of events) {
+    const startPhase = Math.floor(event.phase / FILMSTRIP_CLUSTER_SPAN) * FILMSTRIP_CLUSTER_SPAN;
+    const endPhase = startPhase + FILMSTRIP_CLUSTER_SPAN - 1;
+    const key = `${startPhase}-${endPhase}`;
+    const bucket = byBucket.get(key) ?? [];
+    bucket.push(event);
+    byBucket.set(key, bucket);
+  }
+
+  return Array.from(byBucket.entries())
+    .map(([id, clusterEvents]) => {
+      const [startRaw, endRaw] = id.split('-');
+      const startPhase = Number.parseInt(startRaw ?? '0', 10);
+      const endPhase = Number.parseInt(endRaw ?? '0', 10);
+      const categoryCounts = new Map<EncyclopediaEventCategory, number>();
+      for (const event of clusterEvents) {
+        const category = mapEventTypeToEncyclopediaCategory(event.type);
+        categoryCounts.set(category, (categoryCounts.get(category) ?? 0) + 1);
+      }
+
+      let dominantCategory: EncyclopediaEventCategory = 'all';
+      let best = 0;
+      for (const [category, count] of categoryCounts.entries()) {
+        if (count > best) {
+          best = count;
+          dominantCategory = category;
+        }
+      }
+
+      const starIds = Array.from(new Set(clusterEvents.map((event) => event.starId)));
+      return {
+        id,
+        startPhase,
+        endPhase,
+        eventCount: clusterEvents.length,
+        dominantCategory,
+        starIds,
+      };
+    })
+    .sort((a, b) => b.endPhase - a.endPhase);
+}
+
+interface NavigatorGroup {
+  id: string;
+  label: string;
+  starIds: string[];
+  rulerId: string;
+  isIndependentBlock: boolean;
+}
+
+function buildNavigatorGroups(): NavigatorGroup[] {
   const stars = galaxy.getAllStars();
-  // Optimization: If too many stars/events, sample or limit
-  const maxEvents = 200;
-  let eventCount = 0;
+  const byRuler = new Map<string, Star[]>();
 
   for (const star of stars) {
-    // Check recent history first
-    for (let i = star.history.length - 1; i >= 0; i--) {
-      const event = star.history[i];
-      if (!event) continue;
-      // Crisis-only scrubber markers.
-      if (event.type && scrubberEventTypes.has(event.type)) {
-        if (event.phase !== undefined) {
-          majorEventPhases.add(event.phase);
-          eventCount++;
-        }
-      }
-      // Don't scan entire history if we have enough markers
-      if (eventCount > maxEvents * 2) break; 
-    }
-  }
-  
-  // Also include bookmarks in the markers
-  for (const bookmark of bookmarks) {
-    majorEventPhases.add(bookmark);
+    const rulerId = star.ruler ?? star.id;
+    const bucket = byRuler.get(rulerId) ?? [];
+    bucket.push(star);
+    byRuler.set(rulerId, bucket);
   }
 
-  const sortedPhases = Array.from(majorEventPhases).sort((a, b) => a - b);
-  
-  // Rebuild datalist - limit to reasonable number of ticks
+  const groups: NavigatorGroup[] = [];
+  for (const [rulerId, groupStars] of byRuler.entries()) {
+    const ruler = galaxy.getStar(rulerId);
+    const independent = ruler ? ruler.ruler === ruler.id : false;
+    const groupId = independent ? `independent:${rulerId}` : `empire:${rulerId}`;
+    const label = independent
+      ? `${ruler?.name ?? rulerId} (Independent)`
+      : `${ruler?.name ?? rulerId} Domain`;
+    groups.push({
+      id: groupId,
+      label,
+      starIds: groupStars.map((star) => star.id).sort((a, b) => {
+        const starA = galaxy.getStar(a);
+        const starB = galaxy.getStar(b);
+        return (starA?.name ?? a).localeCompare(starB?.name ?? b);
+      }),
+      rulerId,
+      isIndependentBlock: independent,
+    });
+  }
+
+  groups.sort((a, b) => b.starIds.length - a.starIds.length);
+  return groups;
+}
+
+function escapeHtml(input: string): string {
+  return input
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function linkifyEncyclopediaText(text: string, starNames: Array<{ id: string; name: string }>): string {
+  const raw = text ?? '';
+  if (raw.length === 0) return '';
+  const lower = raw.toLowerCase();
+  const matches: Array<{ start: number; end: number; kind: 'phase' | 'star'; value: string }> = [];
+
+  const phaseRegex = /phase\s+(\d+)/gi;
+  let phaseMatch = phaseRegex.exec(raw);
+  while (phaseMatch) {
+    const fullMatch = phaseMatch[0];
+    const phaseNumber = phaseMatch[1];
+    if (phaseNumber) {
+      matches.push({
+        start: phaseMatch.index,
+        end: phaseMatch.index + fullMatch.length,
+        kind: 'phase',
+        value: phaseNumber,
+      });
+    }
+    phaseMatch = phaseRegex.exec(raw);
+  }
+
+  const namesSorted = [...starNames].sort((a, b) => b.name.length - a.name.length);
+  for (const star of namesSorted) {
+    const needle = star.name.toLowerCase();
+    if (needle.length < 3) continue;
+    let startAt = 0;
+    while (startAt < lower.length) {
+      const idx = lower.indexOf(needle, startAt);
+      if (idx < 0) break;
+      const left = idx === 0 ? '' : lower[idx - 1] ?? '';
+      const right = idx + needle.length >= lower.length ? '' : lower[idx + needle.length] ?? '';
+      const leftBoundary = left.length === 0 || !/[a-z0-9]/.test(left);
+      const rightBoundary = right.length === 0 || !/[a-z0-9]/.test(right);
+      if (leftBoundary && rightBoundary) {
+        matches.push({
+          start: idx,
+          end: idx + needle.length,
+          kind: 'star',
+          value: star.id,
+        });
+      }
+      startAt = idx + needle.length;
+    }
+  }
+
+  matches.sort((a, b) => {
+    if (a.start !== b.start) return a.start - b.start;
+    return (b.end - b.start) - (a.end - a.start);
+  });
+
+  const accepted: typeof matches = [];
+  for (const match of matches) {
+    const overlaps = accepted.some((existing) => !(match.end <= existing.start || match.start >= existing.end));
+    if (!overlaps) accepted.push(match);
+  }
+
+  if (accepted.length === 0) return escapeHtml(raw);
+
+  let cursor = 0;
   let html = '';
-  // If too many phases, skip some to avoid DOM overload
-  const step = Math.ceil(sortedPhases.length / 100); 
-  
-  for (let i = 0; i < sortedPhases.length; i += step) {
-     html += `<option value="${sortedPhases[i]}"></option>`;
-  }
-  phaseMarkers.innerHTML = html;
-}
-
-// Global error handler
-window.addEventListener('error', (event) => {
-  console.error('Global Error:', event.error);
-  // Only alert if it's a new error to avoid spam
-  if (!document.getElementById('error-overlay')) {
-      const overlay = document.createElement('div');
-      overlay.id = 'error-overlay';
-      overlay.style.position = 'fixed';
-      overlay.style.top = '0';
-      overlay.style.left = '0';
-      overlay.style.width = '100%';
-      overlay.style.height = '100%';
-      overlay.style.backgroundColor = 'rgba(0,0,0,0.8)';
-      overlay.style.color = '#ff4444';
-      overlay.style.zIndex = '99999';
-      overlay.style.padding = '50px';
-      overlay.style.fontFamily = 'monospace';
-      overlay.innerHTML = `<h1>CRITICAL ERROR</h1><pre>${event.error?.message || 'Unknown Error'}</pre><button onclick="location.reload()" style="padding: 10px; background: #fff; color: #000; border: none; cursor: pointer;">RELOAD GAME</button>`;
-      document.body.appendChild(overlay);
-  }
-  if (animationId) cancelAnimationFrame(animationId);
-});
-
-// Game loop for auto-advance and animation
-let animationId: number;
-let renderFailed = false;
-
-function gameLoop(timestamp: number) {
-  if (renderFailed) return;
-
-  try {
-    if (isPlaying) {
-      if (timestamp - lastAutoAdvanceTime > playbackSpeed) {
-        advancePhase();
-        lastAutoAdvanceTime = timestamp;
-      }
+  for (const match of accepted) {
+    if (match.start > cursor) {
+      html += escapeHtml(raw.slice(cursor, match.start));
     }
-    
-    // Always render to support animations (trade routes, alliances)
-    render();
-  } catch (e) {
-    console.error('❌ Game Loop Error:', e);
-    renderFailed = true;
-    isPlaying = false;
-    if (playBtn) playBtn.textContent = '▶ Play';
-    
-    // Show error in UI
-    const errorMsg = e instanceof Error ? e.message : String(e);
-    const statusEl = document.getElementById('status-message') || document.createElement('div');
-    statusEl.id = 'status-message';
-    statusEl.style.position = 'fixed';
-    statusEl.style.bottom = '10px';
-    statusEl.style.right = '10px';
-    statusEl.style.background = 'red';
-    statusEl.style.color = 'white';
-    statusEl.style.padding = '10px';
-    statusEl.textContent = 'Render Error: ' + errorMsg;
-    document.body.appendChild(statusEl);
-    
-    return; // Stop the loop
+    const tokenText = raw.slice(match.start, match.end);
+    if (match.kind === 'phase') {
+      html += `<button type="button" class="encyclopedia-inline-link" data-link-phase="${match.value}">${escapeHtml(tokenText)}</button>`;
+    } else {
+      html += `<button type="button" class="encyclopedia-inline-link" data-link-star-id="${match.value}">${escapeHtml(tokenText)}</button>`;
+    }
+    cursor = match.end;
   }
-  
-  animationId = requestAnimationFrame(gameLoop);
+  if (cursor < raw.length) {
+    html += escapeHtml(raw.slice(cursor));
+  }
+  return html;
 }
 
-// Initial render
-try {
-  render();
-  updateScrubber();
-  updatePhaseMarkers();
-  console.log('✅ Initial render complete');
-} catch (e) {
-  console.error('❌ Initial render failed:', e);
+interface EncyclopediaSearchSuggestion {
+  value: string;
+  label: string;
+  type: 'star' | 'type' | 'event';
 }
 
-requestAnimationFrame(gameLoop);
+function buildEncyclopediaSearchSuggestions(query: string, events: EncyclopediaEntry[]): EncyclopediaSearchSuggestion[] {
+  const normalized = query.trim().toLowerCase();
+  if (normalized.length < 2) return [];
 
-window.addEventListener('beforeunload', () => {
-  archiveWorkerClient.terminate();
-});
+  const suggestions: EncyclopediaSearchSuggestion[] = [];
+  const seen = new Set<string>();
+  const pushUnique = (item: EncyclopediaSearchSuggestion) => {
+    const key = `${item.type}:${item.value.toLowerCase()}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    suggestions.push(item);
+  };
 
-// Advance phase
-function advancePhase() {
-  const startTime = performance.now();
-  galaxy.advancePhase();
-  lastPhaseTime = performance.now() - startTime;
-
-  render();
-  updateScrubber();
-  
-  // Optimization: Update markers and save only every 5 phases
-  if (galaxy.state.phase % 5 === 0) {
-    updatePhaseMarkers();
-    void persistGameState();
+  for (const starName of Array.from(new Set(events.map((event) => event.starName)))) {
+    if (starName.toLowerCase().includes(normalized)) {
+      pushUnique({ value: starName, label: `${starName} (star)`, type: 'star' });
+    }
+    if (suggestions.length >= 4) break;
   }
 
-  console.log(
-    `Advanced to phase ${galaxy.state.phase} (${lastPhaseTime.toFixed(1)}ms)`
-  );
-}
-
-// Keyboard controls
-document.addEventListener('keydown', (e) => {
-  if (e.code === 'Space') {
-    e.preventDefault();
-    advancePhase();
-  } else if (e.code === 'Tab') {
-    // Cycle through filtered stars
-    e.preventDefault();
-    cycleToNextStar();
-  } else if (e.code === 'Escape') {
-    // Exit detail view
-    if (renderer.getSelectedStar()) {
-      renderer.setSelectedStar(null);
-      render();
+  const eventTypes = Array.from(new Set(events.map((event) => event.type)));
+  for (const eventType of eventTypes) {
+    if (eventType.toLowerCase().includes(normalized)) {
+      pushUnique({ value: eventType, label: `${eventType} (type)`, type: 'type' });
     }
-  } else if (e.code === 'Digit1') {
-    // Toggle view (same as click for now)
-    if (renderer.getSelectedStar()) {
-      renderer.setSelectedStar(null);
-    }
-    render();
-  } else if (e.code === 'Home') {
-    // Reset camera
-    if (!renderer.getSelectedStar()) {
-      renderer.resetCamera();
-      render();
-    }
-  } else if (e.code === 'ArrowUp') {
-    // Pan up
-    if (!renderer.getSelectedStar()) {
-      e.preventDefault();
-      renderer.panCamera(0, 30);
-      render();
-    }
-  } else if (e.code === 'ArrowDown') {
-    // Pan down
-    if (!renderer.getSelectedStar()) {
-      e.preventDefault();
-      renderer.panCamera(0, -30);
-      render();
-    }
-  } else if (e.code === 'ArrowLeft') {
-    // Pan left
-    if (!renderer.getSelectedStar()) {
-      e.preventDefault();
-      renderer.panCamera(30, 0);
-      render();
-    }
-  } else if (e.code === 'ArrowRight') {
-    // Pan right
-    if (!renderer.getSelectedStar()) {
-      e.preventDefault();
-      renderer.panCamera(-30, 0);
-      render();
-    }
-  } else if (e.code === 'Equal' || e.code === 'NumpadAdd') {
-    // Zoom in
-    if (!renderer.getSelectedStar()) {
-      e.preventDefault();
-      renderer.zoomCamera(0.1);
-      render();
-    }
-  } else if (e.code === 'Minus' || e.code === 'NumpadSubtract') {
-    // Zoom out
-    if (!renderer.getSelectedStar()) {
-      e.preventDefault();
-      renderer.zoomCamera(-0.1);
-      render();
-    }
-  }
-});
-
-// Button controls
-const advanceBtn = document.getElementById('advanceBtn');
-if (advanceBtn) {
-  advanceBtn.addEventListener('click', advancePhase);
-}
-
-const resetBtn = document.getElementById('resetBtn');
-if (resetBtn) {
-  resetBtn.addEventListener('click', async () => {
-    if (confirm('Delete saved game and create new galaxy?')) {
-      clearHistoricalTracking();
-      await saveRepository.deleteSave(DEFAULT_GAME_ID);
-      location.reload();
-    }
-  });
-}
-
-// Settings modal
-const settingsBtn = document.getElementById('settingsBtn');
-const settingsModal = document.getElementById('settingsModal');
-const cancelSettingsBtn = document.getElementById('cancelSettingsBtn');
-const createGalaxyBtn = document.getElementById('createGalaxyBtn');
-const starCountSelect = document.getElementById('starCountSelect') as HTMLSelectElement;
-const seedInput = document.getElementById('seedInput') as HTMLInputElement;
-const themeSelect = document.getElementById('themeSelect') as HTMLSelectElement;
-const galaxySizeSelect = document.getElementById('galaxySizeSelect') as HTMLSelectElement;
-const galaxyShapeSelect = document.getElementById('galaxyShapeSelect') as HTMLSelectElement;
-const runIntegrityCheckBtn = document.getElementById('runIntegrityCheckBtn');
-const saveIntegrityReport = document.getElementById('saveIntegrityReport');
-
-function renderIntegrityReport(report: SaveIntegrityReport): void {
-  if (!saveIntegrityReport) return;
-
-  let html = `<div style="margin-bottom:6px; color:${report.overallOk ? '#66dd88' : '#ff8866'};">` +
-    `${report.overallOk ? 'PASS' : 'FAIL'} - ${report.checkedAtIso}</div>`;
-
-  for (const check of report.checks) {
-    html +=
-      `<div style="margin-bottom:4px; color:${check.ok ? '#88ccaa' : '#ff9977'};">` +
-      `${check.ok ? 'OK' : 'ERR'} ${check.name}` +
-      `</div><div style="margin: -2px 0 6px 16px; color:#7f9bb6;">${check.details}</div>`;
+    if (suggestions.length >= 6) break;
   }
 
-  saveIntegrityReport.innerHTML = html;
-}
-
-if (settingsBtn && settingsModal) {
-  settingsBtn.addEventListener('click', () => {
-    // Set current star count in dropdown
-    starCountSelect.value = galaxy.state.config.starCount.toString();
-    
-    // Set current galaxy config if available
-    if (galaxySizeSelect && galaxy.state.config.width) {
-       const w = galaxy.state.config.width;
-       if (w <= 32) galaxySizeSelect.value = 'small';
-       else if (w <= 48) galaxySizeSelect.value = 'medium';
-       else galaxySizeSelect.value = 'large';
-    }
-
-    if (galaxyShapeSelect && galaxy.state.config.shape) {
-      galaxyShapeSelect.value = galaxy.state.config.shape;
-    }
-
-    // Set current theme
-    if (themeSelect) {
-      themeSelect.value = localStorage.getItem('seldon-theme') || 'foundation';
-    }
-    
-    settingsModal.style.display = 'flex';
-
-    void saveRepository
-      .verifyIntegrity(DEFAULT_GAME_ID)
-      .then(renderIntegrityReport)
-      .catch((error) => {
-        if (!saveIntegrityReport) return;
-        saveIntegrityReport.innerHTML = `<div style="color:#ff8866;">Integrity check failed: ${String(error)}</div>`;
+  for (const event of events) {
+    if (event.description.toLowerCase().includes(normalized)) {
+      pushUnique({
+        value: event.description,
+        label: `${event.description.slice(0, 64)}${event.description.length > 64 ? '...' : ''} (event)`,
+        type: 'event',
       });
-  });
-}
-
-if (runIntegrityCheckBtn) {
-  runIntegrityCheckBtn.addEventListener('click', () => {
-    if (saveIntegrityReport) {
-      saveIntegrityReport.innerHTML = '<div style="color:#7f9bb6;">Running integrity checks...</div>';
     }
-
-    void saveRepository
-      .verifyIntegrity(DEFAULT_GAME_ID)
-      .then(renderIntegrityReport)
-      .catch((error) => {
-        if (!saveIntegrityReport) return;
-        saveIntegrityReport.innerHTML = `<div style="color:#ff8866;">Integrity check failed: ${String(error)}</div>`;
-      });
-  });
-}
-
-if (themeSelect) {
-  themeSelect.addEventListener('change', () => {
-    applyTheme(themeSelect.value as 'foundation' | 'zx');
-  });
-}
-
-if (cancelSettingsBtn && settingsModal) {
-  cancelSettingsBtn.addEventListener('click', () => {
-    settingsModal.style.display = 'none';
-  });
-}
-
-if (createGalaxyBtn && settingsModal) {
-  createGalaxyBtn.addEventListener('click', async () => {
-    const starCount = parseInt(starCountSelect.value);
-    const seedText = seedInput.value.trim();
-    const seed = seedText ? parseInt(seedText) : Date.now();
-    
-    // Get shape
-    const shape = (galaxyShapeSelect?.value as GalaxyShape) || GalaxyShape.Random;
-    
-    // Get dimensions based on size selection
-    let width = 40;
-    let height = 30;
-    const size = galaxySizeSelect?.value || 'small';
-    
-    if (size === 'medium') {
-      width = 100;
-      height = 75;
-    } else if (size === 'large') {
-      width = 200;
-      height = 150;
-    }
-
-    // Confirm before creating
-    if (
-      confirm(
-        `Create new galaxy with ${starCount} stars (${size}, ${shape})?\n\nThis will delete your current save.`
-      )
-    ) {
-      // Clear historical tracking
-      clearHistoricalTracking();
-
-      // Delete old save
-      await saveRepository.deleteSave(DEFAULT_GAME_ID);
-
-      // Create new galaxy
-      galaxy = new Galaxy({
-        seed,
-        starCount,
-        interactionFactor: 10,
-        width,
-        height,
-        shape
-      });
-
-      // Reset camera
-      renderer.resetCamera();
-
-      // Save initial state
-      await persistGameState();
-
-      // Hide modal
-      settingsModal.style.display = 'none';
-
-      // Clear seed input
-      seedInput.value = '';
-
-      // Populate filters
-      populateRegionFilter();
-
-      // Reset playback
-      isPlaying = false;
-      if (playBtn) playBtn.textContent = '▶ Play';
-      updateScrubber();
-
-      // Render
-      render();
-
-      console.log(`✨ New galaxy created: ${starCount} stars, seed: ${seed}`);
-    }
-  });
-}
-
-// Click outside modal to close
-if (settingsModal) {
-  settingsModal.addEventListener('click', (e) => {
-    if (e.target === settingsModal) {
-      settingsModal.style.display = 'none';
-    }
-  });
-}
-
-// Search and filter functionality
-const starSearchInput = document.getElementById('starSearch') as HTMLInputElement;
-const filterTierSelect = document.getElementById('filterTier') as HTMLSelectElement;
-const filterStatusSelect = document.getElementById('filterStatus') as HTMLSelectElement;
-const filterRegionSelect = document.getElementById('filterRegion') as HTMLSelectElement;
-
-let currentFilterIndex = 0;
-
-function updateFilters() {
-  const search = starSearchInput?.value || '';
-  const tier = filterTierSelect?.value || 'all';
-  const status = filterStatusSelect?.value || 'all';
-  const region = filterRegionSelect?.value || 'all';
-
-  renderer.setFilterCriteria({ search, tier, status, region }, galaxy);
-  currentFilterIndex = 0;
-  render();
-}
-
-// Populate Region Dropdown
-function populateRegionFilter() {
-  if (!filterRegionSelect) return;
-  
-  // Clear existing options (except "All")
-  while (filterRegionSelect.options.length > 1) {
-    filterRegionSelect.remove(1);
+    if (suggestions.length >= 8) break;
   }
 
-  const regions = (galaxy.state as any).regions;
-  if (regions && regions.length > 0) {
-    regions.forEach((r: any) => {
-      const option = document.createElement('option');
-      option.value = r.id;
-      option.textContent = r.name;
-      option.style.color = r.color;
-      filterRegionSelect.appendChild(option);
-    });
-  }
+  return suggestions.slice(0, 8);
 }
 
-// Initial population
-populateRegionFilter();
-
-// Tab key cycles through filtered stars
-function cycleToNextStar() {
-  const filteredStars = renderer.getFilteredStars();
-  if (filteredStars.length === 0) {
-    updateFilters(); // Apply filters if not already done
-  }
-
-  if (filteredStars.length > 0) {
-    currentFilterIndex = (currentFilterIndex + 1) % filteredStars.length;
-    const starId = filteredStars[currentFilterIndex]!;
-    renderer.setSelectedStar(starId);
-    if (tooltip) tooltip.style.display = 'none';
-    render();
-  }
+function getDemographicMetricValue(snapshot: DemographicSnapshot, metric: DemographicMetricKey): number {
+  const value = snapshot[metric];
+  return typeof value === 'number' ? value : 0;
 }
 
-if (starSearchInput) {
-  starSearchInput.addEventListener('input', updateFilters);
-}
+function renderEncyclopediaDemographicsChart(
+  canvas: HTMLCanvasElement,
+  metric: DemographicMetricKey,
+  selectedPhase: number | null,
+  events: EncyclopediaEntry[]
+): void {
+  const data = galaxy.state.demographics;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
 
-if (filterTierSelect) {
-  filterTierSelect.addEventListener('change', updateFilters);
-}
+  const rect = canvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.max(1, Math.floor(rect.width * dpr));
+  canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const width = rect.width;
+  const height = rect.height;
 
-if (filterStatusSelect) {
-  filterStatusSelect.addEventListener('change', updateFilters);
-}
-
-if (filterRegionSelect) {
-  filterRegionSelect.addEventListener('change', updateFilters);
-}
-
-// Success message
-console.log('✅ Seldon\'s Game - Phase 2: Planet Personalities!');
-console.log('📊 Galaxy:', galaxy.getAllStars().length, 'stars with unique personalities');
-console.log('🌟 Features:');
-console.log('  - 6 star types (Blue Giants, Yellow Dwarfs, Red Dwarfs, etc.)');
-console.log('  - 16 personality traits affecting gameplay');
-console.log('  - Visual distinction by star type');
-console.log('🎮 Controls:');
-console.log('  - SPACE: Advance phase');
-console.log('  - CLICK star: View details');
-console.log('  - DRAG: Pan camera (galaxy view)');
-console.log('  - SCROLL: Zoom in/out (galaxy view)');
-console.log('  - ARROW KEYS: Pan camera');
-console.log('  - +/- : Zoom in/out');
-console.log('  - HOME: Reset camera');
-console.log('  - ESC: Return to galaxy');
-console.log('  - Hover: See star type & traits');
-
-// --- Phase 8: Encyclopedia Galactica ---
-
-const encyclopediaBtn = document.getElementById('encyclopediaBtn');
-const encyclopediaModal = document.getElementById('encyclopediaModal');
-const closeEncyclopediaBtn = document.getElementById('closeEncyclopediaBtn');
-const encyclopediaSearch = document.getElementById('encyclopediaSearch') as HTMLInputElement;
-const encyclopediaTypeFilter = document.getElementById('encyclopediaTypeFilter') as HTMLSelectElement;
-const encyclopediaContent = document.getElementById('encyclopediaContent');
-
-// State for encyclopedia
-let activeTab: 'events' | 'demographics' | 'narrative' = 'events';
-let chartRenderer: ChartRenderer | null = null;
-let archiveEventsCursor: string | undefined;
-let archiveRenderedEvents: EncyclopediaEntry[] = [];
-
-if (encyclopediaBtn && encyclopediaModal && closeEncyclopediaBtn && encyclopediaContent) {
-  
-  encyclopediaBtn.addEventListener('click', () => {
-    encyclopediaModal.style.display = 'flex';
-    renderEncyclopedia();
-    // Pause game when reading history
-    if (isPlaying && playBtn) playBtn.click();
-  });
-
-  closeEncyclopediaBtn.addEventListener('click', () => {
-    encyclopediaModal.style.display = 'none';
-  });
-
-  const exportDataBtn = document.getElementById('exportDataBtn');
-  const exportFormatSelect = document.getElementById('exportFormatSelect') as HTMLSelectElement | null;
-  if (exportDataBtn) {
-    exportDataBtn.addEventListener('click', async () => {
-      const selectedFormat = exportFormatSelect?.value ?? 'full';
-      const isCompactExport = selectedFormat === 'compact-analysis-v1';
-
-      const exportData = isCompactExport
-        ? buildCompactAnalysisExportV1(galaxy.state)
-        : {
-            version: '0.7.0',
-            date: new Date().toISOString(),
-            galaxy: {
-              phase: galaxy.state.phase,
-              config: galaxy.state.config,
-              stars: Array.from(galaxy.state.stars.values()).map(s => ({
-                id: s.id,
-                name: s.name,
-                tier: s.tier,
-                history: s.history
-              })),
-              events: galaxy.state.events,
-              demographics: galaxy.state.demographics
-            }
-          };
-
-      let jsonText: string;
-      try {
-        jsonText = await archiveWorkerClient.serializeExportJson(exportData, !isCompactExport);
-      } catch (error) {
-        console.warn('Archive export worker failed. Falling back to main thread.', error);
-        jsonText = JSON.stringify(exportData, null, isCompactExport ? 0 : 2);
-      }
-
-      const blob = new Blob([jsonText], { type: 'application/json' });
-      const blobUrl = URL.createObjectURL(blob);
-      const downloadAnchorNode = document.createElement('a');
-      downloadAnchorNode.setAttribute('href', blobUrl);
-      downloadAnchorNode.setAttribute(
-        'download',
-        isCompactExport
-          ? `galaxy_analysis_phase_${galaxy.state.phase}_compact_v1.json`
-          : `galaxy_history_phase_${galaxy.state.phase}.json`
-      );
-      document.body.appendChild(downloadAnchorNode);
-      downloadAnchorNode.click();
-      downloadAnchorNode.remove();
-      URL.revokeObjectURL(blobUrl);
-    });
-  }
-
-  // Close on outside click
-  encyclopediaModal.addEventListener('click', (e) => {
-    if (e.target === encyclopediaModal) {
-      encyclopediaModal.style.display = 'none';
-    }
-  });
-
-  // Tabs
-  const tabEvents = document.getElementById('tabEvents');
-  const tabDemographics = document.getElementById('tabDemographics');
-  const tabNarrative = document.getElementById('tabNarrative');
-  
-  const eventsView = document.getElementById('encyclopediaEventsView');
-  const demographicsView = document.getElementById('encyclopediaDemographicsView');
-  const narrativeView = document.getElementById('encyclopediaNarrativeView');
-  
-  const chartCanvas = document.getElementById('demographicsChart') as HTMLCanvasElement;
-  const chartMetricSelect = document.getElementById('chartMetricSelect') as HTMLSelectElement;
-
-  if (tabEvents && tabDemographics && tabNarrative && eventsView && demographicsView && narrativeView) {
-      tabEvents.addEventListener('click', () => {
-          activeTab = 'events';
-          archiveEventsCursor = undefined;
-          archiveRenderedEvents = [];
-          
-          tabEvents.classList.add('active');
-          tabEvents.style.background = 'var(--archive-tab-active-bg)';
-          
-          tabDemographics.classList.remove('active');
-          tabDemographics.style.background = 'transparent';
-          
-          tabNarrative.classList.remove('active');
-          tabNarrative.style.background = 'transparent';
-          
-          eventsView.style.display = 'flex';
-          demographicsView.style.display = 'none';
-          narrativeView.style.display = 'none';
-          
-          renderEncyclopedia();
-      });
-
-      tabDemographics.addEventListener('click', () => {
-          activeTab = 'demographics';
-          
-          tabDemographics.classList.add('active');
-          tabDemographics.style.background = 'var(--archive-tab-active-bg)';
-          
-          tabEvents.classList.remove('active');
-          tabEvents.style.background = 'transparent';
-          
-          tabNarrative.classList.remove('active');
-          tabNarrative.style.background = 'transparent';
-          
-          eventsView.style.display = 'none';
-          demographicsView.style.display = 'block';
-          narrativeView.style.display = 'none';
-          
-          // Initialize chart if needed
-          if (!chartRenderer && chartCanvas) {
-              chartRenderer = new ChartRenderer(chartCanvas);
-          }
-          renderEncyclopedia();
-      });
-
-      tabNarrative.addEventListener('click', () => {
-          activeTab = 'narrative';
-          
-          tabNarrative.classList.add('active');
-          tabNarrative.style.background = 'var(--archive-tab-active-bg)';
-          
-          tabEvents.classList.remove('active');
-          tabEvents.style.background = 'transparent';
-          
-          tabDemographics.classList.remove('active');
-          tabDemographics.style.background = 'transparent';
-          
-          eventsView.style.display = 'none';
-          demographicsView.style.display = 'none';
-          narrativeView.style.display = 'block';
-          
-          renderEncyclopedia();
-      });
-  }
-
-  // Search and Filter
-  if (encyclopediaSearch) {
-    encyclopediaSearch.addEventListener('input', () => {
-      archiveEventsCursor = undefined;
-      archiveRenderedEvents = [];
-      renderEncyclopedia();
-    });
-  }
-  
-  if (encyclopediaTypeFilter) {
-    encyclopediaTypeFilter.addEventListener('change', () => {
-      archiveEventsCursor = undefined;
-      archiveRenderedEvents = [];
-      renderEncyclopedia();
-    });
-  }
-  
-  if (chartMetricSelect) {
-      chartMetricSelect.addEventListener('change', () => renderEncyclopedia());
-  }
-}
-
-function renderEncyclopedia() {
-  if (activeTab === 'events') {
-      void renderEvents();
-  } else if (activeTab === 'demographics') {
-      renderDemographics();
-  } else {
-      void renderNarrative();
-  }
-}
-
-function buildNarrativeHtmlOnMainThread(): string {
-    let html = '';
-
-    html += `<h3 style="color: var(--text-main); border-bottom: 1px solid var(--text-dim); padding-bottom: 10px; font-family: 'Space Mono', monospace;">The History of the Galaxy</h3>`;
-
-    const currentPhase = galaxy.state.phase;
-    let hasEntries = false;
-
-    for (let p = currentPhase; p >= 0; p--) {
-        const narrative = NarrativeGenerator.generatePhaseNarrative(galaxy.state, p);
-
-        const isSignificant = !narrative.includes("passed without major incident") || p % 50 === 0 || p === 0;
-
-        if (isSignificant) {
-            hasEntries = true;
-            html += `
-                <div style="margin-bottom: 25px; padding-bottom: 15px; border-bottom: 1px solid var(--text-dim);">
-                    <span style="color: var(--accent); font-weight: bold; font-size: 1.1em; font-family: 'Space Mono', monospace; display: block; margin-bottom: 5px;">Phase ${p}</span>
-                    <p style="margin: 0;">${narrative}</p>
-                </div>
-            `;
-        }
-    }
-
-    if (!hasEntries) {
-        html += `<p>No significant history recorded yet.</p>`;
-    }
-
-    return html;
-}
-
-let narrativeRenderToken = 0;
-
-async function renderNarrative() {
-    const narrativeContent = document.getElementById('narrativeContent');
-    if (!narrativeContent) return;
-
-    const token = ++narrativeRenderToken;
-    narrativeContent.innerHTML = '<div style="color:var(--text-dim); padding: 8px 0;">Compiling chronicle...</div>';
-
-    let html = '';
-    try {
-      html = await archiveWorkerClient.buildNarrativeHtml(galaxy.state, galaxy.state.phase);
-    } catch (error) {
-      console.warn('Narrative worker failed. Falling back to main thread.', error);
-      html = buildNarrativeHtmlOnMainThread();
-    }
-
-    if (token !== narrativeRenderToken) return;
-    narrativeContent.innerHTML = html;
-}
-
-async function renderEvents(loadMore: boolean = false) {
-  if (!encyclopediaContent) return;
-
-  const searchQuery = encyclopediaSearch?.value || '';
-  const typeFilter = encyclopediaTypeFilter?.value || 'all';
-
-  if (!loadMore) {
-    archiveEventsCursor = undefined;
-    archiveRenderedEvents = [];
-  }
-
-  const eventTypes = typeFilter !== 'all' ? [typeFilter] : undefined;
-  const result = await saveRepository.queryEvents(galaxy.state, {
-    searchText: searchQuery,
-    eventTypes,
-    cursor: archiveEventsCursor,
-    limit: 300,
-    sort: 'phase_desc',
-  });
-
-  archiveEventsCursor = result.nextCursor;
-  archiveRenderedEvents = loadMore
-    ? archiveRenderedEvents.concat(result.items)
-    : result.items;
-
-  const events = archiveRenderedEvents;
-
-  // Render
-  if (events.length === 0) {
-    encyclopediaContent.innerHTML = '<div style="text-align: center; color: var(--text-muted); margin-top: 50px;">No records found in the Encyclopedia Galactica.</div>';
+  ctx.clearRect(0, 0, width, height);
+  if (data.length < 2) {
+    ctx.fillStyle = '#88bbdd';
+    ctx.font = '12px "Courier New", monospace';
+    ctx.fillText('Not enough demographic data yet.', 12, 20);
     return;
   }
 
-  let html = '';
-  let currentPhase = -1;
+  const padding = 32;
+  const graphW = width - padding * 2;
+  const graphH = height - padding * 2;
+  const values = data.map((snap) => getDemographicMetricValue(snap, metric));
+  const maxVal = Math.max(1, ...values);
+  const minVal = Math.min(0, ...values);
 
-  for (const event of events) {
-    // Add phase header if changed
-    if (event.phase !== currentPhase) {
-      html += `<div style="border-bottom: 1px solid var(--text-dim); color: var(--text-dim); margin: 15px 0 5px 0; font-size: 10px; font-weight: bold;">PHASE ${event.phase}</div>`;
-      currentPhase = event.phase;
+  ctx.strokeStyle = 'rgba(120, 160, 190, 0.35)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = padding + (i / 4) * graphH;
+    ctx.beginPath();
+    ctx.moveTo(padding, y);
+    ctx.lineTo(width - padding, y);
+    ctx.stroke();
+  }
+
+  ctx.beginPath();
+  ctx.strokeStyle = '#66bbff';
+  ctx.lineWidth = 2;
+  values.forEach((value, index) => {
+    const x = padding + (index / Math.max(1, data.length - 1)) * graphW;
+    const normalized = (value - minVal) / Math.max(1e-6, (maxVal - minVal));
+    const y = height - padding - normalized * graphH;
+    if (index === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+
+  const crisisPhases = Array.from(
+    new Set(
+      events
+        .filter((event) => mapEventTypeToEncyclopediaCategory(event.type) === 'crisis')
+        .map((event) => event.phase)
+    )
+  );
+  ctx.strokeStyle = 'rgba(255, 110, 110, 0.45)';
+  for (const phase of crisisPhases) {
+    const idx = data.findIndex((snap) => snap.phase === phase);
+    if (idx < 0) continue;
+    const x = padding + (idx / Math.max(1, data.length - 1)) * graphW;
+    ctx.beginPath();
+    ctx.moveTo(x, padding);
+    ctx.lineTo(x, height - padding);
+    ctx.stroke();
+  }
+
+  if (selectedPhase !== null) {
+    const idx = data.findIndex((snap) => snap.phase === selectedPhase);
+    if (idx >= 0) {
+      const x = padding + (idx / Math.max(1, data.length - 1)) * graphW;
+      ctx.strokeStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.moveTo(x, padding);
+      ctx.lineTo(x, height - padding);
+      ctx.stroke();
+    }
+  }
+
+  ctx.fillStyle = '#88bbdd';
+  ctx.font = '10px "Courier New", monospace';
+  ctx.fillText(`Phase ${data[0]?.phase ?? 0}`, padding, height - 10);
+  ctx.fillText(`Phase ${data[data.length - 1]?.phase ?? 0}`, width - padding - 56, height - 10);
+}
+
+function computeMiniMapPoints(stars: Star[], width = 218, height = 126, padding = 10): MiniMapPoint[] {
+  if (stars.length === 0) return [];
+  const minX = Math.min(...stars.map((star) => star.position.x));
+  const maxX = Math.max(...stars.map((star) => star.position.x));
+  const minY = Math.min(...stars.map((star) => star.position.y));
+  const maxY = Math.max(...stars.map((star) => star.position.y));
+  const xRange = Math.max(1e-6, maxX - minX);
+  const yRange = Math.max(1e-6, maxY - minY);
+  const innerWidth = Math.max(1, width - padding * 2);
+  const innerHeight = Math.max(1, height - padding * 2);
+
+  return stars.map((star) => ({
+    starId: star.id,
+    x: padding + ((star.position.x - minX) / xRange) * innerWidth,
+    y: padding + ((star.position.y - minY) / yRange) * innerHeight,
+  }));
+}
+
+function renderEncyclopedia() {
+    if (!contextualNav) return;
+    const events = getCachedEncyclopediaEvents();
+    const search = encyclopediaViewState.searchText.trim().toLowerCase();
+
+    const baseFilteredEvents = events.filter((event) => {
+        if (!eventMatchesCategory(event.type, encyclopediaViewState.eventCategory)) return false;
+
+        if (encyclopediaViewState.starFilters.length > 0) {
+          const related = [event.starId, ...event.relatedStars];
+          const intersects = encyclopediaViewState.starFilters.some((starId) => related.includes(starId));
+          if (!intersects) return false;
+        }
+
+        if (search.length === 0) return true;
+        return (
+          event.description.toLowerCase().includes(search) ||
+          event.starName.toLowerCase().includes(search) ||
+          event.type.toLowerCase().includes(search)
+        );
+    });
+
+    const timelineClusters = buildTimelineClusters(baseFilteredEvents);
+    const selectedCluster = timelineClusters.find((cluster) => cluster.id === encyclopediaViewState.timelineClusterId) ?? null;
+
+    const filteredEvents = baseFilteredEvents.filter((event) => {
+      if (encyclopediaViewState.phaseFilter !== null && event.phase !== encyclopediaViewState.phaseFilter) return false;
+      if (selectedCluster && (event.phase < selectedCluster.startPhase || event.phase > selectedCluster.endPhase)) return false;
+      return true;
+    });
+
+    const displayedEvents = filteredEvents.slice(0, encyclopediaViewState.visibleCount);
+    const hasMoreEvents = displayedEvents.length < filteredEvents.length;
+    const narrativeChapters = buildNarrativeChapters(filteredEvents);
+    const searchSuggestions = buildEncyclopediaSearchSuggestions(encyclopediaViewState.searchText, baseFilteredEvents);
+    const timelineEventsByPhase = new Map<number, EncyclopediaEntry>();
+    for (const event of filteredEvents) {
+      if (!timelineEventsByPhase.has(event.phase)) {
+        timelineEventsByPhase.set(event.phase, event);
+      }
+      if (timelineEventsByPhase.size >= 90) break;
+    }
+    const timelineEvents = Array.from(timelineEventsByPhase.values()).sort((a, b) => a.phase - b.phase);
+
+    const starFilterLabel = encyclopediaViewState.starFilters
+      .map((starId) => galaxy.getStar(starId)?.name || starId)
+      .join(', ');
+
+    const selectedChapter = narrativeChapters.find((chapter) => chapter.id === encyclopediaViewState.selectedChapterId) ?? narrativeChapters[0];
+    const selectedPhase = encyclopediaViewState.selectedPhase;
+    const selectedStarId = encyclopediaViewState.selectedStarId ?? encyclopediaViewState.starFilters[0] ?? selectedChapter?.anchorStarId ?? null;
+    const starNameLinkData = galaxy.getAllStars().map((star) => ({ id: star.id, name: star.name }));
+    const miniMapHighlightStars = new Set<string>();
+    if (selectedStarId) miniMapHighlightStars.add(selectedStarId);
+    for (const starId of encyclopediaViewState.starFilters) {
+      miniMapHighlightStars.add(starId);
+    }
+    if (selectedChapter) {
+      for (const starId of selectedChapter.starIds.slice(0, 12)) {
+        miniMapHighlightStars.add(starId);
+      }
     }
 
-    const color = getEventColor(event.type);
-    
-    html += `
-      <div style="padding: 6px; border-left: 3px solid ${color}; background: var(--archive-event-bg); margin-bottom: 4px;">
-        <div style="display: flex; justify-content: space-between; font-size: 10px; color: var(--text-dim); margin-bottom: 2px;">
-          <span>${event.type.toUpperCase()}</span>
-          <span><a href="#" style="color: var(--text-dim); text-decoration: none;" onclick="window.selectStar('${event.starId}')">${event.starName}</a></span>
+    const miniMapStars = galaxy.getAllStars();
+    const miniMapPoints = computeMiniMapPoints(miniMapStars);
+    const miniMapDotsHtml = miniMapPoints.map((point) => {
+      const isSelected = selectedStarId === point.starId;
+      const isHighlighted = miniMapHighlightStars.has(point.starId);
+      const className = isSelected ? 'mini-map-star selected' : isHighlighted ? 'mini-map-star highlighted' : 'mini-map-star';
+      const star = galaxy.getStar(point.starId);
+      const label = star?.name ?? point.starId;
+      return `<circle class="${className}" data-mini-star-id="${point.starId}" cx="${point.x.toFixed(2)}" cy="${point.y.toFixed(2)}" r="${isSelected ? '3.2' : '2.1'}"><title>${label}</title></circle>`;
+    }).join('');
+
+    const eventsHtml = displayedEvents.map(event => `
+        <div class="encyclopedia-item ${selectedPhase === event.phase && selectedStarId === event.starId ? 'selected' : ''}" data-event-phase="${event.phase}" data-event-star-id="${event.starId}">
+            <div class="encyclopedia-item-head">
+              <span class="encyclopedia-item-type">${event.type}</span>
+              <span class="encyclopedia-item-phase">Phase ${event.phase}</span>
+            </div>
+            <p class="encyclopedia-item-description">${linkifyEncyclopediaText(event.description, starNameLinkData)}</p>
+            <p class="encyclopedia-item-meta"><button type="button" class="encyclopedia-inline-link" data-link-star-id="${event.starId}">${escapeHtml(event.starName)}</button></p>
+            <div class="encyclopedia-related-actions">
+              <button type="button" class="encyclopedia-related-btn" data-related-star-id="${event.starId}" data-related-star-name="${encodeURIComponent(event.starName)}" data-related-stars="${event.relatedStars.join(',')}" data-related-phase="${event.phase}">Star Detail →</button>
+              <button type="button" class="encyclopedia-related-btn" data-related-type="${event.type}">Similar Events →</button>
+            </div>
         </div>
-        <div style="color: var(--text-main); font-size: 12px;">${event.description}</div>
+    `).join('');
+
+    const timelineMinPhase = timelineEvents[0]?.phase ?? 0;
+    const timelineMaxPhase = timelineEvents[timelineEvents.length - 1]?.phase ?? 1;
+    const timelineRange = Math.max(1, timelineMaxPhase - timelineMinPhase);
+    const timelineNodesHtml = timelineEvents.map((event, index) => {
+      const left = ((event.phase - timelineMinPhase) / timelineRange) * 100;
+      const nodeClass = selectedPhase === event.phase ? 'encyclopedia-timeline-node selected' : 'encyclopedia-timeline-node';
+      return `
+        <button
+          type="button"
+          class="${nodeClass}"
+          data-timeline-event-index="${index}"
+          style="left:${left.toFixed(2)}%;"
+          title="Phase ${event.phase}: ${event.type}"
+        >
+          <span>${event.phase}</span>
+        </button>
+      `;
+    }).join('');
+
+    const selectedTimelineEvent = timelineEvents.find((event) => event.phase === selectedPhase) ?? timelineEvents[timelineEvents.length - 1] ?? null;
+    const eventsPaneHtml = encyclopediaViewState.eventsViewMode === 'timeline'
+      ? `
+        <div class="encyclopedia-events-timeline-wrap">
+          <div class="encyclopedia-events-timeline">
+            <div class="encyclopedia-events-timeline-line"></div>
+            ${timelineNodesHtml || '<p class="encyclopedia-empty-copy">No timeline points available.</p>'}
+          </div>
+          ${
+            selectedTimelineEvent
+              ? `
+              <article class="encyclopedia-timeline-detail">
+                <h4>Phase ${selectedTimelineEvent.phase}</h4>
+                <p>${linkifyEncyclopediaText(selectedTimelineEvent.description, starNameLinkData)}</p>
+                <div class="encyclopedia-filter-summary">
+                  <span>${selectedTimelineEvent.type}</span>
+                  <span>${selectedTimelineEvent.starName}</span>
+                </div>
+                <div class="encyclopedia-related-actions">
+                  <button type="button" class="encyclopedia-related-btn" data-related-star-id="${selectedTimelineEvent.starId}" data-related-star-name="${encodeURIComponent(selectedTimelineEvent.starName)}" data-related-stars="${selectedTimelineEvent.relatedStars.join(',')}" data-related-phase="${selectedTimelineEvent.phase}">Star Detail →</button>
+                  <button type="button" class="encyclopedia-related-btn" data-related-type="${selectedTimelineEvent.type}">Similar Events →</button>
+                </div>
+              </article>
+            `
+              : '<p class="encyclopedia-empty-copy">Select a timeline point to inspect the event.</p>'
+          }
+        </div>
+      `
+      : `
+        <div class="encyclopedia-content encyclopedia-workspace-content">
+          ${eventsHtml.length > 0 ? eventsHtml : '<p>No significant events have occurred yet.</p>'}
+        </div>
+        ${hasMoreEvents ? `<div class="encyclopedia-load-more-wrap"><button id="encyclopediaLoadMoreBtn" class="encyclopedia-clear-btn" type="button">Load More</button></div>` : ''}
+      `;
+
+    const demographicMetricLabels: Record<DemographicMetricKey, string> = {
+      totalPopulation: 'Total Population',
+      averageTech: 'Average Technology',
+      maxPower: 'Max Power',
+      imperialPower: 'Imperial Power',
+      activeWars: 'Active Wars',
+      activeCrises: 'Active Crises',
+    };
+
+    const demographicsPaneHtml = `
+      <div class="encyclopedia-demographics-wrap">
+        <div class="encyclopedia-demographics-controls">
+          <label for="encyclopediaDemographicMetric" class="color-dim font-size-11">Metric</label>
+          <select id="encyclopediaDemographicMetric" class="encyclopedia-type-select" aria-label="Select demographic metric">
+            ${Object.entries(demographicMetricLabels)
+              .map(([value, label]) => `<option value="${value}" ${encyclopediaViewState.demographicsMetric === value ? 'selected' : ''}>${label}</option>`)
+              .join('')}
+          </select>
+        </div>
+        <canvas id="encyclopediaDemographicsCanvas" class="encyclopedia-demographics-canvas" aria-label="Interactive demographics chart"></canvas>
+        <p class="encyclopedia-mini-map-help">Click chart to jump to phase. Crisis markers are shown as red guide lines.</p>
       </div>
     `;
-  }
 
-  const summary = `<div style="margin: 0 0 10px 0; color: var(--text-dim); font-size: 10px;">` +
-    `Showing ${events.length}${result.totalEstimate ? ` of ${result.totalEstimate}` : ''}` +
-    ` records (${result.queryMs.toFixed(1)}ms, ${result.source})</div>`;
+    const chaptersHtml = narrativeChapters.map((chapter) => `
+      <button type="button" class="encyclopedia-chapter-btn ${selectedChapter?.id === chapter.id ? 'selected' : ''}" data-chapter-id="${chapter.id}">
+        <span class="encyclopedia-chapter-title">Phases ${chapter.startPhase}-${chapter.endPhase}</span>
+        <span class="encyclopedia-chapter-meta">${chapter.eventCount} events</span>
+      </button>
+    `).join('');
 
-  const loadMoreHtml = archiveEventsCursor
-    ? `<div style="margin-top: 10px; text-align: center;">
-        <button onclick="window.loadMoreArchiveEvents()" style="padding: 6px 12px; background: var(--panel-bg); color: var(--text-main); border: 1px solid var(--border); cursor: pointer;">
-          Load More
-        </button>
-      </div>`
-    : '';
+    const narrativeRailHtml = `
+      <div class="encyclopedia-narrative-rail">
+        <h4>Chapter Rails</h4>
+        <div class="encyclopedia-chapter-list">
+          ${chaptersHtml || '<p class="encyclopedia-empty-copy">No chapters generated yet.</p>'}
+        </div>
+      </div>
+    `;
 
-  encyclopediaContent.innerHTML = summary + html + loadMoreHtml;
-}
+    const selectedChapterSupportEvents = selectedChapter
+      ? filteredEvents
+          .filter((event) => event.phase >= selectedChapter.startPhase && event.phase <= selectedChapter.endPhase)
+          .slice(0, 8)
+      : [];
 
-function renderDemographics() {
-    if (!chartRenderer || !galaxy.state.demographics) return;
+    const selectedChapterSummary = selectedChapter
+      ? `
+        <article class="encyclopedia-narrative-chapter" data-chapter-id="${selectedChapter.id}">
+          <h4>Phase Arc ${selectedChapter.startPhase}-${selectedChapter.endPhase}</h4>
+          <p>${linkifyEncyclopediaText(selectedChapter.summary, starNameLinkData)}</p>
+          <div class="encyclopedia-filter-summary">
+            <span>Anchor Phase ${selectedChapter.anchorPhase}</span>
+            <span>${selectedChapter.eventCount} Events</span>
+            ${selectedChapter.anchorStarId ? `<span>${galaxy.getStar(selectedChapter.anchorStarId)?.name || selectedChapter.anchorStarId}</span>` : ''}
+          </div>
+          <details class="encyclopedia-narrative-disclosure">
+            <summary>Supporting events (${selectedChapterSupportEvents.length})</summary>
+            <div class="encyclopedia-narrative-support-list">
+              ${
+                selectedChapterSupportEvents.length > 0
+                  ? selectedChapterSupportEvents.map((event) => `<p><strong>Phase ${event.phase}:</strong> ${linkifyEncyclopediaText(event.description, starNameLinkData)}</p>`).join('')
+                  : '<p class="encyclopedia-empty-copy">No supporting events available.</p>'
+              }
+            </div>
+          </details>
+        </article>
+      `
+      : '<p class="encyclopedia-empty-copy">No narrative chapter selected.</p>';
 
-    const metricSelect = document.getElementById('chartMetricSelect') as HTMLSelectElement;
-    const metric = (metricSelect?.value || 'totalPopulation');
-    
-    // Special handling for Pie Chart
-    if (metric === 'politicalShare') {
-        const latest = galaxy.state.demographics[galaxy.state.demographics.length - 1];
-        if (latest && latest.politicalShare) {
-            chartRenderer.drawPieChart(latest.politicalShare);
-        } else {
-            chartRenderer.drawPieChart([]);
+    const clusterLabelMap: Record<EncyclopediaEventCategory, string> = {
+      all: 'Mixed',
+      war: 'War',
+      crisis: 'Crisis',
+      rebellion: 'Rebellion',
+      plague: 'Plague',
+      leader: 'Leader',
+      succession: 'Succession',
+    };
+
+    const filmstripHtml = `
+      <div class="encyclopedia-filmstrip-wrap">
+        <div class="encyclopedia-filmstrip-header">
+          <h4>Timeline Filmstrip</h4>
+          <button id="encyclopediaClearFilmstripBtn" class="encyclopedia-clear-btn" type="button">All Eras</button>
+        </div>
+        <div class="encyclopedia-filmstrip">
+          ${timelineClusters.map((cluster) => `
+            <button
+              type="button"
+              class="encyclopedia-cluster-chip ${selectedCluster?.id === cluster.id ? 'selected' : ''}"
+              data-timeline-cluster-id="${cluster.id}"
+            >
+              <span class="cluster-chip-range">${cluster.startPhase}-${cluster.endPhase}</span>
+              <span class="cluster-chip-meta">${cluster.eventCount} ${clusterLabelMap[cluster.dominantCategory]}</span>
+            </button>
+          `).join('') || '<p class="encyclopedia-empty-copy">No timeline clusters for current filters.</p>'}
+        </div>
+      </div>
+    `;
+
+    const navigatorGroups = buildNavigatorGroups();
+    const navigatorHtml = `
+      <div class="encyclopedia-navigator-wrap">
+        <div class="encyclopedia-navigator-header">
+          <h4>Galaxy Navigator</h4>
+          <span>${navigatorGroups.length} blocs</span>
+        </div>
+        <div class="encyclopedia-navigator-list">
+          ${navigatorGroups.map((group) => {
+            const expanded = encyclopediaViewState.navigatorExpandedGroupIds.includes(group.id);
+            const sampleStars = expanded ? group.starIds : group.starIds.slice(0, 4);
+            return `
+              <section class="encyclopedia-navigator-group">
+                <button type="button" class="encyclopedia-navigator-group-btn" data-navigator-group-id="${group.id}">
+                  <span>${escapeHtml(group.label)}</span>
+                  <span>${group.starIds.length} stars</span>
+                </button>
+                <div class="encyclopedia-navigator-stars">
+                  ${sampleStars.map((starId) => {
+                    const star = galaxy.getStar(starId);
+                    const label = star?.name ?? starId;
+                    return `<button type="button" class="encyclopedia-navigator-star-btn" data-navigator-star-id="${starId}">${escapeHtml(label)}</button>`;
+                  }).join('')}
+                  ${
+                    !expanded && group.starIds.length > 4
+                      ? `<button type="button" class="encyclopedia-navigator-more-btn" data-navigator-group-id="${group.id}">+${group.starIds.length - 4} more</button>`
+                      : ''
+                  }
+                </div>
+              </section>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
+
+    const workspace = getEncyclopediaWorkspace();
+    if (!workspace) return;
+    const isSplitMode = encyclopediaViewState.displayMode === 'split';
+    document.body.classList.toggle('encyclopedia-split-mode', isSplitMode);
+    if (isSplitMode && renderer.getSelectedStar()) {
+      renderer.setSelectedStar(null);
+    }
+    resizeCanvas();
+
+    contextualNav.innerHTML = `
+      <div class="panel encyclopedia-control-panel">
+        <h3>ENCYCLOPEDIA CONTROLS</h3>
+        <div class="encyclopedia-mode-toggle">
+          <button id="encyclopediaAtlasModeBtn" class="encyclopedia-tab-btn ${encyclopediaViewState.displayMode === 'atlas' ? 'active' : ''}" type="button">Atlas</button>
+          <button id="encyclopediaSplitModeBtn" class="encyclopedia-tab-btn ${encyclopediaViewState.displayMode === 'split' ? 'active' : ''}" type="button">Split Reality</button>
+        </div>
+        <div class="encyclopedia-focus-header">
+          <button id="backToSimulationBtn" class="encyclopedia-back-btn" type="button">Back to Simulation</button>
+          <div class="encyclopedia-focus-context">
+            <span>Phase ${simulationNavigationContext.phase}</span>
+            ${simulationNavigationContext.selectedStarId ? `<span>${galaxy.getStar(simulationNavigationContext.selectedStarId)?.name || simulationNavigationContext.selectedStarId}</span>` : ''}
+            <span>${simulationNavigationContext.eventCategory}</span>
+          </div>
+        </div>
+        <div class="encyclopedia-mini-map-card">
+          <div class="encyclopedia-mini-map-header">
+            <h4>Mini Galaxy Context</h4>
+            <button id="encyclopediaJumpToMapBtn" class="encyclopedia-clear-btn" type="button">Jump to Map Context</button>
+          </div>
+          <svg id="encyclopediaMiniMap" class="encyclopedia-mini-map-svg" viewBox="0 0 218 126" role="img" aria-label="Mini galaxy context map">
+            <rect x="0.5" y="0.5" width="217" height="125" rx="6" ry="6" class="mini-map-frame"></rect>
+            ${miniMapDotsHtml}
+          </svg>
+          <div class="encyclopedia-mini-map-help">Click a star to filter archive context.</div>
+        </div>
+        <div class="encyclopedia-filters">
+          <div class="search-container">
+            <input
+              id="encyclopediaSearchInput"
+              class="encyclopedia-search-input"
+              type="text"
+              placeholder="Search events, stars, or types..."
+              value="${encyclopediaViewState.searchText}"
+              aria-label="Search encyclopedia events"
+            />
+            <div id="encyclopediaSearchSuggestions" class="search-suggestions ${searchSuggestions.length > 0 ? 'active' : ''}">
+              ${searchSuggestions.map((item, index) => `<div class="search-suggestion" data-encyclopedia-suggestion="${encodeURIComponent(item.value)}" data-encyclopedia-suggestion-index="${index}">${item.label}</div>`).join('')}
+            </div>
+          </div>
+          <select id="encyclopediaTypeSelect" class="encyclopedia-type-select" aria-label="Filter encyclopedia by event category">
+            <option value="all" ${encyclopediaViewState.eventCategory === 'all' ? 'selected' : ''}>All</option>
+            <option value="war" ${encyclopediaViewState.eventCategory === 'war' ? 'selected' : ''}>Wars</option>
+            <option value="crisis" ${encyclopediaViewState.eventCategory === 'crisis' ? 'selected' : ''}>Crises</option>
+            <option value="rebellion" ${encyclopediaViewState.eventCategory === 'rebellion' ? 'selected' : ''}>Rebellions</option>
+            <option value="plague" ${encyclopediaViewState.eventCategory === 'plague' ? 'selected' : ''}>Plagues</option>
+            <option value="leader" ${encyclopediaViewState.eventCategory === 'leader' ? 'selected' : ''}>Leaders</option>
+            <option value="succession" ${encyclopediaViewState.eventCategory === 'succession' ? 'selected' : ''}>Succession</option>
+          </select>
+          <button id="encyclopediaClearFiltersBtn" class="encyclopedia-clear-btn" type="button">Clear Filters</button>
+        </div>
+      </div>
+    `;
+
+    workspace.innerHTML = `
+      <section class="encyclopedia-workspace-shell">
+        <div class="encyclopedia-workspace-header">
+          <h2>Encyclopedia Workspace</h2>
+          <div class="encyclopedia-focus-tabs">
+            <button id="encyclopediaEventsTabBtn" class="encyclopedia-tab-btn ${encyclopediaViewState.activeTab === 'events' ? 'active' : ''}" type="button">Events</button>
+            <button id="encyclopediaNarrativeTabBtn" class="encyclopedia-tab-btn ${encyclopediaViewState.activeTab === 'narrative' ? 'active' : ''}" type="button">Narrative</button>
+            <button id="encyclopediaDemographicsTabBtn" class="encyclopedia-tab-btn ${encyclopediaViewState.activeTab === 'demographics' ? 'active' : ''}" type="button">Demographics</button>
+            <button id="encyclopediaNavigatorTabBtn" class="encyclopedia-tab-btn ${encyclopediaViewState.activeTab === 'navigator' ? 'active' : ''}" type="button">Navigator</button>
+          </div>
+        </div>
+        ${
+          encyclopediaViewState.activeTab === 'events'
+            ? `
+              <div class="encyclopedia-view-toggle">
+                <button id="encyclopediaEventsListModeBtn" class="encyclopedia-tab-btn ${encyclopediaViewState.eventsViewMode === 'list' ? 'active' : ''}" type="button">List View</button>
+                <button id="encyclopediaEventsTimelineModeBtn" class="encyclopedia-tab-btn ${encyclopediaViewState.eventsViewMode === 'timeline' ? 'active' : ''}" type="button">Timeline View</button>
+              </div>
+            `
+            : ''
         }
-        return;
+        <div class="encyclopedia-filter-summary">
+          ${encyclopediaViewState.phaseFilter !== null ? `<span>Phase ${encyclopediaViewState.phaseFilter}</span>` : ''}
+          ${selectedCluster ? `<span>Era ${selectedCluster.startPhase}-${selectedCluster.endPhase}</span>` : ''}
+          ${starFilterLabel ? `<span>${starFilterLabel}</span>` : ''}
+          <span>${displayedEvents.length} of ${filteredEvents.length} events</span>
+        </div>
+        ${encyclopediaViewState.activeTab === 'events'
+          ? eventsPaneHtml
+          : `
+            ${
+              encyclopediaViewState.activeTab === 'narrative'
+                ? `
+                  <div class="encyclopedia-narrative-layout encyclopedia-workspace-content">
+                    ${narrativeRailHtml}
+                    <div class="encyclopedia-content encyclopedia-narrative-content">
+                      ${selectedChapterSummary}
+                    </div>
+                  </div>
+                `
+                : `
+                  <div class="encyclopedia-workspace-content">
+                    ${encyclopediaViewState.activeTab === 'demographics' ? demographicsPaneHtml : navigatorHtml}
+                  </div>
+                `
+            }
+          `
+        }
+        ${
+          encyclopediaViewState.activeTab === 'events'
+            ? filmstripHtml
+            : ''
+        }
+      </section>
+    `;
+
+    const searchInput = contextualNav.querySelector('#encyclopediaSearchInput') as HTMLInputElement | null;
+    const searchSuggestionItems = contextualNav.querySelectorAll<HTMLElement>('[data-encyclopedia-suggestion]');
+    const typeSelect = contextualNav.querySelector('#encyclopediaTypeSelect') as HTMLSelectElement | null;
+    const clearFiltersBtn = contextualNav.querySelector('#encyclopediaClearFiltersBtn') as HTMLButtonElement | null;
+    const backBtn = contextualNav.querySelector('#backToSimulationBtn') as HTMLButtonElement | null;
+    const jumpToMapBtn = contextualNav.querySelector('#encyclopediaJumpToMapBtn') as HTMLButtonElement | null;
+    const atlasModeBtn = contextualNav.querySelector('#encyclopediaAtlasModeBtn') as HTMLButtonElement | null;
+    const splitModeBtn = contextualNav.querySelector('#encyclopediaSplitModeBtn') as HTMLButtonElement | null;
+    const loadMoreBtn = workspace.querySelector('#encyclopediaLoadMoreBtn') as HTMLButtonElement | null;
+    const eventsTabBtn = workspace.querySelector('#encyclopediaEventsTabBtn') as HTMLButtonElement | null;
+    const narrativeTabBtn = workspace.querySelector('#encyclopediaNarrativeTabBtn') as HTMLButtonElement | null;
+    const demographicsTabBtn = workspace.querySelector('#encyclopediaDemographicsTabBtn') as HTMLButtonElement | null;
+    const navigatorTabBtn = workspace.querySelector('#encyclopediaNavigatorTabBtn') as HTMLButtonElement | null;
+    const eventsListModeBtn = workspace.querySelector('#encyclopediaEventsListModeBtn') as HTMLButtonElement | null;
+    const eventsTimelineModeBtn = workspace.querySelector('#encyclopediaEventsTimelineModeBtn') as HTMLButtonElement | null;
+    const demographicMetricSelect = workspace.querySelector('#encyclopediaDemographicMetric') as HTMLSelectElement | null;
+    const demographicsCanvas = workspace.querySelector('#encyclopediaDemographicsCanvas') as HTMLCanvasElement | null;
+    const clearFilmstripBtn = workspace.querySelector('#encyclopediaClearFilmstripBtn') as HTMLButtonElement | null;
+
+    backBtn?.addEventListener('click', () => {
+      returnToSimulationFromEncyclopedia();
+    });
+
+    eventsTabBtn?.addEventListener('click', () => {
+      encyclopediaViewState = {
+        ...encyclopediaViewState,
+        activeTab: 'events',
+      };
+      renderEncyclopedia();
+    });
+
+    narrativeTabBtn?.addEventListener('click', () => {
+      encyclopediaViewState = {
+        ...encyclopediaViewState,
+        activeTab: 'narrative',
+        selectedChapterId: selectedChapter?.id ?? narrativeChapters[0]?.id ?? null,
+      };
+      renderEncyclopedia();
+    });
+
+    demographicsTabBtn?.addEventListener('click', () => {
+      encyclopediaViewState = {
+        ...encyclopediaViewState,
+        activeTab: 'demographics',
+      };
+      renderEncyclopedia();
+    });
+
+    navigatorTabBtn?.addEventListener('click', () => {
+      encyclopediaViewState = {
+        ...encyclopediaViewState,
+        activeTab: 'navigator',
+      };
+      renderEncyclopedia();
+    });
+
+    eventsListModeBtn?.addEventListener('click', () => {
+      encyclopediaViewState = {
+        ...encyclopediaViewState,
+        eventsViewMode: 'list',
+      };
+      renderEncyclopedia();
+    });
+
+    eventsTimelineModeBtn?.addEventListener('click', () => {
+      encyclopediaViewState = {
+        ...encyclopediaViewState,
+        eventsViewMode: 'timeline',
+      };
+      renderEncyclopedia();
+    });
+
+    jumpToMapBtn?.addEventListener('click', () => {
+      const fallbackEvent = filteredEvents[0] ?? null;
+      const targetPhase = encyclopediaViewState.selectedPhase ?? selectedChapter?.anchorPhase ?? fallbackEvent?.phase ?? simulationNavigationContext.phase;
+      const targetStar = encyclopediaViewState.selectedStarId ?? selectedChapter?.anchorStarId ?? fallbackEvent?.starId ?? simulationNavigationContext.selectedStarId;
+      returnToSimulationFromEncyclopedia({
+        phase: targetPhase,
+        starId: targetStar,
+        detailTab: 'entry',
+      });
+    });
+
+    atlasModeBtn?.addEventListener('click', () => {
+      encyclopediaViewState = {
+        ...encyclopediaViewState,
+        displayMode: 'atlas',
+      };
+      renderEncyclopedia();
+    });
+
+    splitModeBtn?.addEventListener('click', () => {
+      encyclopediaViewState = {
+        ...encyclopediaViewState,
+        displayMode: 'split',
+      };
+      renderEncyclopedia();
+    });
+
+    contextualNav.querySelectorAll<SVGCircleElement>('[data-mini-star-id]').forEach((dot) => {
+      dot.addEventListener('click', () => {
+        const miniStarId = dot.dataset.miniStarId;
+        if (!miniStarId) return;
+        encyclopediaViewState = {
+          ...encyclopediaViewState,
+          selectedStarId: miniStarId,
+          starFilters: [miniStarId],
+          phaseFilter: null,
+          timelineClusterId: null,
+          selectedPhase: null,
+          selectedChapterId: null,
+          visibleCount: DEFAULT_ENCYCLOPEDIA_VIEW_STATE.visibleCount,
+        };
+        renderEncyclopedia();
+      });
+    });
+
+    workspace.querySelectorAll<HTMLButtonElement>('.encyclopedia-chapter-btn[data-chapter-id]').forEach((chapterBtn) => {
+      chapterBtn.addEventListener('click', () => {
+        const chapterId = chapterBtn.dataset.chapterId;
+        if (!chapterId) return;
+        const chapter = narrativeChapters.find((candidate) => candidate.id === chapterId);
+        encyclopediaViewState = {
+          ...encyclopediaViewState,
+          activeTab: 'narrative',
+          selectedChapterId: chapterId,
+          selectedPhase: chapter?.anchorPhase ?? encyclopediaViewState.selectedPhase,
+          selectedStarId: chapter?.anchorStarId ?? encyclopediaViewState.selectedStarId,
+        };
+        renderEncyclopedia();
+      });
+    });
+
+    workspace.querySelectorAll<HTMLElement>('.encyclopedia-item[data-event-phase][data-event-star-id]').forEach((eventItem) => {
+      eventItem.addEventListener('click', (event) => {
+        const clickTarget = event.target as HTMLElement | null;
+        if (clickTarget?.closest('.encyclopedia-related-actions')) return;
+        const eventPhaseRaw = eventItem.dataset.eventPhase;
+        const eventStarId = eventItem.dataset.eventStarId;
+        const eventPhase = eventPhaseRaw ? Number.parseInt(eventPhaseRaw, 10) : Number.NaN;
+        if (!eventStarId || Number.isNaN(eventPhase)) return;
+        encyclopediaViewState = {
+          ...encyclopediaViewState,
+          selectedStarId: eventStarId,
+          selectedPhase: eventPhase,
+        };
+        renderEncyclopedia();
+      });
+    });
+
+    searchInput?.addEventListener('input', () => {
+      encyclopediaViewState = {
+        ...encyclopediaViewState,
+        searchText: searchInput.value,
+        timelineClusterId: null,
+        visibleCount: DEFAULT_ENCYCLOPEDIA_VIEW_STATE.visibleCount,
+      };
+      renderEncyclopedia();
+    });
+
+    searchInput?.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter') return;
+      const first = searchSuggestions[0];
+      if (!first) return;
+      event.preventDefault();
+      encyclopediaViewState = {
+        ...encyclopediaViewState,
+        searchText: first.value,
+        timelineClusterId: null,
+        visibleCount: DEFAULT_ENCYCLOPEDIA_VIEW_STATE.visibleCount,
+      };
+      renderEncyclopedia();
+    });
+
+    searchSuggestionItems.forEach((item) => {
+      item.addEventListener('click', () => {
+        const suggestion = item.dataset.encyclopediaSuggestion;
+        if (!suggestion) return;
+        let decoded = suggestion;
+        try {
+          decoded = decodeURIComponent(suggestion);
+        } catch {
+          decoded = suggestion;
+        }
+        encyclopediaViewState = {
+          ...encyclopediaViewState,
+          searchText: decoded,
+          timelineClusterId: null,
+          visibleCount: DEFAULT_ENCYCLOPEDIA_VIEW_STATE.visibleCount,
+        };
+        renderEncyclopedia();
+      });
+    });
+
+    typeSelect?.addEventListener('change', () => {
+      encyclopediaViewState = {
+        ...encyclopediaViewState,
+        eventCategory: typeSelect.value as EncyclopediaEventCategory,
+        timelineClusterId: null,
+        selectedChapterId: null,
+        visibleCount: DEFAULT_ENCYCLOPEDIA_VIEW_STATE.visibleCount,
+      };
+      renderEncyclopedia();
+    });
+
+    demographicMetricSelect?.addEventListener('change', () => {
+      encyclopediaViewState = {
+        ...encyclopediaViewState,
+        demographicsMetric: demographicMetricSelect.value as DemographicMetricKey,
+      };
+      renderEncyclopedia();
+    });
+
+    clearFiltersBtn?.addEventListener('click', () => {
+      openEncyclopedia({
+        displayMode: encyclopediaViewState.displayMode,
+        activeTab: encyclopediaViewState.activeTab,
+      });
+    });
+
+    loadMoreBtn?.addEventListener('click', () => {
+      encyclopediaViewState = {
+        ...encyclopediaViewState,
+        visibleCount: encyclopediaViewState.visibleCount + DEFAULT_ENCYCLOPEDIA_VIEW_STATE.visibleCount,
+      };
+      renderEncyclopedia();
+    });
+
+    workspace.querySelectorAll<HTMLButtonElement>('[data-timeline-cluster-id]').forEach((clusterBtn) => {
+      clusterBtn.addEventListener('click', () => {
+        const clusterId = clusterBtn.dataset.timelineClusterId;
+        if (!clusterId) return;
+        const cluster = timelineClusters.find((candidate) => candidate.id === clusterId);
+        encyclopediaViewState = {
+          ...encyclopediaViewState,
+          timelineClusterId: encyclopediaViewState.timelineClusterId === clusterId ? null : clusterId,
+          phaseFilter: null,
+          selectedPhase: cluster?.endPhase ?? encyclopediaViewState.selectedPhase,
+          selectedStarId: cluster?.starIds[0] ?? encyclopediaViewState.selectedStarId,
+          visibleCount: DEFAULT_ENCYCLOPEDIA_VIEW_STATE.visibleCount,
+        };
+        renderEncyclopedia();
+      });
+    });
+
+    clearFilmstripBtn?.addEventListener('click', () => {
+      encyclopediaViewState = {
+        ...encyclopediaViewState,
+        timelineClusterId: null,
+        visibleCount: DEFAULT_ENCYCLOPEDIA_VIEW_STATE.visibleCount,
+      };
+      renderEncyclopedia();
+    });
+
+    workspace.querySelectorAll<HTMLButtonElement>('[data-timeline-event-index]').forEach((timelineBtn) => {
+      timelineBtn.addEventListener('click', () => {
+        const idxRaw = timelineBtn.dataset.timelineEventIndex;
+        const idx = idxRaw ? Number.parseInt(idxRaw, 10) : Number.NaN;
+        if (Number.isNaN(idx)) return;
+        const event = timelineEvents[idx];
+        if (!event) return;
+        encyclopediaViewState = {
+          ...encyclopediaViewState,
+          selectedPhase: event.phase,
+          selectedStarId: event.starId,
+        };
+        renderEncyclopedia();
+      });
+    });
+
+    workspace.querySelectorAll<HTMLButtonElement>('[data-navigator-group-id]').forEach((groupBtn) => {
+      groupBtn.addEventListener('click', () => {
+        const groupId = groupBtn.dataset.navigatorGroupId;
+        if (!groupId) return;
+        const currentlyExpanded = encyclopediaViewState.navigatorExpandedGroupIds.includes(groupId);
+        encyclopediaViewState = {
+          ...encyclopediaViewState,
+          navigatorExpandedGroupIds: currentlyExpanded
+            ? encyclopediaViewState.navigatorExpandedGroupIds.filter((id) => id !== groupId)
+            : [...encyclopediaViewState.navigatorExpandedGroupIds, groupId],
+        };
+        renderEncyclopedia();
+      });
+    });
+
+    workspace.querySelectorAll<HTMLButtonElement>('[data-navigator-star-id]').forEach((starBtn) => {
+      starBtn.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const starId = starBtn.dataset.navigatorStarId;
+        if (!starId) return;
+        encyclopediaViewState = {
+          ...encyclopediaViewState,
+          selectedStarId: starId,
+          starFilters: [starId],
+          timelineClusterId: null,
+          phaseFilter: null,
+          activeTab: 'events',
+          visibleCount: DEFAULT_ENCYCLOPEDIA_VIEW_STATE.visibleCount,
+        };
+        renderEncyclopedia();
+      });
+    });
+
+    workspace.querySelectorAll<HTMLButtonElement>('[data-link-star-id]').forEach((linkBtn) => {
+      linkBtn.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const starId = linkBtn.dataset.linkStarId;
+        if (!starId) return;
+        encyclopediaViewState = {
+          ...encyclopediaViewState,
+          selectedStarId: starId,
+          starFilters: [starId],
+          timelineClusterId: null,
+          phaseFilter: null,
+          activeTab: 'events',
+          visibleCount: DEFAULT_ENCYCLOPEDIA_VIEW_STATE.visibleCount,
+        };
+        renderEncyclopedia();
+      });
+    });
+
+    workspace.querySelectorAll<HTMLButtonElement>('[data-link-phase]').forEach((linkBtn) => {
+      linkBtn.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const phaseRaw = linkBtn.dataset.linkPhase;
+        const phase = phaseRaw ? Number.parseInt(phaseRaw, 10) : Number.NaN;
+        if (Number.isNaN(phase)) return;
+        encyclopediaViewState = {
+          ...encyclopediaViewState,
+          selectedPhase: phase,
+          phaseFilter: phase,
+          timelineClusterId: null,
+          visibleCount: DEFAULT_ENCYCLOPEDIA_VIEW_STATE.visibleCount,
+        };
+        renderEncyclopedia();
+      });
+    });
+
+    if (demographicsCanvas && encyclopediaViewState.activeTab === 'demographics') {
+      renderEncyclopediaDemographicsChart(demographicsCanvas, encyclopediaViewState.demographicsMetric, encyclopediaViewState.selectedPhase, events);
+
+      const onMouseMove = (mouseEvent: MouseEvent) => {
+        const data = galaxy.state.demographics;
+        if (data.length < 2) return;
+        const rect = demographicsCanvas.getBoundingClientRect();
+        const x = mouseEvent.clientX - rect.left;
+        const padding = 32;
+        const graphW = rect.width - padding * 2;
+        const ratio = Math.max(0, Math.min(1, (x - padding) / Math.max(1, graphW)));
+        const idx = Math.round(ratio * Math.max(0, data.length - 1));
+        const snap = data[idx];
+        if (!snap) return;
+        const value = getDemographicMetricValue(snap, encyclopediaViewState.demographicsMetric);
+        showInfoTooltip(
+          demographicMetricLabels[encyclopediaViewState.demographicsMetric],
+          [`Phase ${snap.phase}`, `Value: ${Math.round(value * 100) / 100}`],
+          mouseEvent.clientX,
+          mouseEvent.clientY
+        );
+      };
+
+      demographicsCanvas.addEventListener('mousemove', onMouseMove);
+      demographicsCanvas.addEventListener('mouseleave', () => hideTooltip());
+      demographicsCanvas.addEventListener('click', (mouseEvent) => {
+        const data = galaxy.state.demographics;
+        if (data.length < 2) return;
+        const rect = demographicsCanvas.getBoundingClientRect();
+        const x = mouseEvent.clientX - rect.left;
+        const padding = 32;
+        const graphW = rect.width - padding * 2;
+        const ratio = Math.max(0, Math.min(1, (x - padding) / Math.max(1, graphW)));
+        const idx = Math.round(ratio * Math.max(0, data.length - 1));
+        const snap = data[idx];
+        if (!snap) return;
+        goToPhase(snap.phase);
+        encyclopediaViewState = {
+          ...encyclopediaViewState,
+          selectedPhase: snap.phase,
+        };
+        renderEncyclopedia();
+      });
     }
 
-    // Get color based on metric
-    let color = '#00ffff';
-    let label = 'Total Output';
-    
-    switch(metric) {
-        case 'totalPopulation': color = '#00ff88'; label = 'Total Galactic Output'; break;
-        case 'averageTech': color = '#0088ff'; label = 'Average Admin Tech'; break;
-        case 'maxPower': color = '#ffaa00'; label = 'Max Star Power'; break;
-        case 'imperialPower': color = '#ff4444'; label = 'Largest Empire Power'; break;
-        case 'activeWars': color = '#ff0000'; label = 'Active Conflicts'; break;
-    }
-
-    chartRenderer.render(galaxy.state.demographics, metric as keyof DemographicSnapshot, color, label);
 }
-
-function getEventColor(type: string): string {
-  const t = type.toLowerCase();
-  if (t.includes('crisis')) return '#ff4444'; // Red
-  if (t.includes('war')) return '#ff8800';    // Orange
-  if (t.includes('rebellion') || t.includes('revolution')) return '#ffff00'; // Yellow
-  if (t.includes('plague')) return '#00ff00'; // Green
-  if (t.includes('boom') || t.includes('golden')) return '#00ffff'; // Cyan
-  if (t.includes('leader') || t.includes('dynasty') || t.includes('succession')) return '#aa00ff'; // Purple
-  return '#888888'; // Grey
-}
-
-// Global helper for the link
-(window as any).selectStar = (starId: string) => {
-  const star = galaxy.getStar(starId);
-  if (star) {
-    renderer.setSelectedStar(starId);
-    if (encyclopediaModal) encyclopediaModal.style.display = 'none';
-    render();
-  }
-};
-
-(window as any).loadMoreArchiveEvents = () => {
-  if (activeTab !== 'events') return;
-  if (!archiveEventsCursor) return;
-  void renderEvents(true);
-};
+''

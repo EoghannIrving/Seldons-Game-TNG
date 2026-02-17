@@ -1,6 +1,6 @@
 # Documentation Index - Seldon's Game TNG
 
-**Last Updated:** 2026-02-16
+**Last Updated:** 2026-02-17
 
 This index helps you navigate the documentation for Seldon's Game TNG. All documents are organized by purpose and current relevance.
 
@@ -23,6 +23,7 @@ This index helps you navigate the documentation for Seldon's Game TNG. All docum
 **Audience:** Developers, users, stakeholders
 **Contents:**
 - All completed phases (0, 1, 2, 3, 5, 6, 7, 8, 9A, 9B)
+- WebUI Review delivery log through Phase G (navigator sitemap, progressive narrative disclosure, internal encyclopedia links, rotating factoids, relationship hover previews)
 - Current architecture and file structure
 - Configuration parameters in use
 - Performance metrics
@@ -491,4 +492,3 @@ All documentation uses **GitHub Flavored Markdown** with:
 
 *"The mathematics of psychohistory are precise. The documentation should be too."*
 — Adapted from Hari Seldon
-

@@ -863,7 +863,7 @@ export class Galaxy {
     let totalPower = 0;
     let independentCount = 0;
     let avgCentralization = 0;
-    
+
     if (!this.state.stars) {
       return {
         phase: this.state.phase,
@@ -891,5 +891,29 @@ export class Galaxy {
       averageCentralization: avgCentralization,
       totalStars: this.state.stars.size,
     };
+  }
+
+  /**
+   * Get all historical events from all stars
+   * Collects events from individual star histories
+   */
+  getHistoricalEvents() {
+    const allEvents: Array<{ type: EventType; phase: number; description: string; starId?: string }> = [];
+
+    if (!this.state.stars) return allEvents;
+
+    // Collect events from each star's history
+    for (const star of this.state.stars.values()) {
+      if (star.history && Array.isArray(star.history)) {
+        for (const event of star.history) {
+          allEvents.push({
+            ...event,
+            starId: star.id
+          });
+        }
+      }
+    }
+
+    return allEvents;
   }
 }

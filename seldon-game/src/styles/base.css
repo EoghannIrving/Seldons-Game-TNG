@@ -1,0 +1,373 @@
+
+:root {
+  /* Foundation Theme (Default) */
+  --bg-color: #000000;
+  --bg-gradient-start: #000000;
+  --bg-gradient-end: #0a0a2e;
+  --text-main: #00ffff;
+  --text-dim: #88bbdd;
+  --text-muted: #888888;
+  --accent: #00ffff;
+  --accent-dim: rgba(0, 255, 255, 0.5);
+  --border: #00ffff;
+  --panel-bg: rgba(0, 20, 40, 0.9);
+  --modal-bg: rgba(0, 0, 0, 0.85);
+  --modal-content-bg: linear-gradient(135deg, #001122 0%, #002244 100%);
+  --font-main: 'Courier New', monospace;
+  --shadow-color: rgba(0, 255, 255, 0.3);
+  --archive-tab-active-bg: #334455;
+  --archive-event-bg: rgba(255, 255, 255, 0.02);
+  --icon-color: var(--text-dim);
+}
+
+body.theme-zx {
+  /* ZX Spectrum Theme */
+  --bg-color: #000000;
+  --bg-gradient-start: #000000;
+  --bg-gradient-end: #000000; /* No gradient */
+  --text-main: #FFFF00; /* Bright Yellow */
+  --text-dim: #00FFFF; /* Bright Cyan */
+  --text-muted: #D7D7D7; /* White */
+  --accent: #FFFF00; /* Yellow */
+  --accent-dim: #D7D700; /* Dim Yellow */
+  --border: #FFFF00;
+  --panel-bg: #000000; /* Solid black */
+  --modal-bg: rgba(0, 0, 0, 0.9);
+  --modal-content-bg: #000000;
+  --font-main: 'Courier New', monospace; /* Keep Courier, closest to system font */
+  --shadow-color: transparent; /* No soft shadows */
+  --archive-tab-active-bg: #303000;
+  --archive-event-bg: rgba(255, 255, 0, 0.08);
+}
+
+/* ZX Scanline Effect */
+body.theme-zx::after {
+  content: " ";
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(18, 16, 16, 0) 50%,
+    rgba(0, 0, 0, 0.25) 50%
+  );
+  background-size: 100% 4px;
+  z-index: 9999;
+  pointer-events: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg-color);
+  background: radial-gradient(circle at center, var(--bg-gradient-end) 0%, var(--bg-gradient-start) 100%);
+  color: var(--text-main);
+  font-family: var(--font-main);
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+}
+
+/* Layout */
+#gameArea {
+  display: flex;
+  height: 100%;
+  width: 100%;
+}
+
+#leftPanel {
+  width: 18%;
+  min-width: 280px;
+  max-width: 400px;
+  background: rgba(0, 10, 20, 0.8);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+  gap: 10px;
+  overflow-y: auto;
+  z-index: 100;
+  backdrop-filter: blur(5px);
+}
+
+#centerPanel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+
+
+#gameContainer {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: black;
+}
+
+#canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+
+
+
+
+/* Utility Classes */
+.flex {
+  display: flex;
+}
+.flex-col {
+  flex-direction: column;
+}
+.flex-1 {
+  flex: 1;
+}
+.flex-2 {
+  flex: 2;
+}
+.gap-5 {
+  gap: 5px;
+}
+.gap-8 {
+  gap: 8px;
+}
+.gap-10 {
+  gap: 10px;
+}
+.items-center {
+  align-items: center;
+}
+.justify-between {
+  justify-content: space-between;
+}
+.w-full {
+  width: 100%;
+}
+.h-full {
+  height: 100%;
+}
+.text-right {
+  text-align: right;
+}
+.font-size-10 {
+  font-size: 10px;
+}
+.font-size-11 {
+  font-size: 11px;
+}
+.font-size-12 {
+  font-size: 12px;
+}
+.color-dim {
+  color: var(--text-dim);
+}
+.color-muted {
+  color: var(--text-muted);
+}
+.color-accent {
+  color: var(--accent);
+}
+.margin-bottom-6 {
+  margin-bottom: 6px;
+}
+.margin-bottom-8 {
+  margin-bottom: 8px;
+}
+.padding-2 {
+  padding: 2px;
+}
+.padding-bottom-8 {
+  padding-bottom: 8px;
+}
+.border-bottom-dim {
+  border-bottom: 1px solid #334455;
+}
+
+/* Component-specific Classes */
+.view-options-label {
+  color: #88bbdd;
+  display: block;
+  margin-bottom: 6px;
+  cursor: pointer;
+}
+.view-options-checkbox {
+  margin-right: 6px;
+}
+
+.display-block {
+  display: block;
+}
+.margin-top-2 {
+  margin-top: 2px;
+}
+.margin-top-5 {
+  margin-top: 5px;
+}
+.margin-top-8 {
+  margin-top: 8px;
+}
+.margin-bottom-2 {
+  margin-bottom: 2px;
+}
+.star-search-input {
+  padding: 6px;
+  background: #001122;
+  border: 1px solid #0088cc;
+  color: #0ff;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+}
+.filter-select {
+  background: #001122;
+  color: #0ff;
+  border: 1px solid #0088cc;
+}
+
+.line-height-1-5 {
+  line-height: 1.5;
+}
+
+.no-margin {
+  margin: 0;
+}
+.letter-spacing-2 {
+  letter-spacing: 2px;
+}
+.items-end {
+  align-items: flex-end;
+}
+.color-white {
+  color: #fff;
+}
+
+
+.gap-10 {
+  gap: 10px;
+}
+.margin-bottom-8 {
+  margin-bottom: 8px;
+}
+.font-size-12 {
+  font-size: 12px;
+}
+.padding-4-8 {
+  padding: 4px 8px;
+}
+.warning-box {
+  margin-top: 20px;
+  padding: 12px;
+  background: rgba(255, 100, 50, 0.1);
+  border: 1px solid rgba(255, 100, 50, 0.3);
+  border-radius: 3px;
+  font-size: 12px;
+  color: #ff8866;
+}
+.integrity-check-box {
+  margin-top: 12px;
+  padding: 10px;
+  background: rgba(50, 80, 120, 0.12);
+  border: 1px solid rgba(90, 130, 180, 0.35);
+  border-radius: 3px;
+}
+.integrity-report {
+  max-height: 120px;
+  overflow-y: auto;
+  font-size: 11px;
+  color: #8aa8c6;
+}
+
+.notification-icon {
+  font-size: 1.2em;
+}
+.notification-hint {
+  opacity: 0.7;
+  font-size: 0.8em;
+}
+.clickable {
+  cursor: pointer;
+}
+
+
+
+.font-bold {
+  font-weight: bold;
+}
+.color-light-gray {
+  color: #ccc;
+}
+.color-dim-accent {
+  color: #6688aa;
+}
+.font-size-10 {
+  font-size: 10px;
+}
+.color-success {
+  color: #44ff44;
+}
+.margin-left-5 {
+  margin-left: 5px;
+}
+
+
+
+.color-leader {
+  color: #FFD700;
+}
+.color-foundation {
+  color: #FFD700;
+  font-weight: bold;
+}
+.color-reform {
+  color: #AAAAFF;
+}
+.color-crisis {
+  color: #ff3333;
+  font-weight: bold;
+}
+.color-crisis-desc {
+  color: #ffaaaa;
+  font-size: 0.9em;
+}
+.color-decadence {
+  color: #ff4444;
+}
+.color-damage {
+  color: #ff9966;
+}
+.color-age {
+  color: #8af;
+}
+
+/* UI Elements */
+
+
+
+
+
+
+
+
+
+/* Ensure canvas receives events */
+canvas {
+  pointer-events: auto !important;
+  z-index: 10;
+}
+
+/* Ensure UI elements are clickable */
+.panel, button, input, select {
+  pointer-events: auto;
+  z-index: 20;
+}
