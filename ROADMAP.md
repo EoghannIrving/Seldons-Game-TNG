@@ -1,6 +1,6 @@
 # Development Roadmap - Future Features
 
-**Last Updated:** 2026-02-17
+**Last Updated:** 2026-02-18
 **Current Version:** v0.9.0 (Phase 9 Complete)
 
 This document contains features and enhancements that are planned but not yet implemented. For completed features, see [`PRODUCTION_NOTES.md`](./PRODUCTION_NOTES.md).
@@ -8,6 +8,44 @@ This document contains features and enhancements that are planned but not yet im
 ---
 
 ## Immediate Priorities (Next Sprint)
+
+### Population-Tech-Power Model Rollout
+**Status:** COMPLETE (Phase 1-6 complete, 2026-02-17)
+**Source:** `Design Documents Archive/POPULATION_TECH_POWER_AND_CAPITAL_VISUAL_PLAN.md`
+
+Completed in Phase 1:
+- Added canonical `population` field to the core `Star` model.
+- Added deterministic population initialization for newly generated stars.
+- Added backward-compatible save migration to derive population for legacy saves.
+
+Completed in Phase 2:
+- Integrated population-driven per-phase growth and derived-strength recomputation.
+- Updated simulation loop ordering for per-phase admin-tech + derived-strength flow.
+- Rebalanced low-strength conquest/recovery thresholds to match new scale.
+
+Completed in Phase 3:
+- Updated simulation stat readouts to canonical fields:
+  - tech displays/factoids now use `administrativeTech`
+  - population factoids use canonical `population`
+- Removed remaining `star.tech` reads from simulation UI surfaces.
+
+Completed in Phase 4:
+- Updated encyclopedia core-status payloads and rendering to include/show canonical population + admin tech.
+- Retuned encyclopedia tech-derived bands/scores to the 0..100 administrative tech scale.
+- Updated global demographic population aggregation to use real `star.population`.
+- Updated compact export fallback demographic population to use real `star.population`.
+- Fixed demographics average-tech precision by storing non-floored mean tech values for encyclopedia charting.
+- Added compatibility repair so legacy integer-only `averageTech` demographics are backfilled from historical per-star tech samples.
+
+Completed in Phase 5:
+- Replaced capital visual `popProxy` derivation with log-normalized real population.
+- Retuned city rendering knobs (building/cluster/settlement counts) so population drives density more strongly.
+- Added direct war-pressure damping to urban night-light coverage.
+
+Completed in Phase 6:
+- Added regression assertions for canonical population/admin-tech in star detail encyclopedia payload tests.
+- Updated determinism hash contract to include canonical population.
+- Final gate passed: build + determinism + detail-view regression + encyclopedia-entry smoke.
 
 ### WebUI Review Follow-ups (Tier 1)
 **Status:** COMPLETE
@@ -37,6 +75,22 @@ This document contains features and enhancements that are planned but not yet im
 - Phase E: Visual Enhancements (interactive demographics chart, events timeline visualization mode, encyclopedia search autocomplete)
 - Phase F: Advanced Features (interactive navigator tab, narrative progressive disclosure rails, internal phase/star linking in encyclopedia content)
 - Phase G: Polish & Delight (rotating "Did You Know?" sidebar factoids with jump actions, hover-based relationship previews in star tooltip)
+
+### Narrative Relevance Rollout (Encyclopedia)
+**Status:** Phase D COMPLETE (2026-02-17)
+**Source:** `Design Documents Archive/Narrative_Relevance_and_Arc_Design.md`
+
+Completed:
+- Deterministic relevance-ranked support-event selection in chapter narrative view
+- Stable tie-break and deterministic event-id derivation for support ordering
+- Inline "why selected" rationale chips
+- Repetitive-event clustering rollups (3+ similar events) with cluster-as-one slot accounting
+- Role-aligned chapter narrative lines (`Trigger`, `Turning Point`, `Aftermath`) with support-to-summary evidence mapping
+- Chapter arc typing (`Expansion`, `Fragmentation`, `Recovery`, `Stagnation`, `Mixed`) with confidence and rationale tags
+- Profile-based relevance weighting presets for support ranking
+
+Planned next:
+- Phase E: hardening, extraction, and performance tuning
 
 ### Phase 10: Government & Succession System
 **Status:** NEXT

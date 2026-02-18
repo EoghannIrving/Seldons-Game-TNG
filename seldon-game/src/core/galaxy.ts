@@ -199,6 +199,12 @@ export class Galaxy {
       x = Math.max(1, Math.min(width - 1, x));
       y = Math.max(1, Math.min(height - 1, y));
 
+      const initialStrength = 50 + rng.random() * 150;
+      const initialGrowth = 0.9 + rng.random() * 0.6;
+      const initialCentralization = rng.random() * 0.75;
+      const initialEpoch = rng.random() < 0.5 ? Epoch.Imperial : Epoch.Communal;
+      const initialPopulation = Math.max(1_000_000, Math.floor(initialStrength * (500_000 + (initialGrowth * 250_000))));
+
       const star: Star = {
         id: `star_${i}`,
         name: getStarName(i), // Now uses real astronomical names!
@@ -230,11 +236,12 @@ export class Galaxy {
         // growth: 0.9 + rng.random() * 0.6
         // centralization: rng.random() * 0.75
         // epoch: random 0 or 1
-        strength: 50 + rng.random() * 150,
-        growth: 0.9 + rng.random() * 0.6,
-        centralization: rng.random() * 0.75,
+        population: initialPopulation,
+        strength: initialStrength,
+        growth: initialGrowth,
+        centralization: initialCentralization,
         power: 0,
-        epoch: rng.random() < 0.5 ? Epoch.Imperial : Epoch.Communal,
+        epoch: initialEpoch,
 
         // Initially independent (self-ruling)
         ruler: null,
@@ -283,7 +290,7 @@ export class Galaxy {
         powerHistory: [],      // Initialize empty history
         
         // Phase 5.5: Crisis Stats
-        stability: 0.8 + (Math.random() * 0.2), // High initial stability
+        stability: 0.8 + (rng.random() * 0.2), // High initial stability
         infrastructureDamage: 0,
         darkAge: false,
         severeDarkAge: false,
@@ -415,12 +422,10 @@ export class Galaxy {
     }
     this.eventManager.applyEventEffects(this.state);
 
-    // 1. Apply growth to all stars
+    // 1. Update per-star long-cycle variables, then apply population growth / derived strength.
     for (const star of this.state.stars.values()) {
-      applyGrowth(star);
-      
-      // Phase 5: Update history mechanics per star
       updateAdministrativeTech(star, this.state);
+      applyGrowth(star, this.state);
       updateDecadence(star, this.state);
       updateReforms(star, this.state.phase);
       
@@ -515,8 +520,14 @@ export class Galaxy {
    */
   private recordDemographics(): void {
     if (!this.state.stars) return;
+    if (!this.state.demographics) this.state.demographics = [];
 
-    let totalOutput = 0;
+    // Compatibility repair for saves created before averageTech precision fix.
+    // If all stored averages are integer-only but per-star tech history has fractional values,
+    // backfill averageTech from historical tech samples once.
+    this.repairLegacyAverageTechSnapshots();
+
+    let totalPopulation = 0;
     let totalTech = 0;
     let maxPower = 0;
     let imperialPower = 0;
@@ -527,8 +538,7 @@ export class Galaxy {
 
     // Calculate stats
     for (const star of this.state.stars.values()) {
-      // Use power + growth as proxy for total output/population
-      totalOutput += star.power + (star.growth * 100);
+      totalPopulation += star.population;
       totalTech += star.administrativeTech;
       maxPower = Math.max(maxPower, star.power);
       
@@ -606,8 +616,8 @@ export class Galaxy {
 
     const snapshot = {
       phase: this.state.phase,
-      totalPopulation: Math.floor(totalOutput),
-      averageTech: this.state.stars.size > 0 ? Math.floor(totalTech / this.state.stars.size) : 0,
+      totalPopulation: Math.floor(totalPopulation),
+      averageTech: this.state.stars.size > 0 ? (totalTech / this.state.stars.size) : 0,
       maxPower: Math.floor(maxPower),
       activeWars,
       activeCrises: this.state.activeCrises ? this.state.activeCrises.length : 0,
@@ -615,12 +625,46 @@ export class Galaxy {
       politicalShare
     };
 
-    // Ensure array exists
-    if (!this.state.demographics) {
-        this.state.demographics = [];
-    }
-    
     this.state.demographics.push(snapshot);
+  }
+
+  private repairLegacyAverageTechSnapshots(): void {
+    const snapshots = this.state.demographics;
+    if (!snapshots || snapshots.length === 0) return;
+
+    const allIntegerAverages = snapshots.every((snap) =>
+      typeof snap.averageTech === 'number'
+      && Number.isFinite(snap.averageTech)
+      && Math.abs(snap.averageTech - Math.round(snap.averageTech)) < 1e-9
+    );
+    if (!allIntegerAverages) return;
+
+    let maxHistoryLen = 0;
+    let hasFractionalHistory = false;
+    for (const star of this.state.stars.values()) {
+      const history = star.techHistory;
+      if (!Array.isArray(history) || history.length === 0) continue;
+      maxHistoryLen = Math.max(maxHistoryLen, history.length);
+      if (!hasFractionalHistory) {
+        hasFractionalHistory = history.some(
+          (value) => typeof value === 'number' && Number.isFinite(value) && Math.abs(value - Math.round(value)) > 1e-9
+        );
+      }
+    }
+    if (!hasFractionalHistory || maxHistoryLen === 0) return;
+
+    for (let i = 0; i < snapshots.length; i++) {
+      let sum = 0;
+      let count = 0;
+      for (const star of this.state.stars.values()) {
+        const value = star.techHistory?.[i];
+        if (typeof value === 'number' && Number.isFinite(value)) {
+          sum += value;
+          count++;
+        }
+      }
+      if (count > 0) snapshots[i]!.averageTech = sum / count;
+    }
   }
 
   /**

@@ -1,7 +1,7 @@
 # Seldon's Game TNG - Production Notes
 
 **Version:** 0.9.0 (Phase 9 Complete)
-**Date:** 2026-02-17
+**Date:** 2026-02-18
 
 This document tracks the technical evolution, design decisions, and implementation details of the project. It serves as a knowledge base for current and future developers.
 
@@ -11,6 +11,48 @@ This document tracks the technical evolution, design decisions, and implementati
 
 **Focus:** Government & Succession System
 **Status:** Not Started
+
+---
+
+## Population-Tech-Power Rollout (Phase 1-6 Delivered)
+
+**Source:** `Design Documents Archive/POPULATION_TECH_POWER_AND_CAPITAL_VISUAL_PLAN.md`  
+**Status:** Phase 1-6 complete (Feb 17, 2026)
+
+1. Added canonical `population` to the core star model (`seldon-game/src/core/types.ts`).
+2. Added deterministic population initialization for new stars in galaxy generation (`seldon-game/src/core/galaxy.ts`).
+3. Added legacy save migration on deserialize so stars missing population derive stable values from legacy strength/growth (`seldon-game/src/utils/storage.ts`).
+4. Removed new-core initialization non-determinism by switching initial stability roll to seeded RNG in star generation (`seldon-game/src/core/galaxy.ts`).
+5. Replaced strength-as-stock growth with population-driven growth and derived strength calculation in `applyGrowth(...)` (`seldon-game/src/core/psychohistory.ts`).
+6. Updated phase execution order so administrative tech updates before derived-strength recomputation each phase (`seldon-game/src/core/galaxy.ts`).
+7. Rebalanced low-strength abandon/reconquest thresholds to align with new derived-strength scale (`seldon-game/src/core/psychohistory.ts`).
+8. Determinism regression suite passes with the new model (`npm.cmd run test:determinism`).
+9. Completed simulation stat-surface alignment: tooltip/factoid technology reads now use canonical `administrativeTech`, and population factoids use canonical `population` (`seldon-game/src/main.ts`, `seldon-game/src/components/tooltip.ts`).
+10. Detail-view regression smoke and production build both pass after stat-surface alignment.
+11. Completed encyclopedia + demographics consistency updates:
+   - Core Status payload now includes canonical `population` and `administrativeTech`.
+   - Core Status detail renderer now displays population and admin tech rows.
+   - Ecology and admin capacity tech normalization retuned for 0..100 admin tech scale.
+   - Global demographics `totalPopulation` now sums real `star.population`.
+   - Compact export fallback population now sums real `star.population`.
+12. Encyclopedia entry smoke, detail-view regression smoke, and production build pass after Phase 4 updates.
+13. Completed capital visual population coupling in the star detail renderer:
+   - `popProxy` now derives from log-normalized real `star.population` (with smoothstep shaping), not power/strength proxy.
+   - Urban density tuning now weights population as primary and tech as secondary.
+   - Building count, city-cluster count, and minor settlement count were retuned upward for higher-population worlds.
+   - War-pressure damping is now applied directly to night-side urban coverage.
+14. Production build and detail/encyclopedia smoke suites pass after Phase 5 visual tuning.
+15. Completed final regression and documentation lock:
+   - Added/updated regression assertions for population/admin-tech star detail payloads.
+   - Determinism hashing now includes canonical `population`.
+   - Final quality gate passed: build + determinism + detail-view regression + encyclopedia-entry smoke.
+   - Synced `PRODUCTION_NOTES.md`, `ROADMAP.md`, `DOCUMENTATION_INDEX.md`, and the rollout plan document status.
+16. Fixed encyclopedia demographics `Average Technology` precision:
+   - `averageTech` snapshots now store the real mean (no integer flooring) in `seldon-game/src/core/galaxy.ts`.
+   - Demographics chart now displays meaningful tech progression instead of coarse 0/1 plateaus in early phases.
+17. Added legacy demographics compatibility repair for average tech:
+   - On load (`seldon-game/src/utils/storage.ts`), integer-only legacy `averageTech` snapshots are backfilled from per-star `techHistory` when fractional history exists.
+   - During simulation (`seldon-game/src/core/galaxy.ts`), the same one-time repair runs before new snapshots are appended, covering in-session legacy states.
 
 ---
 
@@ -123,6 +165,25 @@ This document tracks the technical evolution, design decisions, and implementati
    - New rotating `DID YOU KNOW?` simulation sidebar panel with deterministic factoids derived from live galaxy state (dynasty age, empire size, rebellion hotspot, technology peak, active-war hotspot, population giant).
    - Factoid action buttons support direct pivots (`Open Star Detail`, `View ... Events` in Encyclopedia, phase jump).
    - Star hover tooltip now includes compact relationship preview rows (`Ruler`, `Allies`, `Enemies`, `Subjects`) with name lists and overflow indicators.
+10. Added Narrative Relevance Phase A foundation in Encyclopedia Narrative view:
+   - Supporting-events selection now uses deterministic relevance ranking instead of raw recency slicing.
+   - Stable tie-break ordering added (score, anchor proximity, recency, deterministic event id).
+   - Added concise inline rationale chips for selected support events (for example `Near anchor phase`, `Shares core actors`, `Causal chain link`).
+   - Legacy fallback path is retained behind the relevance feature flag guard.
+11. Added Narrative Relevance Phase B clustering in Encyclopedia Narrative view:
+   - Repetitive support events now collapse into rollup entries when 3+ similar events occur in the same phase/actor cluster.
+   - Cluster rollups count as one visible support slot and include aggregate event counts.
+   - Support selection now avoids duplicate member entries when a cluster rollup is selected.
+12. Added Narrative Relevance Phase C role alignment in Encyclopedia Narrative view:
+   - Chapter summaries now render role-ordered lines (`Trigger`, `Turning Point`, `Aftermath`) with phase context.
+   - Support-event selection now performs role-bucket pass before general fill, improving arc coverage.
+   - Support entries are linked to summary lines with evidence counts shown per summary line.
+   - Support rows now show role badges to clarify narrative function.
+13. Added Narrative Relevance Phase D arc typing and confidence:
+   - Chapter arcs are now classified as `Expansion`, `Fragmentation`, `Recovery`, `Stagnation`, or `Mixed`.
+   - Narrative chapter header now shows arc label, confidence score, and profile in use.
+   - Arc rationale chips are rendered from chapter metrics (control delta, conflict/crisis mix).
+   - Relevance scoring now uses profile-based weight presets (`balanced`, `actor_focused`, `chronology_focused`).
 
 ---
 

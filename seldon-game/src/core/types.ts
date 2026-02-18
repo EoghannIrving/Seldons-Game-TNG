@@ -221,6 +221,7 @@ export interface Star {
   position: Vector3;
 
   // Core stats (from original game)
+  population: number; // Civilian population / logistics base
   strength: number;
   growth: number;
   centralization: number;
@@ -267,6 +268,7 @@ export interface Star {
   darkAgeStartPhase?: number; // Phase 5: Major Renewal tracking
   historicalClaims?: Record<string, number>; // Phase 5: Cultural Affinity (Empire ID -> Strength 0-100)
   powerHistory: number[]; // Full history for charting
+  populationHistory?: number[]; // Full history of population
   strengthHistory?: number[]; // Full history of population/economy
   techHistory?: number[]; // Full history of administrative tech
   subjectsHistory?: number[]; // Full history of subject count

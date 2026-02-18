@@ -24,6 +24,7 @@ This index helps you navigate the documentation for Seldon's Game TNG. All docum
 **Contents:**
 - All completed phases (0, 1, 2, 3, 5, 6, 7, 8, 9A, 9B)
 - WebUI Review delivery log through Phase G (navigator sitemap, progressive narrative disclosure, internal encyclopedia links, rotating factoids, relationship hover previews)
+- Narrative relevance Phase A/B/C/D delivery (deterministic support ranking, cluster rollups, role-aligned summary evidence mapping, and chapter arc typing with confidence)
 - Current architecture and file structure
 - Configuration parameters in use
 - Performance metrics
@@ -73,6 +74,36 @@ This index helps you navigate the documentation for Seldon's Game TNG. All docum
 - You are implementing archive/persistence improvements
 - You need data-fidelity constraints for scalability work
 - You are planning performance validation criteria
+
+---
+
+### Design Documents Archive/Narrative_Relevance_and_Arc_Design.md
+**Purpose:** Narrative chapter depth and support-event relevance design + rollout plan
+**Status:** Active design; Phase A implemented (2026-02-17)
+**Contents:**
+- Relevance scoring model and deterministic tie-break policy
+- Support-event selection constraints and rationale strategy
+- Arc typing model and phased implementation plan (A-E)
+- Decision log for execution defaults and acceptance gates
+
+**When to read:**
+- You are implementing narrative support ranking or chapter arc features
+- You need deterministic selection and testing criteria for narrative UX
+
+---
+
+### Design Documents Archive/POPULATION_TECH_POWER_AND_CAPITAL_VISUAL_PLAN.md
+**Purpose:** Execution plan for canonical population stats, tech-population-power coupling, and population-driven capital visuals
+**Status:** Implemented; Phase 1-6 complete (2026-02-17)
+**Contents:**
+- Candidate #3 formula and rollout sequence (Phases 1-6)
+- Save migration strategy for legacy stars missing population
+- UI/encyclopedia/demographics consistency touchpoints
+- Capital city visual scaling rules tied to real population
+
+**When to read:**
+- You are implementing the population/tech model migration
+- You are tuning star detail capital visual density from simulation stats
 
 ---
 

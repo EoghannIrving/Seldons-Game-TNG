@@ -1981,7 +1981,7 @@ export class GalaxyRenderer {
         const sectionGapH = 4;
         const rowH = Math.floor(lblSize * 1.75); // Conservative to account for occasional wraps
 
-        if (section.kind === 'core_status') return headerH + (9 * rowH) + sectionGapH;
+        if (section.kind === 'core_status') return headerH + (11 * rowH) + sectionGapH;
         if (section.kind === 'system_inventory') {
           const inventory = StarSystemRenderer.getSystemInventory(star, theme);
           const shownPlanets = Math.min(5, inventory.planets.length);
@@ -2057,6 +2057,8 @@ export class GalaxyRenderer {
             regionId?: string;
             regionName: string;
             traits: string[];
+            population: number;
+            administrativeTech: number;
             strength: number;
             power: number;
             growth: number;
@@ -2067,6 +2069,8 @@ export class GalaxyRenderer {
           compactRow('Epoch', payload.epoch === 'imperial' ? 'Imperial' : 'Communal', theme.colors.ui.warning, x);
           compactRow('Region', payload.regionName || payload.regionId || 'Unassigned', theme.colors.dimText, x);
           compactRow('Traits', payload.traits.length > 0 ? payload.traits.join(', ') : 'None cataloged', theme.colors.ui.info, x);
+          compactRow('Population', formatNumber(payload.population), theme.colors.ui.info, x);
+          compactRow('Admin Tech', payload.administrativeTech.toFixed(1), theme.colors.ui.info, x);
           compactRow('Strength', formatNumber(payload.strength), undefined, x);
           compactRow('Power', formatNumber(payload.power), undefined, x);
           compactRow('Growth', formatNumber(payload.growth), undefined, x);
@@ -3134,7 +3138,7 @@ export class GalaxyRenderer {
     ] as const;
 
     for (const layer of districtLayers) {
-      const buildingCount = Math.max(6, Math.floor((10 + popProxy * 10 + techNorm * 8) * civicCountMul * layer.scale * tierScale));
+      const buildingCount = Math.max(8, Math.floor((12 + popProxy * 20 + techNorm * 6) * civicCountMul * layer.scale * tierScale));
       const parcelCount = layer.parcels;
       const parcelPad = 2;
       const parcelW = (width - 16) / parcelCount;
@@ -4212,9 +4216,10 @@ export class GalaxyRenderer {
         : dominantWorldType === 'ice' ? 0.72
           : dominantWorldType === 'lava' ? 0.44
             : 0.32;
-    const urbanScore = clamp((popProxy * 0.55) + (techNorm * 0.45) + (star.tier === StarTier.Major ? 0.10 : 0), 0, 1);
-    const urbanCoverage = clamp((0.10 + urbanScore * 0.86) * worldCoverageCap, 0.04, 0.96);
-    const clusterCount = Math.floor(10 + urbanCoverage * 46);
+    const urbanScore = clamp((popProxy * 0.72) + (techNorm * 0.28) + (star.tier === StarTier.Major ? 0.08 : 0), 0, 1);
+    const warDamp = clamp(1 - (warPressure * 0.28), 0.62, 1);
+    const urbanCoverage = clamp((0.12 + urbanScore * 0.88) * worldCoverageCap * warDamp, 0.04, 0.96);
+    const clusterCount = Math.floor(14 + urbanCoverage * 58);
     const clusterCenters: Array<{ x: number; y: number }> = [];
     const cloudCoverAt = (px: number, py: number): number => {
       let cover = 0;
@@ -4252,7 +4257,7 @@ export class GalaxyRenderer {
       const nightFactor = getNightFactor(nx);
       if (nightFactor < 0.08) continue;
       const anchorWeight = anchor ? anchor.weight : 1;
-      const pointCount = Math.floor((18 + urbanCoverage * 90 + rand() * (18 + techNorm * 24)) * anchorWeight);
+      const pointCount = Math.floor((20 + urbanCoverage * 96 + rand() * (16 + techNorm * 20 + popProxy * 16)) * anchorWeight);
       const glowR = 1.8 + urbanCoverage * 4.5 + rand() * 1.5;
       const cloudMask = 1 - cloudCoverAt(cxp, cyp) * 0.55;
       this.ctx.fillStyle = materialist
@@ -4282,7 +4287,7 @@ export class GalaxyRenderer {
     }
 
     // Minor settlements fill gaps between major hubs.
-    const minorCount = Math.floor(10 + urbanCoverage * 24);
+    const minorCount = Math.floor(12 + urbanCoverage * 30);
     for (let i = 0; i < minorCount; i++) {
       const anchor = cityAnchors.length > 0
         ? cityAnchors[Math.floor(rand() * cityAnchors.length)] ?? null
@@ -4422,8 +4427,8 @@ export class GalaxyRenderer {
       }
     }
 
-    const tech = clamp(star.administrativeTech, 0.4, 2.2);
-    const techNorm = clamp((tech - 0.4) / 1.8, 0, 1);
+    const tech = clamp(star.administrativeTech, 0, 100);
+    const techNorm = clamp(tech / 100, 0, 1);
     const stability = clamp(star.stability, 0, 1);
     const vitality = clamp(star.vitality, 0, 1);
     const warPressure = clamp((star.atWarWith.length / 4) + (stability < 0.45 ? 0.2 : 0), 0, 1);
@@ -4434,17 +4439,15 @@ export class GalaxyRenderer {
     const spiritualist = star.traits.includes(Trait.Spiritualist);
     const materialist = star.traits.includes(Trait.Materialist);
     const cosmopolitan = star.traits.includes(Trait.Cosmopolitan);
-    // Population proxy should reflect current scale (stock), not growth momentum.
-    // Use weighted normalized power/strength with smoothstep so high-end worlds are
-    // not overly compressed while still preserving low-end differentiation.
-    const powerLog = Math.log10(Math.max(10, star.power));
-    const strengthLog = Math.log10(Math.max(10, star.strength));
-    const powerNorm = clamp((powerLog - 1.6) / 2.9, 0, 1);
-    const strengthNorm = clamp((strengthLog - 1.3) / 2.6, 0, 1);
+    // Population proxy should be driven by real population stock.
+    // Log normalization keeps both young and mature worlds visually distinguishable.
+    const populationLog = Math.log10(Math.max(1, star.population));
+    const populationNormRaw = clamp((populationLog - 6.0) / 4.0, 0, 1); // 1e6 .. 1e10 reference window
+    const populationNorm = populationNormRaw * populationNormRaw * (3 - (2 * populationNormRaw)); // smoothstep
     const tierLift = star.tier === StarTier.Major
       ? 0.08
       : (star.tier === StarTier.Regional ? 0.04 : 0);
-    const popRaw = clamp((powerNorm * 0.65) + (strengthNorm * 0.35) + (techNorm * 0.08) + tierLift, 0, 1);
+    const popRaw = clamp((populationNorm * 0.90) + (techNorm * 0.10) + tierLift, 0, 1);
     const popProxy = clamp(popRaw * popRaw * (3 - (2 * popRaw)), 0, 1);
 
     const starSkyProfile = (() => {

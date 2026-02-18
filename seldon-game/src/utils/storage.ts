@@ -64,15 +64,76 @@ export function deserializeSerializedGalaxyState(data: SerializedGalaxyState): G
     height: (data.config as any).height || 1000,
   } as any;
 
+  const migrateLegacyPopulation = (rawStar: any): any => {
+    if (!rawStar || typeof rawStar !== 'object') return rawStar;
+    if (typeof rawStar.population === 'number' && Number.isFinite(rawStar.population) && rawStar.population > 0) {
+      return rawStar;
+    }
+
+    const strength = typeof rawStar.strength === 'number' && Number.isFinite(rawStar.strength) ? rawStar.strength : 1;
+    const growth = typeof rawStar.growth === 'number' && Number.isFinite(rawStar.growth) ? rawStar.growth : 1;
+    const derivedPopulation = Math.max(1_000_000, Math.floor(strength * (500_000 + (growth * 250_000))));
+
+    return {
+      ...rawStar,
+      population: derivedPopulation,
+    };
+  };
+
+  const migratedStars = (data.stars || []).map(([id, star]) => [id, migrateLegacyPopulation(star)] as [string, any]);
+
+  const migrateLegacyAverageTechSnapshots = (rawDemographics: any[], stars: Array<[string, any]>): any[] => {
+    if (!Array.isArray(rawDemographics) || rawDemographics.length === 0) return rawDemographics || [];
+
+    const allIntegerAverages = rawDemographics.every((snap) =>
+      typeof snap?.averageTech === 'number'
+      && Number.isFinite(snap.averageTech)
+      && Math.abs(snap.averageTech - Math.round(snap.averageTech)) < 1e-9
+    );
+    if (!allIntegerAverages) return rawDemographics;
+
+    const starValues = stars.map(([, star]) => star).filter((star) => star && typeof star === 'object');
+    let maxHistoryLen = 0;
+    let hasFractionalHistory = false;
+    for (const star of starValues) {
+      const history = Array.isArray(star.techHistory) ? star.techHistory : null;
+      if (!history || history.length === 0) continue;
+      maxHistoryLen = Math.max(maxHistoryLen, history.length);
+      if (!hasFractionalHistory) {
+        hasFractionalHistory = history.some(
+          (value: unknown) => typeof value === 'number' && Number.isFinite(value) && Math.abs(value - Math.round(value)) > 1e-9
+        );
+      }
+    }
+    if (!hasFractionalHistory || maxHistoryLen === 0) return rawDemographics;
+
+    const migrated = rawDemographics.map((snap) => ({ ...snap }));
+    for (let i = 0; i < migrated.length; i++) {
+      let sum = 0;
+      let count = 0;
+      for (const star of starValues) {
+        const value = star.techHistory?.[i];
+        if (typeof value === 'number' && Number.isFinite(value)) {
+          sum += value;
+          count++;
+        }
+      }
+      if (count > 0) migrated[i].averageTech = sum / count;
+    }
+    return migrated;
+  };
+
+  const migratedDemographics = migrateLegacyAverageTechSnapshots(data.demographics || [], migratedStars);
+
   return {
     config,
-    stars: new Map(data.stars),
+    stars: new Map(migratedStars),
     phase: data.phase,
     zeitgeist: data.zeitgeist || 0,
     activeCrises: data.activeCrises || [],
     regions: data.regions || [],
     events: data.events || [],
-    demographics: data.demographics || [],
+    demographics: migratedDemographics,
     dynasties: new Map(data.dynasties || []),
     dynasts: new Map(data.dynasts || []),
     dynasticRelationships: data.dynasticRelationships || [],

@@ -59,6 +59,8 @@ interface CoreStatusPayload {
   regionId?: string;
   regionName: string;
   traits: string[];
+  population: number;
+  administrativeTech: number;
   strength: number;
   power: number;
   growth: number;
@@ -280,6 +282,8 @@ export function buildCoreStatusSection(star: Star, galaxyState: GalaxyState): En
       regionId: star.regionId,
       regionName,
       traits: star.traits.map((trait) => toTitleCase(trait)),
+      population: star.population,
+      administrativeTech: star.administrativeTech,
       strength: star.strength,
       power: star.power,
       growth: star.growth,
@@ -464,7 +468,7 @@ function deriveEcologyProfile(star: Star): DerivedEcologyProfile {
           : 0;
   const stabilityScore = clamp(star.stability, 0, 1);
   const warScore = clamp(star.atWarWith.length / 4, 0, 1);
-  const techScore = clamp((star.administrativeTech - 0.4) / 1.8, 0, 1);
+  const techScore = clamp(star.administrativeTech / 100, 0, 1);
   const vitalityScore = clamp(star.vitality, 0, 1);
   const hazardPressure = clamp(
     (1 - stabilityScore) * 0.45 + warScore * 0.35 + (hasTrait(Trait.Militaristic) ? 0.08 : 0) + (hasTrait(Trait.Industrial) ? 0.05 : 0),
@@ -616,9 +620,9 @@ export function buildCapitalAdministrationSection(star: Star): EntrySection {
   const centralizationBand = star.centralization >= 0.7
     ? 'High'
     : (star.centralization >= 0.4 ? 'Moderate' : 'Distributed');
-  const adminCapacityBand = star.administrativeTech >= 1.3
+  const adminCapacityBand = star.administrativeTech >= 70
     ? 'Advanced'
-    : (star.administrativeTech >= 0.9 ? 'Standard' : 'Strained');
+    : (star.administrativeTech >= 40 ? 'Standard' : 'Strained');
   const stabilityBand = star.stability >= 0.7
     ? 'Stable'
     : (star.stability >= 0.45 ? 'Mixed' : 'Fragile');

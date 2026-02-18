@@ -154,8 +154,8 @@ export function determineRuler(
 ): string {
   // Phase 3 Enhanced: Stronger abandonment/reconquest thresholds
   // Different thresholds for losing vs. regaining control with aggressive hysteresis
-  const ABANDONMENT_THRESHOLD = 2.0;   // Lose control below this (raised from 1.0)
-  const RECONQUEST_THRESHOLD = 15.0;   // Must recover to this to be worth reconquering (raised from 5.0)
+  const ABANDONMENT_THRESHOLD = 3.0;   // Lose control below this
+  const RECONQUEST_THRESHOLD = 20.0;   // Must recover to this to be worth reconquering
 
   const isCurrentlySubject = star.ruler !== star.id;
   const isCurrentlyIndependent = star.ruler === star.id;
@@ -193,9 +193,9 @@ export function determineRuler(
     // Calculate required influence as percentage of attacker's total power
     // Weaker the star, higher the percentage required
     let requiredInfluencePercentage: number;
-    if (star.strength < 1.0) {
+    if (star.strength < 2.0) {
       requiredInfluencePercentage = 0.50; // Need 50% of empire's power focused here (collapsed)
-    } else if (star.strength < 5.0) {
+    } else if (star.strength < 8.0) {
       requiredInfluencePercentage = 0.25; // Need 25% of empire's power (very weak)
     } else {
       requiredInfluencePercentage = 0.10; // Need 10% of empire's power (weak)
@@ -387,17 +387,17 @@ export function updateGrowth(star: Star, currentPhase: number, galaxy: GalaxySta
   // Independent stars recovering from near-collapse get significant boost
   // This represents freed resources and reduced bureaucratic overhead
   const isIndependent = star.ruler === star.id;
-  if (isIndependent && star.strength < 15) {
+  if (isIndependent && star.strength < 20) {
     // Much stronger boost for extremely weak stars (collapsed/abandoned)
-    if (star.strength < 1.0) {
+    if (star.strength < 2.0) {
       // Collapsed stars get massive recovery boost
       star.growth = Math.max(star.growth, 1.15); // Ensure 15% growth minimum
       star.growth += 0.10; // Additional boost
-    } else if (star.strength < 5.0) {
+    } else if (star.strength < 8.0) {
       // Very weak stars get strong boost
       star.growth = Math.max(star.growth, 1.10); // Ensure 10% growth minimum
       star.growth += 0.05; // Additional boost
-    } else if (star.strength < 15.0) {
+    } else if (star.strength < 20.0) {
       // Weak stars get moderate boost
       star.growth = Math.max(star.growth, 1.05); // Ensure 5% growth minimum
     }
@@ -443,19 +443,46 @@ export function updateCentralization(star: Star, currentPhase: number): void {
 }
 
 /**
- * Apply growth to star strength
- * Original: stars[n].strength *= stars[n].growth
- * Phase 3: Add minimum strength floor to prevent death spirals
+ * Apply growth to star population and derive effective strength.
+ * Phase 10 prep: population is the stock; strength is a derived projection capacity.
  */
-export function applyGrowth(star: Star): void {
-  star.strength *= star.growth;
+export function applyGrowth(star: Star, galaxy?: GalaxyState): void {
+  const clamp = (v: number, min: number, max: number): number => Math.max(min, Math.min(max, v));
+  const currentPopulation = (typeof star.population === 'number' && Number.isFinite(star.population) && star.population > 0)
+    ? star.population
+    : Math.max(1_000_000, Math.floor(star.strength * (500_000 + (star.growth * 250_000))));
 
-  // Phase 3 Fix: Minimum strength floor
-  // Stars can never go below this, allowing for recovery
+  // Population growth is damped from raw growth to keep demographic evolution plausible.
+  const popGrowthFactor = clamp(1 + ((star.growth - 1) * 0.30), 0.92, 1.16);
+  const activeCrisis = galaxy?.activeCrises?.find((c) => c.targetStarId === star.id && !c.resolved);
+  const crisisFactor = activeCrisis ? clamp(1 - (0.22 * activeCrisis.severity), 0.68, 1) : 1;
+  const warFactor = clamp(1 - Math.min(0.22, (star.atWarWith.length * 0.03) + ((star.warWeariness || 0) * 0.0015)), 0.78, 1);
+  const vitalityFactor = clamp(0.88 + (star.vitality * 0.20), 0.78, 1.08);
+
+  const POPULATION_FLOOR = 100_000;
+  star.population = Math.max(
+    POPULATION_FLOOR,
+    Math.floor(currentPopulation * popGrowthFactor * crisisFactor * warFactor * vitalityFactor)
+  );
+
+  const techNormalized = clamp(star.administrativeTech / 100, 0, 1);
+  const baseCapacity = Math.pow(star.population, 0.6);
+  const techEffect = 1 + (0.7 * techNormalized);
+  const projectionBase = 1 + (0.6 * techNormalized);
+  const lowPopProjection = clamp(star.population / 20_000_000, 0, 1);
+  const projectionFactor = projectionBase * (0.55 + (0.45 * lowPopProjection));
+  const governanceFactor = clamp(
+    (0.72 + (0.28 * clamp(star.stability, 0, 1))) *
+    (0.75 + (0.25 * clamp(star.vitality, 0, 1))) *
+    (1 - (0.35 * clamp(star.infrastructureDamage || 0, 0, 1))),
+    0.35,
+    1.30
+  );
+
+  // Scale keeps derived strength in the historical gameplay range for influence thresholds.
+  const STRENGTH_SCALE = 0.002;
   const MIN_STRENGTH = 0.1;
-  if (star.strength < MIN_STRENGTH) {
-    star.strength = MIN_STRENGTH;
-  }
+  star.strength = Math.max(MIN_STRENGTH, baseCapacity * techEffect * projectionFactor * governanceFactor * STRENGTH_SCALE);
 }
 
 /**

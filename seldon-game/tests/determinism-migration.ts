@@ -74,6 +74,7 @@ function hashState(state: GalaxyState): string {
       tier: star.tier,
       ruler: star.ruler,
       subjects: [...star.subjects],
+      population: Math.floor(star.population),
       strength: Number(star.strength.toFixed(6)),
       power: Number(star.power.toFixed(6)),
       centralization: Number(star.centralization.toFixed(6)),

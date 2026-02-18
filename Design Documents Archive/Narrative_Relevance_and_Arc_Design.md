@@ -1,7 +1,7 @@
 # Narrative Relevance and Chapter Arc Design
 
 ## Status
-Design-only proposal. No code changes in this document.
+Design + rollout record. Phase A, Phase B, Phase C, and Phase D are implemented as of 2026-02-17; remaining phases are planned.
 
 ## Goals
 - Deepen chapter narrative from event count snapshots to coherent arcs.
@@ -328,3 +328,222 @@ If implementing incrementally with minimal UI changes:
 3. Add simple rationale text per support item.
 
 This provides the largest relevance gain with the lowest integration risk.
+
+## Decision Log (Proposed Defaults)
+
+### Locked Decisions
+1. Event identity (`eventId`)
+- Use deterministic composite key:
+- `${phase}:${type}:${starId}:${sortedRelatedStars}:${descriptionHash8}`
+- `descriptionHash8` must use a fixed stable hash implementation.
+
+2. Stable sort and tie-break policy
+- Sort support candidates by:
+1. higher `score`
+2. smaller `abs(phase - anchorPhase)`
+3. higher `phase` (newer first)
+4. lexical `eventId`
+
+3. Causal-link source (Phase 1)
+- Use inferred rule-based links only (no persistence changes yet).
+- Initial rules:
+- conquest(X by Y) -> later independence(X from Y)
+- crisis start(label) -> crisis resolve(label)
+- succession continuity in same polity chain
+- Confidence:
+- direct rule hit `1.0`
+- weak inferred relation `0.4`
+
+4. Arc classification thresholds (initial)
+- `expansion`: `(annexed - liberated) >= 6` and `conquestShare >= 0.35`
+- `fragmentation`: `(liberated - annexed) >= 6` or `rebellionShare >= 0.30`
+- `recovery`: `(crisesResolved - crisesStarted) >= 3` and `stabilityDelta > 0`
+- `stagnation`: `structuralEventCount <= 4`
+- else `mixed`
+- Arc confidence = normalized margin to second-best rule score.
+
+5. Cluster slot accounting
+- Cluster counts as 1 visible support slot.
+- Child count shown in metadata only.
+
+6. Support rationale display
+- Always show max 2 rationale chips inline.
+- Full rationale available on hover/expand.
+
+7. Support list size policy
+- Target `8`, hard min `6`, hard max `10`.
+- If constrained list < target, backfill by score while progressively relaxing diversity constraints.
+
+8. Diversity relaxation order
+- Apply caps first:
+- max 2 per event type
+- max 3 per phase
+- max 3 per principal actor
+- If under target, relax in order:
+1. phase cap
+2. actor cap
+3. type cap
+
+9. Rollout path choice
+- Execute minimal upgrade first:
+- keep current chapter summary generation
+- replace support selection with relevance ranking + rationale
+- Then add clusters, then role alignment, then arc typing.
+
+10. Feature flags
+- `narrativeSupportRelevanceV2`: default ON in internal builds
+- `narrativeSupportClustersV2`: default OFF
+- `narrativeArcTypingV2`: default OFF
+- Persist in existing local settings mechanism.
+
+11. Performance targets
+- Chapter switch: <= 16ms average, <= 40ms p95
+- Initial narrative tab render: <= 80ms p95
+- Memoization key: `chapterId + filters + phase`
+
+12. Acceptance gates
+- >= 70% of support rows share anchor entities or causal chain
+- <= 25% rows from same phase (unless chapter genuinely phase-dominant)
+- Deterministic ordering for fixed seed/state
+- No recent-only drift in sampled regression runs
+
+## Phased Implementation Plan
+
+### Phase A: Foundations (Deterministic Relevance Core)
+Scope:
+- Add deterministic `eventId` derivation.
+- Add relevance scoring helpers and stable sorting.
+- Keep existing chapter summary unchanged.
+
+Target files:
+- `seldon-game/src/main.ts`
+- Optional helper extraction target later: `seldon-game/src/core/narrative.ts`
+
+Tasks:
+1. Add typed helper models for score context and score breakdown.
+2. Build chapter key entity extraction function.
+3. Implement per-event feature calculators for all score factors.
+4. Implement stable tie-break comparator using the locked policy.
+5. Replace current support `slice(0, 8)` path with rank-select pipeline.
+6. Add inline rationale text generation (max 2 chips).
+7. Keep legacy path behind a flag fallback.
+
+Tests:
+- deterministic ordered output for fixed seed
+- comparator tie-break regression test
+- fallback parity test when relevance flag off
+
+Exit criteria:
+- Support list relevance visibly improved with no summary changes.
+- Deterministic tests pass.
+
+### Phase B: Repetition Control (Clustering)
+Scope:
+- Collapse repetitive events into cluster rollups.
+
+Target files:
+- `seldon-game/src/main.ts`
+
+Tasks:
+1. Add cluster-key generator and grouping function.
+2. Emit cluster rollup support items for groups >= 3.
+3. Preserve child event ids for optional disclosure.
+4. Ensure cluster-as-one slot accounting in selector.
+
+Tests:
+- cluster grouping determinism
+- slot accounting correctness
+- rollup text format regression
+
+Exit criteria:
+- Repeated independence/conquest spam reduced without losing evidence traceability.
+
+### Phase C: Role Alignment (Trigger/Turning/Aftermath Mapping)
+Scope:
+- Introduce role assignment for support items.
+- Link support items to summary claims.
+
+Target files:
+- `seldon-game/src/main.ts`
+- `seldon-game/src/core/narrative.ts`
+
+Tasks:
+1. Add role inference heuristics.
+2. Add role-aware bucket fill before general fill.
+3. Link support items to summary line ids.
+4. Render role badges and evidence counts.
+
+Tests:
+- role coverage when candidates exist
+- stable behavior when one or more roles absent
+- summary-support linkage consistency
+
+Exit criteria:
+- Support list explains summary arc, not just event recency.
+
+### Phase D: Arc Typing and Confidence
+Scope:
+- Compute and display chapter arc class + confidence.
+
+Target files:
+- `seldon-game/src/core/narrative.ts`
+- `seldon-game/src/main.ts`
+
+Tasks:
+1. Implement arc metrics aggregator per chapter window.
+2. Implement threshold classifier and confidence margin.
+3. Render arc badge + rationale tags in narrative panel.
+4. Add profile presets for weight tuning (`balanced`, `actor_focused`, `chronology_focused`).
+
+Tests:
+- rule-threshold boundary tests
+- confidence monotonicity tests
+- deterministic classification per fixed seed
+
+Exit criteria:
+- Chapter panel exposes coherent strategic arc with measurable confidence.
+
+### Phase E: Hardening and Extraction
+Scope:
+- Move reusable logic out of UI layer.
+- Finalize performance and docs.
+
+Target files:
+- `seldon-game/src/core/narrative.ts`
+- `seldon-game/src/main.ts`
+- `PRODUCTION_NOTES.md`
+- `ROADMAP.md`
+- `DOCUMENTATION_INDEX.md`
+
+Tasks:
+1. Extract scoring/selection/clustering into core helper module.
+2. Add memoization keyed by chapter/filter context.
+3. Measure against performance budgets and tune hot paths.
+4. Update docs and index per repo policy.
+5. Flip feature flags progressively after regression validation.
+
+Tests:
+- performance benchmark checks
+- full deterministic regression suite
+- UI snapshot checks for narrative panel
+
+Exit criteria:
+- Clean module boundaries, docs in sync, flags ready for broader enablement.
+
+## Suggested Sprint Mapping
+- Sprint 1: Phase A
+- Sprint 2: Phase B
+- Sprint 3: Phase C
+- Sprint 4: Phase D
+- Sprint 5: Phase E
+
+## Go/No-Go Checklist Before Coding
+- [ ] Decision log approved as-is
+- [ ] Weight profile defaults accepted
+- [ ] Feature flag defaults accepted
+- [ ] Performance budgets accepted
+- [ ] Determinism tie-break policy accepted
+
+
+
+

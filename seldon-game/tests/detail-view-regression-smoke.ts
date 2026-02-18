@@ -42,6 +42,14 @@ function main(): void {
   const entryA = buildStarEncyclopediaEntry(star!, galaxy.state);
   const entryB = buildStarEncyclopediaEntry(star!, galaxy.state);
   assert(JSON.stringify(entryA) === JSON.stringify(entryB), 'Entry adapter should be deterministic');
+  const coreStatus = entryA.sections.find((s) => s.kind === 'core_status');
+  assert(coreStatus, 'Entry should include core status section');
+  const corePayload = coreStatus?.payload as {
+    population: number;
+    administrativeTech: number;
+  };
+  assert(Number.isFinite(corePayload.population) && corePayload.population > 0, 'Core status should expose population');
+  assert(Number.isFinite(corePayload.administrativeTech), 'Core status should expose administrative tech');
   assert(entryA.visuals.some((v) => v.type === 'star_system'), 'Entry should include star_system visual');
   assert(entryA.visuals.some((v) => v.type === 'capital_city'), 'Entry should include capital_city visual');
   const capital = entryA.visuals.find((v) => v.type === 'capital_city');

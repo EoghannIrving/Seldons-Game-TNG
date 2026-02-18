@@ -57,6 +57,15 @@ function main(): void {
   assert(ecology.dominantBiomes.length >= 1, 'Ecology should include at least one dominant biome');
   assert(ecology.hazards.length >= 1, 'Ecology should include at least one hazard/status line');
 
+  const coreStatus = entryA.sections.find((s) => s.kind === 'core_status');
+  assert(coreStatus, 'Core status section should be present');
+  const corePayload = coreStatus?.payload as {
+    population: number;
+    administrativeTech: number;
+  };
+  assert(Number.isFinite(corePayload.population) && corePayload.population > 0, 'Core status population should be populated');
+  assert(Number.isFinite(corePayload.administrativeTech) && corePayload.administrativeTech >= 0, 'Core status admin tech should be populated');
+
   const serializedA = JSON.stringify(entryA);
   const serializedB = JSON.stringify(entryB);
   assert(serializedA === serializedB, 'Entry adapter must be deterministic for identical inputs');

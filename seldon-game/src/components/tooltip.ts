@@ -171,8 +171,8 @@ export function showTooltip(star: Star, x: number, y: number, galaxy?: any) {
             ${epochIcon} <span style="color: ${epochColor};">${epochName}</span> |
             Str: <span style="color: #0ff;">${formatLargeNumber(star.strength || 0)}</span> |
             Pwr: <span style="color: #0ff;">${formatLargeNumber(star.power || 0)}</span><br>
-            Pop: <span style="color: #0ff;">${formatLargeNumber(star.population || 0)}</span> |
-            Tech: <span style="color: #0ff;">${(star.tech || 0).toFixed(1)}</span> |
+            Pop: <span style="color: #0ff;">${formatLargeNumber(star.population)}</span> |
+            Tech: <span style="color: #0ff;">${star.administrativeTech.toFixed(1)}</span> |
             Ruler: <span style="color: ${isIndependent ? '#ffdd44' : '#ff8844'};">${rulerName}</span>
         </div>
         ${statusHTML}

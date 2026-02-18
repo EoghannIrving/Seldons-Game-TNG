@@ -46,7 +46,7 @@ function computeFallbackDemographicRow(state: GalaxyState): {
 } {
   const stars = Array.from(state.stars.values());
   const starCount = stars.length || 1;
-  const totalPopulation = stars.reduce((sum, star) => sum + star.strength, 0);
+  const totalPopulation = stars.reduce((sum, star) => sum + star.population, 0);
   const totalTech = stars.reduce((sum, star) => sum + star.administrativeTech, 0);
   const maxPower = stars.reduce((max, star) => Math.max(max, star.power), 0);
   const warEdgeCount = stars.reduce((sum, star) => sum + star.atWarWith.length, 0);
