@@ -1,0 +1,1 @@
+Get-Content "C:\Users\eogha\Downloads\Seldons Game TNG\seldon-game\tests\diag_output.txt" | Where-Object { $_ -notlike "*pairs checked*" } | Set-Content "C:\Users\eogha\Downloads\Seldons Game TNG\seldon-game\tests\diag_filtered.txt"

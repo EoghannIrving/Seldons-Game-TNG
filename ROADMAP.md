@@ -1,127 +1,113 @@
 # Development Roadmap - Future Features
 
-**Last Updated:** 2026-02-18
-**Current Version:** v0.9.0 (Phase 9 Complete)
+**Last Updated:** 2026-02-22
+**Current Version:** v0.9.0 (Phase 9 + Population-Tech-Power Tuning Complete)
+
+---
+
+## Simulation Time Scale (Canonical)
+
+**1 phase = approximately 5–10 years** (deliberately nebulous — a generation-scale interval, not a calendar year).
+
+This means:
+- A simulation running to phase 500 spans roughly 2,500–5,000 years — consistent with Foundation's galactic history scale
+- A ruler alive for 10 phases has reigned 50–100 years, which is exceptional longevity, not a normal career
+- Dark ages lasting 20–50 phases span centuries — civilisational collapses, not short crises
+- Trade route integration taking 200 phases spans a millennium — deep structural change
+- Republic "terms" of 40–70 phases are more like dynastic political eras than election cycles
+
+**Implications for dynasty mechanics (to be corrected in Phase 10G):**
+- Current death thresholds (rulerAge > 40 phases = > ~200–400 years) are far too late — rulers are effectively immortal
+- Heir generation window (age 18–50 phases = ~90–500 years) is biologically absurd
+- Spouse generation (age > 20 phases = > ~100–200 years) is similarly broken
+- All dynasty age thresholds need to be recalibrated to match the 5–10 year phase scale
+- A realistic ruler lifespan is 5–15 phases (one working life at ~7 years/phase = 35–105 years)
+- Heir generation should be possible from age 2–8 phases (roughly 10–80 years old)
+- These corrections are prerequisite for the family tree to produce meaningful generational depth
 
 This document contains features and enhancements that are planned but not yet implemented. For completed features, see [`PRODUCTION_NOTES.md`](./PRODUCTION_NOTES.md).
 
 ---
 
+## Recently Completed (2026-02-17 to 2026-02-21)
+
+- **Population-Tech-Power Model** (Phases 1-6 + tuning patch): canonical population field, logistic carrying-capacity growth, deterministic war/plague shocks, occupancy-driven capital urbanization tiers, demographic scale retuning. See `PRODUCTION_NOTES.md` and `Design Documents Archive/POPULATION_TECH_POWER_AND_CAPITAL_VISUAL_PLAN.md`.
+- **WebUI Review** (Phases A-G): architecture correction, core navigation, encyclopedia focus mode, mini galaxy, demographics charts, events timeline, search autocomplete, navigator tab, narrative disclosure rails, rotating factoids, relationship hover previews. See `PRODUCTION_NOTES.md`.
+- **Narrative Relevance Rollout** (Phases A-E): deterministic relevance ranking, clustering rollups, role alignment, arc typing, core extraction to `narrative-support.ts`. See `PRODUCTION_NOTES.md` and `Design Documents Archive/Narrative_Relevance_and_Arc_Design.md`.
+- **Demographics Retention Refactor** (2026-02-21): compact columnar demographics storage, removal of 500-row truncation, snapshot memory decoupling, legacy migration, and chart downsampling with phase-accurate interactions. See `DEMOGRAPHICS_RETENTION_IMPLEMENTATION_CHECKLIST.md`.
+
+---
+
 ## Immediate Priorities (Next Sprint)
 
-### Population-Tech-Power Model Rollout
-**Status:** COMPLETE (Phase 1-6 complete, 2026-02-17)
-**Source:** `Design Documents Archive/POPULATION_TECH_POWER_AND_CAPITAL_VISUAL_PLAN.md`
-
-Completed in Phase 1:
-- Added canonical `population` field to the core `Star` model.
-- Added deterministic population initialization for newly generated stars.
-- Added backward-compatible save migration to derive population for legacy saves.
-
-Completed in Phase 2:
-- Integrated population-driven per-phase growth and derived-strength recomputation.
-- Updated simulation loop ordering for per-phase admin-tech + derived-strength flow.
-- Rebalanced low-strength conquest/recovery thresholds to match new scale.
-
-Completed in Phase 3:
-- Updated simulation stat readouts to canonical fields:
-  - tech displays/factoids now use `administrativeTech`
-  - population factoids use canonical `population`
-- Removed remaining `star.tech` reads from simulation UI surfaces.
-
-Completed in Phase 4:
-- Updated encyclopedia core-status payloads and rendering to include/show canonical population + admin tech.
-- Retuned encyclopedia tech-derived bands/scores to the 0..100 administrative tech scale.
-- Updated global demographic population aggregation to use real `star.population`.
-- Updated compact export fallback demographic population to use real `star.population`.
-- Fixed demographics average-tech precision by storing non-floored mean tech values for encyclopedia charting.
-- Added compatibility repair so legacy integer-only `averageTech` demographics are backfilled from historical per-star tech samples.
-
-Completed in Phase 5:
-- Replaced capital visual `popProxy` derivation with log-normalized real population.
-- Retuned city rendering knobs (building/cluster/settlement counts) so population drives density more strongly.
-- Added direct war-pressure damping to urban night-light coverage.
-
-Completed in Phase 6:
-- Added regression assertions for canonical population/admin-tech in star detail encyclopedia payload tests.
-- Updated determinism hash contract to include canonical population.
-- Final gate passed: build + determinism + detail-view regression + encyclopedia-entry smoke.
-
-### WebUI Review Follow-ups (Tier 1)
-**Status:** COMPLETE
-**Source:** `Design Documents Archive/WebUI_Review_Report.md`
-
-1. **Add News Feed -> Encyclopedia deep links**
-   - Clicking a news item should support opening Encyclopedia with phase/type/star filters.
-2. **Add tooltips to header stats**
-   - Explain metric meaning, directionality, and range at point of use.
-3. **Add event type icons to news feed**
-   - Improve scan speed and visual categorization for major event types.
-4. **Add collapsed-panel content hints**
-   - Show lightweight hints on collapsed headers (for example, control counts).
-
-**Completed from Tier 1 in this sprint:**
-- Expand critical panels by default (`SEARCH & FILTER` onboarding expansion + first-load pulse)
-- Add News Feed -> Encyclopedia deep links (contextual archive filters from news row actions)
-- Add header stat tooltips (in-place metric explanations and ranges)
-- Add event type icons to news feed (faster scan and categorization)
-- Add collapsed-panel content hints (`VIEW OPTIONS` and `SEARCH & FILTER`)
-
-**Completed architecture foundation from WebUI review:**
-- Phase A: Architecture Correction (single encyclopedia entry path, Focus Mode shell, persistent back path, context-preserving state)
-- Phase C: Core Navigation (deep links + star-detail breadcrumbs + related-content widgets)
-- Phase C reliability patch: Encyclopedia `Star Detail ->` now uses phase-safe star resolution with context fallback, so detail view opens reliably after archive navigation.
-- Phase D: Encyclopedia Focus + Mini Galaxy (persistent mini map context card, bidirectional star/event/chapter sync, map-context jump action, chapterized narrative rails)
-- Phase E: Visual Enhancements (interactive demographics chart, events timeline visualization mode, encyclopedia search autocomplete)
-- Phase F: Advanced Features (interactive navigator tab, narrative progressive disclosure rails, internal phase/star linking in encyclopedia content)
-- Phase G: Polish & Delight (rotating "Did You Know?" sidebar factoids with jump actions, hover-based relationship previews in star tooltip)
-
-### Narrative Relevance Rollout (Encyclopedia)
-**Status:** Phase D COMPLETE (2026-02-17)
-**Source:** `Design Documents Archive/Narrative_Relevance_and_Arc_Design.md`
-
-Completed:
-- Deterministic relevance-ranked support-event selection in chapter narrative view
-- Stable tie-break and deterministic event-id derivation for support ordering
-- Inline "why selected" rationale chips
-- Repetitive-event clustering rollups (3+ similar events) with cluster-as-one slot accounting
-- Role-aligned chapter narrative lines (`Trigger`, `Turning Point`, `Aftermath`) with support-to-summary evidence mapping
-- Chapter arc typing (`Expansion`, `Fragmentation`, `Recovery`, `Stagnation`, `Mixed`) with confidence and rationale tags
-- Profile-based relevance weighting presets for support ranking
-
-Planned next:
-- Phase E: hardening, extraction, and performance tuning
-
 ### Phase 10: Government & Succession System
+**Status:** COMPLETE (2026-02-22)
+
+Sub-phases delivered:
+- **10A:** Four-tier system (Zeitgeist, Ideology, Traits, GovernmentType). Ideology replaces binary Epoch as a continuous -1.0→+1.0 float.
+- **10B:** Ideology drift per phase (zeitgeist pressure, trait anchor, conquest bleed, crisis acceleration).
+- **10C:** Government transitions (misalignment, dark age + trait combos, conquest pressure). GovernmentTransition event type, narrative templates, LINEAGE tab regime history.
+- **10D:** Per-government-type succession (Monarchy/Republic/Theocracy/Junta/Oligarchy/Autocracy). Unified `resolveSuccession()` dispatcher.
+- **10E:** Great Leader titles derived from government type.
+- **10F:** Theocracy peaceful conversion (Religious Conquest). Ideology pressure + hard government flip. Converter/target history events, narrative `religious_conversion` templates, "Faith of:" display in LINEAGE and encyclopedia, notifications.
+
+---
+
+### Phase 10G: Dynasty Family Tree
 **Status:** NEXT
-**Concept:** Redesign star governance with distinct layers (Ideology, Traits, Government Type) and a unified succession system for all government types, including hereditary and non-hereditary leaders.
+**Concept:** Make the dynasty system biologically coherent and visually readable as a true multi-generational family tree, with ruler lifespans scaled to tech level and a descendant-first display.
 
-1. **Four-Tier System**
-   - Differentiate Zeitgeist, Ideology, Traits, and Government Type.
-   - Make Ideology (formerly Epoch) dynamic.
+#### Design Constraints
 
-2. **New Government Types**
-   - Introduce Monarchy, Republic, Theocracy, Military Junta, Oligarchy, and Autocracy.
-   - Each type has unique succession mechanics.
+**Time scale (canonical):** 1 phase ≈ 5–10 years (deliberately nebulous; a generation-scale interval).
+- A 500-phase simulation spans ~2,500–5,000 years.
+- A ruler reigning 8 phases has held power for ~40–80 years — a full political career.
+- Dark ages of 20–50 phases are civilisational collapses spanning centuries.
 
-3. **Unified Succession & Dynasty System**
-   - Extend the dynasty system to handle both hereditary and non-hereditary leadership, including:
-       - **Hereditary:** Monarchies.
-       - **Non-Hereditary:** Elected officials (term limits, political families), military coups (designated successors), religious appointments (merit + lineage), and corporate boards (wealth-based).
-   - Track historical ruling families after they lose power or when the government type changes (e.g., "House Arcturus ruled 232 phases before Republican Revolution").
-   - The Lineage tab will show the current government and a full history of previous dynasties/regimes with succession reasons.
-   - **(Experimental)** Chart the detailed family lineages and dynasties, including births, deaths, marriages, and unique family characteristics.
-   - All succession transitions will emerge from simulation conditions (traits, ideology, zeitgeist, stability), not player choices.
+**Lifespan scales with tech:** At low tech humans live ~50 years (~7 phases). At post-scarcity tech, 150–200 years (~20–28 phases) is plausible. Lifespan is a function of `administrativeTech` + trait modifiers, not hardcoded per government type.
 
-4. **Great Leader Integration**
-   - Integrate Great Leaders as exceptional rulers within the existing government structure (e.g., a legendary general in a junta, a prophetic leader in a theocracy).
+**Current bugs (to fix in 10G-i):**
+- Death thresholds (rulerAge > 40–55 phases) assume 1 phase = 1 year → rulers are effectively immortal for 200–400 real years.
+- Heir generation window (age 18–50 phases) and spouse generation (age > 20 phases) are similarly broken.
+- Heir naming uses `'II'.repeat(n)` — produces `"Arcturus Line IIIII"`, not Roman numerals.
+- Spouses are named `"Consort [HouseName]"` — no actual name.
 
-5. **(Experimental) Religious Conquest & Ideological Expansion (Peaceful Expansion Alternative)**
-   - Theocracy government type enables conversion mechanics: cultural influence can flip neighbor allegiance without military conquest.
-   - Spiritualist trait + high cultural influence creates ideological "infection" spreading peacefully across regions.
-   - Models Salvor Hardin's religious expansion era from Foundation books.
-   - Creates asymmetric expansion narratives: military empires vs ideological movements vs trade federations.
-   - Emerges naturally from government type + trait combinations, no player control needed.
+#### Sub-phases
+
+**10G-i: Tech-Scaled Lifespan + Naming Fix** *(prerequisite for everything else)*
+- Replace all per-government hardcoded death thresholds with a single `computeRulerLifespan(star)` function:
+  ```
+  base = 5 + clamp(adminTech, 0, 1.2) * 20       // 5 phases (primitive) → 25 phases (post-scarcity)
+  × PostScarcity trait: ×1.4
+  × Spiritualist trait: ×1.15
+  × Stoic trait:        ×1.10
+  × Volatile trait:     ×0.80
+  × Theocracy gov:      ×1.20  (elder selection)
+  × MilitaryJunta gov:  ×0.75  (hard lives)
+  × Republic gov:       ×0.90  (term-limited anyway)
+  ```
+- Death chance formula: `max(0, rulerAge - lifespan) * 0.15` per phase (ramps steeply after lifespan exceeded).
+- Recalibrate heir generation: window = ages 1–(lifespan × 0.6); rate = 15% per phase.
+- Recalibrate spouse generation: eligible from age 1 phase; 25% per phase until married.
+- Recalibrate Republic terms: 3–8 phases (~21–56 years).
+- Recalibrate Oligarchy rotation: 2–5 phases (~14–35 years).
+- Fix heir naming: proper Roman numerals (I, II, III, IV…), not string repetition.
+- Fix spouse naming: draw from a name pool (same pool used for dynasts), not "Consort [House]".
+- Spouse `birthPhase` correction: currently set to `galaxy.phase - rulerAge + 5` which is often negative or wrong; set to `galaxy.phase - rng(1, lifespan * 0.4)` so spouse is plausibly aged.
+- Files: `government.ts` (death thresholds), `psychohistory.ts` (heir/spouse generation).
+
+**10G-ii: Descendant View**
+- Extend `FamilyTreeNode` with `children: FamilyTreeNode[]`.
+- Update `buildTree()` in `encyclopedia-entry.ts` to also traverse downward (children of current ruler and their children, max 2 generations down).
+- Update `renderNode()` in `galaxy-renderer.ts` to render children below the ruler under a "Heirs:" label, indented, with a visual marker distinguishing living vs deceased heirs.
+- Cap ancestor depth at 3 generations up, descendant depth at 2 generations down.
+- Show heir count summary if more than 5 children ("...and 3 more heirs").
+
+**10G-iii: Family Characteristics** *(lower priority, discuss before implementing)*
+- Assign 1–2 dynasty traits at founding, seeded from the star's own traits.
+- Children inherit each trait with ~60% probability.
+- Wire minor probability biases into existing systems (Martial → coup resistance, Long-Lived → lifespan bonus, Fertile → higher heir rate, etc.).
+- Display as colour-coded tags in tree nodes.
 
 ---
 
@@ -365,3 +351,5 @@ Planned next:
 - Foundation concepts (10-14) preserve psychohistory's core: large-scale prediction works despite individual unpredictability, knowledge endures across dark ages, hidden forces correct deviations, prophecy validates mathematics.
 
 ---
+
+

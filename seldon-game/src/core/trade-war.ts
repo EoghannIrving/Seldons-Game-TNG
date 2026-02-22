@@ -11,6 +11,17 @@
 
 import { Star, GalaxyState, Trait, EventType, StarTier } from './types';
 import type { Galaxy } from './galaxy';
+import { SeededRandom } from '../utils/seeded-random';
+
+/** Deterministic hash — same algorithm used in psychohistory.ts */
+function stableHash(input: string): number {
+  let hash = 2166136261;
+  for (let i = 0; i < input.length; i++) {
+    hash ^= input.charCodeAt(i);
+    hash = (hash * 16777619) >>> 0;
+  }
+  return hash;
+}
 
 /**
  * Calculate trade compatibility between two stars
@@ -50,7 +61,7 @@ function shouldEstablishTrade(
   star1: Star,
   star2: Star,
   distance: number,
-  _galaxy: GalaxyState
+  galaxy: GalaxyState
 ): boolean {
   // Must be within trade range
   const TRADE_RANGE = 120; // Reduced from 250
@@ -67,7 +78,7 @@ function shouldEstablishTrade(
 
   // Check cooldown (if recently severed)
   const cooldownUntil = star1.tradeRouteCooldown?.[star2.id];
-  if (cooldownUntil !== undefined && cooldownUntil > _galaxy.phase) {
+  if (cooldownUntil !== undefined && cooldownUntil > galaxy.phase) {
     return false;
   }
 
@@ -90,7 +101,8 @@ function shouldEstablishTrade(
     tradeChance += 0.20; // +20% for empire members
   }
 
-  return Math.random() < tradeChance;
+  const tradeRng = new SeededRandom(stableHash(`trade-form|${galaxy.config.seed}|${galaxy.phase}|${star1.id}|${star2.id}`));
+  return tradeRng.next() < tradeChance;
 }
 
 /**
@@ -99,7 +111,8 @@ function shouldEstablishTrade(
 function shouldSeverTrade(
   star1: Star,
   star2: Star,
-  distance: number
+  distance: number,
+  galaxy: GalaxyState
 ): boolean {
   // War immediately severs trade
   if (star1.atWarWith.includes(star2.id)) return true;
@@ -107,11 +120,14 @@ function shouldSeverTrade(
   // Too far apart (routes collapse over distance)
   if (distance > 400) return true; // Roughly 15 grid units
 
+  // Two independent random decisions — use a single RNG drawing sequentially
+  const severRng = new SeededRandom(stableHash(`trade-sever|${galaxy.config.seed}|${galaxy.phase}|${star1.id}|${star2.id}`));
+
   // Trade routes can randomly fail (economic disruption, piracy, etc.)
-  if (Math.random() < 0.01) return true; // 1% chance per phase
+  if (severRng.next() < 0.01) return true; // 1% chance per phase
 
   // Different rulers may disrupt trade (conquest broke the route)
-  if (star1.ruler !== star2.ruler && Math.random() < 0.05) return true; // 5% chance
+  if (star1.ruler !== star2.ruler && severRng.next() < 0.05) return true; // 5% chance
 
   return false;
 }
@@ -281,7 +297,7 @@ export function updateTradeRoutes(galaxy: GalaxyState, galaxyInstance: Galaxy): 
 
       const distance = galaxyInstance.getDistance(star.id, partnerId);
 
-      if (shouldSeverTrade(star, partner, distance)) {
+      if (shouldSeverTrade(star, partner, distance, galaxy)) {
         // Determine reason
         let reason: 'war' | 'distance' | 'disruption' | 'conquest' = 'disruption';
         if (star.atWarWith.includes(partnerId)) {
@@ -312,7 +328,10 @@ export function updateTradeRoutes(galaxy: GalaxyState, galaxyInstance: Galaxy): 
 
   for (const star1 of stars) {
     // Minor stars initiate trade less often
-    if (star1.tier === StarTier.Minor && Math.random() > 0.05) continue;
+    if (star1.tier === StarTier.Minor) {
+      const minorTradeRng = new SeededRandom(stableHash(`trade-minor|${galaxy.config.seed}|${galaxy.phase}|${star1.id}`));
+      if (minorTradeRng.next() > 0.05) continue;
+    }
     
     // Max routes check
     if (star1.tradeRoutes.length >= 8) continue;
@@ -339,6 +358,23 @@ export function updateTradeRoutes(galaxy: GalaxyState, galaxyInstance: Galaxy): 
   }
 }
 
+// Maximum simultaneous wars a star can fight — historical empires rarely fought
+// more than 2-3 at once before collapsing from overstretch
+const MAX_SIMULTANEOUS_WARS = 2;
+
+/**
+ * Compute what fraction of stars are subjects (0 = all independent, 1 = all absorbed).
+ * Used to scale down inter-independent-state conflict when large empires dominate the map.
+ */
+function getConsolidationFactor(galaxy: GalaxyState): number {
+  if (!galaxy.stars || galaxy.stars.size === 0) return 0;
+  let subjectCount = 0;
+  for (const star of galaxy.stars.values()) {
+    if (star.ruler !== star.id) subjectCount++;
+  }
+  return subjectCount / galaxy.stars.size;
+}
+
 /**
  * Check if two stars should go to war
  */
@@ -346,68 +382,69 @@ function shouldDeclareWar(
   star1: Star,
   star2: Star,
   distance: number,
-  _galaxy: GalaxyState
+  galaxy: GalaxyState
 ): boolean {
-  // Both must be independent rulers (wars between empires, not subjects)
+  // Both must be independent rulers
   if (star1.ruler !== star1.id || star2.ruler !== star2.id) return false;
-
-  // Can't be at war with yourself
   if (star1.id === star2.id) return false;
-
-  // Already at war?
   if (star1.atWarWith.includes(star2.id)) return false;
-
-  // Can't declare war on allies
   if (star1.allies.includes(star2.id)) return false;
 
-  // Must be within military range
-  const WAR_RANGE = 200; // Same as diplomatic range
+  const WAR_RANGE = 200;
   if (distance > WAR_RANGE) return false;
 
-  // War weariness reduces war declarations
-  if (star1.warWeariness > 50) return false; // Too tired of war
-  if (star2.warWeariness > 50) return false;
+  // Hard cap on simultaneous wars — a star fighting 2 wars already cannot open a third front
+  if (star1.atWarWith.length >= MAX_SIMULTANEOUS_WARS) return false;
 
-  // Base war chance - quite low
-  let warChance = 0.02; // 2% base per phase
+  // War weariness gate — raised from 50 to 30 so recovery from one war
+  // is required before the next can begin
+  if (star1.warWeariness > 30) return false;
 
-  // Militaristic stars more aggressive
-  if (star1.traits.includes(Trait.Militaristic)) {
-    warChance += 0.05; // +5%
-  }
+  // Base war chance — kept low; scale comes from traits, not base rate
+  let warChance = 0.015; // 1.5% base per phase
 
-  // Ambitious stars seek conquest
-  if (star1.traits.includes(Trait.Ambitious)) {
-    warChance += 0.03; // +3%
-  }
+  if (star1.traits.includes(Trait.Militaristic)) warChance += 0.04;
+  if (star1.traits.includes(Trait.Ambitious))    warChance += 0.02;
+  if (star1.traits.includes(Trait.Imperialist))  warChance += 0.02;
+  if (star1.traits.includes(Trait.Cautious))     warChance -= 0.05;
+  if (star1.traits.includes(Trait.Republican))   warChance -= 0.03;
 
-  // Imperialist stars want to expand
-  if (star1.traits.includes(Trait.Imperialist)) {
-    warChance += 0.03; // +3%
-  }
-
-  // Cautious stars avoid war
-  if (star1.traits.includes(Trait.Cautious)) {
-    warChance -= 0.05; // -5%
-  }
-
-  // Republican stars less likely to start wars
-  if (star1.traits.includes(Trait.Republican)) {
-    warChance -= 0.03; // -3%
-  }
-
-  // Power disparity encourages aggression (strong vs weak)
+  // Power disparity encourages opportunistic aggression
   const powerRatio = star1.power / (star2.power + 1);
-  if (powerRatio > 2.0) {
-    warChance += 0.05; // +5% if much stronger
+  if (powerRatio > 2.0) warChance += 0.03;
+
+  // Competing empires generate stronger rivalry — large empires clash more intensely
+  const star1Imperial = star1.subjects.length;
+  const star2Imperial = star2.subjects.length;
+  if (star1Imperial > 2 && star2Imperial > 2) {
+    // Scale rivalry with combined imperial size, not just a flat +0.02
+    const rivalryBonus = Math.min(0.06, (star1Imperial + star2Imperial) * 0.003);
+    warChance += rivalryBonus;
   }
 
-  // Competing empires (both have subjects) more likely to war
-  if (star1.subjects.length > 2 && star2.subjects.length > 2) {
-    warChance += 0.04; // +4% for rival empires
+  // Consolidation suppression: when empires dominate the map, the remaining independent
+  // stars are fewer and less likely to fight each other (unless they are themselves
+  // empire-builders competing for the last free worlds).
+  const consolidation = getConsolidationFactor(galaxy);
+  if (consolidation > 0.2) {
+    // Small independents (no subjects) become cautious as empires loom
+    const isSmall = star1Imperial === 0 && star2Imperial === 0;
+    if (isSmall) {
+      // Up to -60% war chance when galaxy is 70% consolidated
+      warChance *= Math.max(0.4, 1 - (consolidation - 0.2) * 1.2);
+    }
+    // Large rival empires are unaffected — they are the source of remaining conflict
   }
 
-  return Math.random() < warChance;
+  // Recent peace bonus — stars that just made peace are reluctant to immediately re-fight
+  const recentPeace = star1.history.some(
+    e => e.type === EventType.PeaceTreaty && e.relatedStars?.includes(star2.id)
+      && (galaxy.phase - e.phase) < 20
+  );
+  if (recentPeace) warChance -= 0.04;
+
+  const warRng = new SeededRandom(stableHash(`war-declare|${galaxy.config.seed}|${galaxy.phase}|${star1.id}|${star2.id}`));
+  return warRng.next() < Math.max(0, warChance);
 }
 
 /**
@@ -416,35 +453,33 @@ function shouldDeclareWar(
 function shouldMakePeace(
   star1: Star,
   star2: Star,
-  warDuration: number
+  warDuration: number,
+  galaxy: GalaxyState
 ): boolean {
-  // Wars end based on weariness
+  // Automatic peace if either side is conquered
+  if (star1.ruler !== star1.id || star2.ruler !== star2.id) return true;
+
+  // Base peace chance from weariness — scaled so wars of ~15-20 phases feel natural
   const combinedWeariness = star1.warWeariness + star2.warWeariness;
+  let peaceChance = combinedWeariness / 300; // Reaches 40% at combined weariness=120 (2 wars × ~30 phases)
 
-  // Base peace chance increases with weariness
-  let peaceChance = combinedWeariness / 500; // 0-40% based on weariness
-
-  // Long wars more likely to end
-  if (warDuration > 20) {
-    peaceChance += 0.10; // +10% after 20 phases
-  }
-
-  // Very long wars almost always end
-  if (warDuration > 50) {
-    peaceChance += 0.30; // +30% after 50 phases
-  }
+  // Duration-based pressure — wars should rarely last more than 30 phases
+  if (warDuration > 10) peaceChance += 0.05;
+  if (warDuration > 20) peaceChance += 0.10;
+  if (warDuration > 35) peaceChance += 0.20; // Very long wars almost always end
 
   // Republican stars seek peace
   if (star1.traits.includes(Trait.Republican) || star2.traits.includes(Trait.Republican)) {
-    peaceChance += 0.05; // +5%
+    peaceChance += 0.05;
   }
 
-  // If one side is conquered, war ends
-  if (star1.ruler !== star1.id || star2.ruler !== star2.id) {
-    return true; // Automatic peace if conquered
-  }
+  // Declining empires (vitality/decadence) seek to end wars they can't sustain
+  const star1Declining = (star1.vitality ?? 1) < 0.4 || (star1.decadence || 0) > 0.6;
+  const star2Declining = (star2.vitality ?? 1) < 0.4 || (star2.decadence || 0) > 0.6;
+  if (star1Declining || star2Declining) peaceChance += 0.08;
 
-  return Math.random() < peaceChance;
+  const peaceRng = new SeededRandom(stableHash(`war-peace|${galaxy.config.seed}|${galaxy.phase}|${star1.id}|${star2.id}`));
+  return peaceRng.next() < peaceChance;
 }
 
 /**
@@ -524,15 +559,14 @@ function makePeace(star1: Star, star2: Star, phase: number): void {
 function updateWarWeariness(galaxy: GalaxyState): void {
   if (!galaxy.stars) return;
   for (const star of galaxy.stars.values()) {
-    // War increases weariness
     if (star.atWarWith.length > 0) {
-      star.warWeariness += 2 * star.atWarWith.length; // +2 per war per phase
+      // Weariness grows with each active war, but caps to prevent runaway values
+      star.warWeariness += 2 * star.atWarWith.length;
     } else {
-      // Peace slowly reduces weariness
-      star.warWeariness = Math.max(0, star.warWeariness - 1);
+      // Peace recovery is meaningful — 3/phase so a 20-phase war (~40 weariness)
+      // clears in ~14 phases of peace, not 40. Stars can re-engage after a real rest.
+      star.warWeariness = Math.max(0, star.warWeariness - 3);
     }
-
-    // Cap at 100
     star.warWeariness = Math.min(100, star.warWeariness);
   }
 }
@@ -567,7 +601,7 @@ export function updateWars(galaxy: GalaxyState, galaxyInstance: Galaxy): void {
       const warStartPhase = warEvents.length > 0 ? warEvents[warEvents.length - 1]!.phase : galaxy.phase;
       const warDuration = galaxy.phase - warStartPhase;
 
-      if (shouldMakePeace(star, enemy, warDuration)) {
+      if (shouldMakePeace(star, enemy, warDuration, galaxy)) {
         makePeace(star, enemy, galaxy.phase);
       }
     }

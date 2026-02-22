@@ -1,7 +1,7 @@
 # Narrative Relevance and Chapter Arc Design
 
 ## Status
-Design + rollout record. Phase A, Phase B, Phase C, and Phase D are implemented as of 2026-02-17; remaining phases are planned.
+âœ… **All phases complete (Aâ€“E implemented, 2026-02-17).** This document is now a historical design record. See `PRODUCTION_NOTES.md` for the delivery log and `seldon-game/src/core/narrative-support.ts` for the extracted core implementation.
 
 ## Goals
 - Deepen chapter narrative from event count snapshots to coherent arcs.
@@ -314,7 +314,7 @@ Rollout sequence:
 - Mitigation: pre-index chapter events and memoize per selected chapter.
 
 3. Risk: Loss of recency visibility.
-- Mitigation: keep an optional “Newest events” secondary panel.
+- Mitigation: keep an optional ï¿½Newest eventsï¿½ secondary panel.
 
 ## Open Decisions
 1. Tie-breaker chronology direction for equal scores.
@@ -543,6 +543,7 @@ Exit criteria:
 - [ ] Feature flag defaults accepted
 - [ ] Performance budgets accepted
 - [ ] Determinism tie-break policy accepted
+
 
 
 

@@ -10,11 +10,19 @@ export interface Vector3 {
   z: number;
 }
 
-// Epoch types
-export enum Epoch {
-  Imperial = 0,   // Centralizing
-  Communal = 1,   // Decentralizing
+// Phase 10: Government types
+export enum GovernmentType {
+  Monarchy     = 'monarchy',       // Hereditary dynastic rule
+  Republic     = 'republic',       // Elected leadership, term limits
+  Theocracy    = 'theocracy',      // Religious appointment
+  MilitaryJunta = 'military-junta', // Coup / general succession
+  Oligarchy    = 'oligarchy',      // Wealth-based council rotation
+  Autocracy    = 'autocracy',      // Strongman, designated successor
 }
+
+// Phase 10: Ideology is a continuous per-star cultural alignment
+// -1.0 = Authoritarian, +1.0 = Libertarian
+// Replaces the old binary Epoch enum.
 
 
 // Star types (Phase 2: Planet Personalities)
@@ -107,6 +115,9 @@ export enum EventType {
   ReformStarted = 'reform_started', // Added missing enum
   Succession = 'succession',
 
+  // Phase 10: Government & Succession
+  GovernmentTransition = 'government_transition', // Government type changed
+
   // Phase 7: Galactic Events
   TradeBoom = 'trade-boom',
   Plague = 'plague',
@@ -141,6 +152,7 @@ export interface GeniusLeader {
   name: string;
   bonusMultiplier: number;  // Multiplier for admin capacity
   expiresAt: number;        // Phase when leader dies
+  title?: string;           // Phase 10: Title derived from government type (e.g. "Emperor", "Chancellor")
 }
 
 // Phase 5.4: Reforms
@@ -159,7 +171,26 @@ export interface HistoricalEvent {
 }
 
 export type DynastyRelationType = 'parent' | 'spouse' | 'adoptive_parent' | 'rival_claimant';
-export type DynastySuccessionReason = 'inheritance' | 'coup' | 'election' | 'regency' | 'civil_war';
+export type DynastySuccessionReason =
+  | 'inheritance'     // Monarchy: heir from family tree
+  | 'coup'            // Military Junta: forceful takeover
+  | 'election'        // Republic: voted in
+  | 'term_end'        // Republic: term expired, successor elected
+  | 'regency'         // Monarchy: regent rules for minor heir
+  | 'civil_war'       // Contested succession — any type
+  | 'appointment'     // Theocracy: chosen by religious institution
+  | 'board_rotation'  // Oligarchy: council seat rotation
+  | 'designated';     // Autocracy: named successor takes over
+
+// Phase 10: Per-star record of a regime epoch (contiguous run under one government type)
+export interface GovernmentRecord {
+  governmentType: GovernmentType;
+  startPhase: number;
+  endPhase?: number;         // undefined = currently active
+  houseName: string;         // Ruling house/faction name at start of regime
+  successionCount: number;   // Internal successions within this regime
+  endReason?: string;        // Human-readable reason the regime ended
+}
 
 export interface Dynasty {
   id: string;
@@ -167,6 +198,8 @@ export interface Dynasty {
   foundingPhase: number;
   founderDynastId: string;
   cultureTags: string[];
+  /** 1–2 Trait values derived from the star at founding. Heirs inherit each with ~60% probability. */
+  dynastyTraits: Trait[];
 }
 
 export interface Dynast {
@@ -197,6 +230,8 @@ export interface DynastySuccessionRecord {
   toDynastId?: string;
   reason: DynastySuccessionReason;
   contested: boolean;
+  source?: 'government_succession' | 'ruler_change';
+  sourceDetail?: 'internal' | 'conquest' | 'revolt' | 'challenger';
 }
 
 export interface DemographicSnapshot {
@@ -208,6 +243,39 @@ export interface DemographicSnapshot {
   activeCrises: number;
   imperialPower: number; // Power of largest empire
   politicalShare?: Array<{ name: string, count: number, color: string }>;
+}
+
+export interface DemographicSeries {
+  schemaVersion: 1;
+  phase: number[];
+  totalPopulation: number[];
+  averageTech: number[];
+  maxPower: number[];
+  activeWars: number[];
+  activeCrises: number[];
+  imperialPower: number[];
+}
+
+export type DemographicsData = DemographicSeries | DemographicSnapshot[];
+
+/**
+ * Phase 6: Structured per-phase record of every ruler change.
+ *
+ * Accumulated into GalaxyState.phaseConquestLog each phase.
+ *
+ * mechanism:
+ *   conquest   — a stronger neighbour absorbed the star via influence projection
+ *   revolt     — the star broke free of its ruler via checkRevolutionConditions
+ *   challenger — the current ruler was displaced by a third-party challenger
+ */
+export type ConquestMechanism = 'conquest' | 'revolt' | 'challenger';
+
+export interface ConquestRecord {
+  phase: number;
+  starId: string;
+  previousRuler: string | null;  // null if star was already independent
+  newRuler: string;
+  mechanism: ConquestMechanism;
 }
 
 // Core Star interface
@@ -226,7 +294,10 @@ export interface Star {
   growth: number;
   centralization: number;
   power: number;
-  epoch: Epoch;
+
+  // Phase 10: Replaces the old binary Epoch field
+  ideology: number;           // -1.0 (Authoritarian) to +1.0 (Libertarian), drifts over time
+  governmentType: GovernmentType; // Institutional structure, can transition over time
 
   // Relationships
   ruler: string | null;    // ID of ruling star
@@ -276,6 +347,13 @@ export interface Star {
   // Phase 5.5: Crisis Stats
   stability: number; // 0.0 to 1.0, affects revolt risk
   infrastructureDamage: number; // 0.0 to 1.0, conquest scarring that rebuilds slowly
+  carryingCapacity?: number; // Dynamic population carrying capacity before temporary damage
+  effectiveCarryingCapacity?: number; // Carrying capacity after temporary war/plague damage
+  capacityDamage?: number; // Temporary carrying-capacity damage state (0.0-0.45 target)
+  lastWarLoss?: number; // Last phase direct population losses from war
+  lastPlagueLoss?: number; // Last phase direct population losses from plague
+  lastPopulationGrowth?: number; // Last phase endogenous (logistic) growth term
+  lastPopulationShockLoss?: number; // Last phase combined war+plague losses after shock caps
 
   // Phase 5: History Logging
   history: HistoricalEvent[];
@@ -289,6 +367,23 @@ export interface Star {
   // Phase 5.6: Golden Age Gating
   darkAge: boolean;
   severeDarkAge: boolean;
+  darkAgeDuration?: number; // Consecutive phases in dark age
+  severeDarkAgeDuration?: number; // Consecutive phases in severe dark age
+  postCollapseRecoveryPhases?: number; // Remaining fragility phases after exiting dark age
+
+  // Post-revolt protection: tracks when a star last revolted so it cannot be
+  // immediately reconquered in the same update cycle (or the next few phases).
+  lastRevoltPhase?: number;
+  revoltIncubation?: number;
+  hegemonyStartPhase?: number;
+
+  // Derived empire health score (0.0–1.0), computed once per phase per ruler star
+  // by computeEmpireHealth() in decay.ts. All consumers that previously re-derived
+  // vitality + decadence + admin load + dark-age flags independently should read
+  // this instead, so tuning happens in one place.
+  empireHealth?: number;
+  declineStress?: number;
+  empireCohesion?: number; // Slow-moving imperial cohesion stock (0.0-1.0)
 }
 
 // Phase 5.5: Seldon Crises
@@ -310,6 +405,9 @@ export interface SeldonCrisis {
   severity: number; // 0.0 to 1.0
   description: string;
   resolved: boolean;
+  mulePeakShare?: number; // Runtime metric for External crisis objective tracking
+  muleEscalationStage?: 0 | 1 | 2 | 3; // Runtime escalation stage for External crisis
+  objectiveAchieved?: boolean; // Crisis-specific objective success flag
 }
 
 // Galaxy Shape types (Phase 4)
@@ -366,16 +464,27 @@ export interface GalaxyState {
   activeCrises: SeldonCrisis[];
   
   // Phase 8: Encyclopedia & Demographics
-  demographics: DemographicSnapshot[];
+  demographics: DemographicsData;
 
   // Phase 9/7A: Dynasty family tree backbone
   dynasties: Map<string, Dynasty>;
   dynasts: Map<string, Dynast>;
   dynasticRelationships: DynasticRelationship[];
   dynastySuccessionRecords: DynastySuccessionRecord[];
+  // Long-lived archival succession history keyed by star ID.
+  // This is the canonical lineage source for deep-history UI browsing.
+  dynastySuccessionArchiveByStar?: Record<string, DynastySuccessionRecord[]>;
+  dynastySuccessionArchiveVersion?: number;
+
+  // Phase 10: Per-star regime history (ordered list of government epochs)
+  governmentHistory: Map<string, GovernmentRecord[]>;
 
   // Performance optimization - pre-calculated distances
   distanceMatrix?: Map<string, Map<string, number>>;
+
+  // Phase 6: Structured conquest log — one entry per ruler change per phase.
+  // Populated by applyConquestTransition() and checkRevolutionConditions().
+  phaseConquestLog: ConquestRecord[];
 }
 
 // Camera for rendering
@@ -390,8 +499,18 @@ export interface RenderOptions {
   showPowerGlow: boolean;
   showLabels: boolean;
   showTradeRoutes: boolean;
+  showExpansionFootprint: boolean;
   showAlliances: boolean;
   showWars: boolean;
   showGrid: boolean;
+  detailV2Shell?: boolean;
+  detailAbstractInfobox?: boolean;
+  detailCounterfactualTeaser?: boolean;
+  detailSpineNav?: boolean;
+  detailDossierTape?: boolean;
+  detailQuestionTrails?: boolean;
+  detailDebateSplit?: boolean;
+  detailClaimEvidence?: boolean;
+  detailCrossrefGraph?: boolean;
   theme: 'dark' | 'light';
 }

@@ -1,4 +1,5 @@
 import { GalaxyState } from '../core/types';
+import { getAllDemographicSnapshots } from '../core/demographics-series';
 import {
   COMPACT_ANALYSIS_SCHEMA_V1,
   CompactAnalysisDictionariesV1,
@@ -67,7 +68,8 @@ function computeFallbackDemographicRow(state: GalaxyState): {
 }
 
 function createGlobalSeries(state: GalaxyState) {
-  if (state.demographics.length === 0) {
+  const demographics = getAllDemographicSnapshots(state.demographics);
+  if (demographics.length === 0) {
     const fallback = computeFallbackDemographicRow(state);
     return {
       p: [fallback.phase],
@@ -81,7 +83,7 @@ function createGlobalSeries(state: GalaxyState) {
     };
   }
 
-  const sortedDemographics = [...state.demographics].sort((a, b) => a.phase - b.phase);
+  const sortedDemographics = [...demographics].sort((a, b) => a.phase - b.phase);
   const zeitByPhase = new Map<number, number>();
   zeitByPhase.set(state.phase, state.zeitgeist);
 

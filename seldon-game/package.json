@@ -10,12 +10,18 @@
     "preview": "vite preview",
     "test:encyclopedia-entry": "tsx tests/encyclopedia-entry-smoke.ts",
     "test:detail-view-regression": "tsx tests/detail-view-regression-smoke.ts",
+    "test:detail-view-phase0-baseline": "tsx tests/detail-view-phase0-baseline-smoke.ts",
+    "test:detail-view-render-baseline": "tsx tests/detail-view-render-baseline-smoke.ts",
     "test:narrative-detail": "tsx tests/narrative-detail-smoke.ts",
     "test:narrative-campaign": "tsx tests/narrative-campaign-smoke.ts",
     "test:determinism": "tsx tests/determinism-migration.ts",
     "test:determinism:full": "set DETERMINISM_FULL=1&& tsx tests/determinism-migration.ts",
+    "test:demographics-retention": "tsx tests/demographics-retention-smoke.ts",
+    "test:population-tuning": "tsx tests/population-tuning-smoke.ts",
+    "test:tech-drift": "tsx tests/tech-drift-smoke.ts",
     "test:perf": "tsx tests/performance-harness.ts",
-    "test:perf:gate": "set PERF_ENFORCE=1&& set PERF_STAR_COUNT=1000&& set PERF_PHASES=3000&& set PERF_ITERS=10&& tsx tests/performance-harness.ts"
+    "test:perf:gate": "set PERF_ENFORCE=1&& set PERF_STAR_COUNT=1000&& set PERF_PHASES=3000&& set PERF_ITERS=10&& tsx tests/performance-harness.ts",
+    "diag:tuning": "tsx tests/diag-tuning.ts"
   },
   "devDependencies": {
     "terser": "^5.46.0",

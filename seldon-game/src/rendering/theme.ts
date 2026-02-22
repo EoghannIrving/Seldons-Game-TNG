@@ -86,7 +86,7 @@ export const THEME_FOUNDATION: Theme = {
     starSizeMultiplier: 1.0,
     lineWidthMultiplier: 1.0,
     fontSizeMultiplier: 1.0,
-    font: '"Courier New"',
+    font: '"Aptos", "Segoe UI", "Noto Sans", "Helvetica Neue", Arial, sans-serif',
     useGradients: true
   }
 };
@@ -135,7 +135,7 @@ export const THEME_ZX: Theme = {
     starSizeMultiplier: 1.2, // Slightly blockier/larger
     lineWidthMultiplier: 1.5,
     fontSizeMultiplier: 1.4,
-    font: '"Courier New"', // Keep Courier
+    font: '"Cascadia Mono", "Consolas", "Courier New", monospace', // Keep mono look for ZX
     useGradients: false
   }
 };

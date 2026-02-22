@@ -22,7 +22,22 @@
       "Bash(npm.cmd run test:encyclopedia-entry)",
       "Bash(grep:*)",
       "Bash(git fetch:*)",
-      "Bash(git ls-tree:*)"
+      "Bash(git ls-tree:*)",
+      "Bash(findstr:*)",
+      "Bash(python3:*)",
+      "Bash(cmd /c dir)",
+      "Bash(cmd /c dir \"seldon-game\\\\src\")",
+      "Bash(cmd /c \"dir seldon-game\\\\src\")",
+      "Bash(cmd /c dir \"C:\\\\Users\\\\eogha\\\\Downloads\\\\Seldons Game TNG\\\\seldon-game\\\\src\")",
+      "Bash(cmd /c \"dir \"\"C:\\\\Users\\\\eogha\\\\Downloads\\\\Seldons Game TNG\\\\seldon-game\\\\src\"\"\")",
+      "Bash(cmd /c dir /b \"seldon-game\\\\src\")",
+      "Bash(cmd /c \"dir /b seldon-game\\\\src\")",
+      "Bash(cmd /c \"dir /b seldon-game\\\\src 2>&1\")",
+      "Bash(cmd /c \"dir /b seldon-game\\\\src && echo DONE\")",
+      "Bash(powershell -Command \"Get-ChildItem ''C:\\\\Users\\\\eogha\\\\Downloads\\\\Seldons Game TNG\\\\seldon-game\\\\src'' | Select-Object Name\")",
+      "Bash(powershell -Command \"python --version\")",
+      "Bash(powershell -Command \"python3 --version\")",
+      "Bash(powershell -Command:*)"
     ]
   }
 }

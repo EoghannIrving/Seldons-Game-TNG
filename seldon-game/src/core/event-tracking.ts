@@ -6,10 +6,10 @@
  * - Conquest/Liberation (ruler changes)
  * - Golden Ages (sustained high growth)
  * - Dark Ages (sustained decline)
- * - Revolutions (epoch changes - when implemented)
+ * - Government transitions (ideology drift, coups, revolutions) — Phase 10
  */
 
-import { Star, GalaxyState, EventType, HistoricalEvent, StarTier } from './types';
+import { Star, GalaxyState, EventType, HistoricalEvent, StarTier, ConquestRecord } from './types';
 import { Galaxy } from './galaxy';
 import { DEFAULT_CONQUEST_RECOVERY } from './stability-config';
 
@@ -20,7 +20,7 @@ import { DEFAULT_CONQUEST_RECOVERY } from './stability-config';
 interface StarHistoricalState {
   previousRuler: string | null;
   previousStrength: number;
-  previousEpoch: number;              // Phase 3: Track epoch changes
+  // Phase 10: previousEpoch removed — government transitions tracked in government.ts
   consecutiveGrowthPhases: number;    // Positive = growth, negative = decline
   strengthHistory: number[];          // Last 10 phases for trend detection
   lastRevolutionPhase: number;        // Phase 3: Cooldown tracking
@@ -46,6 +46,12 @@ const historicalStates = new Map<string, StarHistoricalState>();
 const POST_WAR_BOOM_CODE = 'post_war_boom';
 const TRUE_GOLDEN_AGE_CODE = 'true_golden_age';
 const TRUE_GOLDEN_PEACE_WINDOW = 12;
+const DARK_AGE_RECOVERY_STABILITY_THRESHOLD = 0.46;
+const DARK_AGE_RECOVERY_REQUIRED_STREAK = 4;
+const SEVERE_DARK_AGE_MIN_DURATION = 6;
+const POST_COLLAPSE_RECOVERY_WINDOW = 6;
+const EMPIRE_DOMINANCE_GRACE_SUBJECTS = 8;
+const EMPIRE_DOMINANCE_GRACE_PHASES = 200; // Extended: new hegemons need more time to consolidate before dark age can fire
 
 /**
  * Initialize historical tracking for a star
@@ -54,7 +60,6 @@ export function initializeStarTracking(star: Star): void {
   historicalStates.set(star.id, {
     previousRuler: star.ruler,
     previousStrength: star.strength,
-    previousEpoch: star.epoch,
     consecutiveGrowthPhases: 0,
     strengthHistory: [star.strength],
     lastRevolutionPhase: -100, // Start with cooldown expired
@@ -73,6 +78,91 @@ export function initializeStarTracking(star: Star): void {
 }
 
 /**
+ * Apply all state mutations that occur when a star changes ruler.
+ *
+ * This is the single authoritative place for "what happens on conquest."
+ * Previously this was split across three locations:
+ *   1. determineRuler()        — loyalty reset, rulershipStartPhase, lastRevoltPhase clear,
+ *                                succession record push
+ *   2. detectRulerChangeEvent() — recentWarOrConquestPhase, history events
+ *   3. applyConquestScarring()  — infrastructureDamage, stability, strength, administrativeTech
+ *
+ * Call order within a phase:
+ *   determineRuler() returns newRuler → caller sets star.ruler = newRuler → calls this function.
+ *   detectRulerChangeEvent() is now responsible only for creating the HistoricalEvent records
+ *   and notifying the former/new ruler stars; it no longer calls applyConquestScarring directly.
+ *
+ * @param star         The star whose ruler just changed
+ * @param previousRuler The ruler ID before the change (null if never ruled)
+ * @param newRuler     The new ruler ID (may equal star.id for liberation)
+ * @param galaxy       Full galaxy state (for succession records and star lookups)
+ */
+export function applyConquestTransition(
+  star: Star,
+  previousRuler: string | null,
+  newRuler: string,
+  galaxy: GalaxyState
+): void {
+  const phase = galaxy.phase;
+
+  // 1. Reset loyalty and record rulership start.
+  //    Initialize to +0.10 so the subject doesn't immediately cliff toward revolt threshold.
+  star.loyalty = 0.10;
+  star.revoltIncubation = 0;
+  star.rulershipStartPhase = phase;
+
+  // 2. Clear revolt protection if this is a reconquest (star is now a subject again).
+  //    Without this, lastRevoltPhase persists indefinitely and permanently applies
+  //    the dark-age reconquest penalty to all future attempts against this star.
+  if (newRuler !== star.id) {
+    star.lastRevoltPhase = undefined;
+  }
+
+  // 3. Mark recent conflict.
+  star.recentWarOrConquestPhase = phase;
+
+  // 4. Conquest scarring — only when a star becomes a subject (not on liberation).
+  if (newRuler !== star.id) {
+    const isReconquest = previousRuler !== null && previousRuler !== star.id && previousRuler !== newRuler;
+    let damage = DEFAULT_CONQUEST_RECOVERY.CONQUEST_INFRA_DAMAGE;
+    if (isReconquest) {
+      damage += DEFAULT_CONQUEST_RECOVERY.RECONQUEST_EXTRA_DAMAGE;
+    }
+
+    star.infrastructureDamage = Math.min(
+      DEFAULT_CONQUEST_RECOVERY.MAX_INFRA_DAMAGE,
+      (star.infrastructureDamage || 0) + damage
+    );
+    star.stability = Math.max(
+      0.1,
+      (star.stability || 1.0) - (
+        DEFAULT_CONQUEST_RECOVERY.CONQUEST_STABILITY_SHOCK_BASE +
+        damage * DEFAULT_CONQUEST_RECOVERY.CONQUEST_STABILITY_SHOCK_DAMAGE_FACTOR
+      )
+    );
+    star.strength = Math.max(
+      0.1,
+      star.strength * (1 - (damage * DEFAULT_CONQUEST_RECOVERY.CONQUEST_STRENGTH_SHOCK_FACTOR))
+    );
+    star.administrativeTech = Math.max(
+      0,
+      star.administrativeTech - Math.max(
+        1,
+        Math.round(damage * DEFAULT_CONQUEST_RECOVERY.CONQUEST_ADMIN_TECH_SHOCK_FACTOR)
+      )
+    );
+  }
+
+  // 5. Push to the phase conquest log.
+  //    'challenger' = the star was already a subject of someone else and was taken.
+  //    'conquest'   = the star was independent (or self-ruled) and absorbed.
+  const mechanism: ConquestRecord['mechanism'] =
+    (previousRuler !== null && previousRuler !== star.id) ? 'challenger' : 'conquest';
+  if (!galaxy.phaseConquestLog) galaxy.phaseConquestLog = [];
+  galaxy.phaseConquestLog.push({ phase, starId: star.id, previousRuler, newRuler, mechanism });
+}
+
+/**
  * Detect and record events for all stars in the galaxy
  * Call this at the end of each phase, after all updates
  */
@@ -87,6 +177,11 @@ export function detectAndRecordEvents(galaxy: GalaxyState, galaxyInstance?: Gala
 
     const state = historicalStates.get(star.id)!;
     const events: HistoricalEvent[] = [];
+    star.darkAgeDuration = star.darkAge ? ((star.darkAgeDuration ?? 0) + 1) : 0;
+    star.severeDarkAgeDuration = star.severeDarkAge ? ((star.severeDarkAgeDuration ?? 0) + 1) : 0;
+    if ((star.postCollapseRecoveryPhases ?? 0) > 0) {
+      star.postCollapseRecoveryPhases = Math.max(0, (star.postCollapseRecoveryPhases ?? 0) - 1);
+    }
 
     // C2: Conquest damage recovers slowly over long periods.
     updateInfrastructureRecovery(star, galaxy.phase);
@@ -97,6 +192,12 @@ export function detectAndRecordEvents(galaxy: GalaxyState, galaxyInstance?: Gala
 
     // 1. Detect ruler changes (Conquest/Liberation)
     if (state.previousRuler !== star.ruler) {
+      // Apply all state mutations for the ruler transition in one place.
+      // star.ruler has already been set by determineRuler()/checkRevolutionConditions()
+      // before detectAndRecordEvents is called.
+      if (star.ruler !== null) {
+        applyConquestTransition(star, state.previousRuler, star.ruler, galaxy);
+      }
       const rulerEvents = detectRulerChangeEvent(star, state.previousRuler, galaxy);
       events.push(...rulerEvents);
       // Clear golden_active on conquest/ruler change
@@ -104,19 +205,35 @@ export function detectAndRecordEvents(galaxy: GalaxyState, galaxyInstance?: Gala
       state.goldenTier = 'none';
     }
 
+    // Dark Age institutional cleanup: a star that has just become independent with no
+    // subjects has no institutions left to collapse. Carrying a severeDarkAge flag from
+    // its previous life as a large empire is misleading and blocks the recovery path
+    // (recoveryStreak never triggers when the stability check is irrelevant to current state).
+    // Also reset the dark streak so the star can be re-evaluated fresh.
+    if (star.ruler === star.id && star.subjects.length === 0) {
+      if (star.severeDarkAge || star.darkAge) {
+        star.severeDarkAge = false;
+        star.darkAge = false;
+        star.darkAgeDuration = 0;
+        star.severeDarkAgeDuration = 0;
+        star.postCollapseRecoveryPhases = 0;
+        state.darkStreak = 0;
+        state.recoveryStreak = 0;
+      }
+    }
+
     // Skip detailed tracking for Minor stars
     if (!isMinor) {
       // 2. Detect golden/dark ages based on growth trends
-      const trendEvent = detectTrendEvent(star, state, galaxy.phase, galaxyInstance);
+      const trendEvent = detectTrendEvent(star, state, galaxy, galaxy.phase, galaxyInstance);
       if (trendEvent) events.push(trendEvent);
 
-      // 3. Phase 3: Detect revolutions (epoch changes)
-      if (state.previousEpoch !== star.epoch) {
-        const revolutionEvent = detectRevolutionEvent(star, state.previousEpoch, galaxy.phase);
-        if (revolutionEvent) {
-          events.push(revolutionEvent);
+      // 3. Phase 10: Revolution events now come from government.ts (GovernmentTransition).
+      // The old epoch-change revolution detection has been removed.
+      if (false) {
+        // kept as dead placeholder so surrounding block structure is unchanged
+        if (false) {
           state.lastRevolutionPhase = galaxy.phase;
-          // Clear golden_active on revolution
           state.golden_active = false;
           state.goldenTier = 'none';
         }
@@ -131,7 +248,6 @@ export function detectAndRecordEvents(galaxy: GalaxyState, galaxyInstance?: Gala
     // 5. Update historical state for next phase
     state.previousRuler = star.ruler;
     state.previousStrength = star.strength;
-    state.previousEpoch = star.epoch;
     state.previousTradeRouteCount = star.tradeRoutes.length;
     state.previousStability = star.stability || 1.0;
 
@@ -144,8 +260,9 @@ export function detectAndRecordEvents(galaxy: GalaxyState, galaxyInstance?: Gala
 }
 
 /**
- * Detect conquest or liberation events based on ruler change
- * Returns array of events - may add events to both subject and ruler
+ * Detect conquest or liberation events based on ruler change.
+ * Returns HistoricalEvent records only — all state mutations are handled by
+ * applyConquestTransition(), which must have been called before this function.
  */
 function detectRulerChangeEvent(
   star: Star,
@@ -160,18 +277,13 @@ function detectRulerChangeEvent(
     const previousRulerStar = previousRuler ? galaxy.stars.get(previousRuler) : null;
     const previousRulerName = previousRulerStar?.name || 'Unknown';
 
-    // Event for the liberated star
     events.push({
       type: EventType.Liberation,
       phase: galaxy.phase,
       description: `Liberated from ${previousRulerName}`,
       relatedStars: previousRuler ? [previousRuler] : undefined,
     });
-    
-    // Update recent conflict phase
-    star.recentWarOrConquestPhase = galaxy.phase;
 
-    // Event for the former ruler (they lost a subject)
     if (previousRulerStar) {
       previousRulerStar.history.push({
         type: EventType.Liberation,
@@ -179,6 +291,7 @@ function detectRulerChangeEvent(
         description: `${star.name} gained independence`,
         relatedStars: [star.id],
       });
+      // Mark conflict on the former ruler as well
       previousRulerStar.recentWarOrConquestPhase = galaxy.phase;
     }
   }
@@ -188,7 +301,6 @@ function detectRulerChangeEvent(
     const newRulerStar = currentRuler ? galaxy.stars.get(currentRuler) : null;
     const newRulerName = newRulerStar?.name || 'Unknown';
 
-    // Event for the conquered star
     events.push({
       type: EventType.Conquest,
       phase: galaxy.phase,
@@ -196,12 +308,6 @@ function detectRulerChangeEvent(
       relatedStars: currentRuler ? [currentRuler] : undefined,
     });
 
-    applyConquestScarring(star, previousRuler, currentRuler);
-    
-    // Update recent conflict phase
-    star.recentWarOrConquestPhase = galaxy.phase;
-
-    // Event for the conquering star
     if (newRulerStar) {
       newRulerStar.history.push({
         type: EventType.Conquest,
@@ -222,6 +328,7 @@ function detectRulerChangeEvent(
 function detectTrendEvent(
   star: Star,
   state: StarHistoricalState,
+  galaxy: GalaxyState,
   currentPhase: number,
   galaxyInstance?: Galaxy
 ): HistoricalEvent | null {
@@ -234,21 +341,12 @@ function detectTrendEvent(
     e.type === EventType.Revolution && e.phase === currentPhase
   );
 
-  // Check for Civil War (Succession Crisis)
-  // Note: activeCrises is on GalaxyState, not Star, but we can check if star is target
-  // However, we don't have access to GalaxyState.activeCrises here directly unless passed?
-  // Wait, detectAndRecordEvents has `galaxy: GalaxyState`. But `detectTrendEvent` only takes `star`, `state`, `currentPhase`.
-  // I need to pass `galaxy` to `detectTrendEvent`.
-  // I will assume I'll update the call site.
-  
-  // For now, let's look at how to get Civil War status.
-  // We can't easily access global crises here without galaxy state.
-  // But we can assume if "Revolution" happened, it covers some civil war aspects.
-  // Or I can add `galaxy` to arguments. I should do that.
-  
   // Trade Collapse: > 50% trade routes lost
   const currentTradeCount = star.tradeRoutes.length;
   const tradeCollapse = (state.previousTradeRouteCount > 2) && (currentTradeCount < state.previousTradeRouteCount * 0.5);
+  const isImperialRuler = star.ruler === star.id && star.subjects.length >= EMPIRE_DOMINANCE_GRACE_SUBJECTS;
+  const rulerTenure = Math.max(0, currentPhase - (star.rulershipStartPhase ?? currentPhase));
+  const inDominanceGrace = isImperialRuler && rulerTenure < EMPIRE_DOMINANCE_GRACE_PHASES;
 
   // "Growing": Net trade routes increased (or high), and no conquest
   // "High" trade routes = at least 3 (arbitrary but reasonable)
@@ -262,7 +360,12 @@ function detectTrendEvent(
   // For this step, I'll rely on "isStable" being false if Revolution happened.
   // Real civil war (Succession Crisis) usually triggers Revolution or massive instability.
   
-  const isStable = !isConquered && !hasRevolution && !tradeCollapse; // && !civilWar (implicit in revolution often)
+  // Low stability counts as instability even without an acute shock.
+  // This activates the dark streak for overextended empires that have had their stability
+  // gradually drained by admin load — connecting the overextension system to dark age triggers.
+  const lowStabilityThreshold = inDominanceGrace ? 0.18 : 0.28; // Stricter threshold to avoid early collapse cliffs
+  const lowStability = (star.stability ?? 1.0) < lowStabilityThreshold;
+  const isStable = !isConquered && !hasRevolution && !tradeCollapse && !lowStability;
 
   // 2. Update Streaks
   // Golden Streak: Requires Stability AND Growth
@@ -429,30 +532,34 @@ function detectTrendEvent(
   }
 
    // --- Dark Age Logic ---
-   
-   // 1. Update Recovery Streak
-   if (star.stability >= 0.5) {
-       state.recoveryStreak++;
+   const severeDuration = star.severeDarkAgeDuration ?? 0;
+   const severeLockActive = star.severeDarkAge && severeDuration < SEVERE_DARK_AGE_MIN_DURATION;
+
+   // 1. Update Recovery Streak (hysteresis: higher threshold, longer streak)
+   if (star.stability >= DARK_AGE_RECOVERY_STABILITY_THRESHOLD && !severeLockActive) {
+     state.recoveryStreak++;
    } else {
-       state.recoveryStreak = 0;
+     state.recoveryStreak = 0;
    }
 
    // 2. Check for Recovery
-   if (state.recoveryStreak >= 2) {
-       if (star.darkAge || star.severeDarkAge) {
-           star.darkAge = false;
-           star.severeDarkAge = false;
-           // Reset dark streak too? Usually yes if we recovered.
-           state.darkStreak = 0;
+   if (state.recoveryStreak >= DARK_AGE_RECOVERY_REQUIRED_STREAK) {
+     if (star.darkAge || star.severeDarkAge) {
+       star.darkAge = false;
+       star.severeDarkAge = false;
+       star.darkAgeDuration = 0;
+       star.severeDarkAgeDuration = 0;
+       star.postCollapseRecoveryPhases = POST_COLLAPSE_RECOVERY_WINDOW;
+       state.darkStreak = 0;
 
-            state.golden_active = false;
-            state.goldenTier = 'none';
-            return {
-                type: EventType.GoldenAge, // Or a new "Recovery" type if exists, or just use description
-                phase: currentPhase,
-                description: 'Recovery - Stability returned, Dark Age ended',
-           };
-       }
+       state.golden_active = false;
+       state.goldenTier = 'none';
+       return {
+         type: EventType.GoldenAge,
+         phase: currentPhase,
+         description: 'Recovery - Stability returned, Dark Age ended',
+       };
+     }
    }
 
    // 3. Check for Economic Shock (Net trade routes down by >= 2 within 2 phases)
@@ -476,35 +583,50 @@ function detectTrendEvent(
    // 4. Trigger Dark Ages
    
    // Severe Dark Age
-   // dark_streak >= 6 AND stability very low (<= 0.2)
-   if (state.darkStreak >= 6 && star.stability <= 0.2) {
+   // Easier to enter than before, but hard to exit due to hysteresis and min-duration lock.
+   const severeEligible = (star.ruler === star.id) && star.subjects.length >= 12 && rulerTenure >= EMPIRE_DOMINANCE_GRACE_PHASES;
+   if (severeEligible && state.darkStreak >= 10 && star.stability <= 0.16) {
        if (!star.severeDarkAge) {
-            star.severeDarkAge = true;
-            star.darkAge = true; // Implied? Or separate states. Let's set both.
-            state.golden_active = false;
-            state.goldenTier = 'none';
-            return {
-                type: EventType.DarkAge,
-                phase: currentPhase,
-                description: 'Severe Dark Age - Collapse of civilization imminent',
-           };
-       }
-   }
+         star.severeDarkAge = true;
+         star.darkAge = true;
+         star.severeDarkAgeDuration = 1;
+         star.darkAgeDuration = Math.max(1, star.darkAgeDuration ?? 0);
+         star.postCollapseRecoveryPhases = 0;
+         // Legitimacy shock: empire-wide trust drop on severe onset.
+         for (const subjectId of star.subjects) {
+           const subject = galaxy.stars.get(subjectId);
+           if (!subject) continue;
+           const loyaltyDrop = Math.max(0.02, Math.min(0.08, 0.02 + (star.subjects.length * 0.001)));
+           subject.loyalty = Math.max(-1, (subject.loyalty ?? 0) - loyaltyDrop);
+         }
+         state.golden_active = false;
+         state.goldenTier = 'none';
+         return {
+           type: EventType.DarkAge,
+           phase: currentPhase,
+           description: 'Severe Dark Age - Collapse of civilization imminent',
+         };
+        }
+    }
    
    // Regular Dark Age
-   // dark_streak >= 3 AND (stability <= 0.35 OR economic shock)
-   if (state.darkStreak >= 3 && (star.stability <= 0.35 || economicShock)) {
+   // dark_streak sustained AND (stability threshold or economic shock)
+   const regularDarkStreakThreshold = inDominanceGrace ? 6 : 4;  // Require longer instability streak
+   const regularStabilityThreshold = inDominanceGrace ? 0.20 : 0.30; // Lower threshold to delay onset
+   if (state.darkStreak >= regularDarkStreakThreshold && (star.stability <= regularStabilityThreshold || economicShock)) {
        if (!star.darkAge && !star.severeDarkAge) {
-            star.darkAge = true;
-            state.golden_active = false;
-            state.goldenTier = 'none';
-            return {
-                type: EventType.DarkAge,
-                phase: currentPhase,
-                description: 'Dark Age - Period of decline and instability',
-           };
-       }
-   }
+         star.darkAge = true;
+         star.darkAgeDuration = Math.max(1, star.darkAgeDuration ?? 0);
+         star.postCollapseRecoveryPhases = 0;
+         state.golden_active = false;
+         state.goldenTier = 'none';
+         return {
+           type: EventType.DarkAge,
+           phase: currentPhase,
+           description: 'Dark Age - Period of decline and instability',
+         };
+        }
+    }
 
    // Dark Age Logic (Legacy check, can be removed or kept as fallback/log)
    if (state.darkStreak === 10 && !star.darkAge) {
@@ -515,35 +637,6 @@ function detectTrendEvent(
    }
 
    return null;
-}
-
-/**
- * Phase 3: Detect revolution events (epoch changes)
- */
-function detectRevolutionEvent(
-  star: Star,
-  previousEpoch: number,
-  currentPhase: number
-): HistoricalEvent | null {
-  // Imperial (0) → Communal (1)
-  if (previousEpoch === 0 && star.epoch === 1) {
-    return {
-      type: EventType.Revolution,
-      phase: currentPhase,
-      description: 'Communal Revolution - Overthrew centralized government',
-    };
-  }
-
-  // Communal (1) → Imperial (0)
-  if (previousEpoch === 1 && star.epoch === 0) {
-    return {
-      type: EventType.Revolution,
-      phase: currentPhase,
-      description: 'Imperial Revolution - Established unified leadership',
-    };
-  }
-
-  return null;
 }
 
 /**
@@ -612,39 +705,6 @@ export function preUpdateGoldenAgeCheck(star: Star, currentPhase: number): void 
   }
 }
 
-function applyConquestScarring(star: Star, previousRuler: string | null, currentRuler: string | null): void {
-  if (!currentRuler || currentRuler === star.id) return;
-
-  let damage = DEFAULT_CONQUEST_RECOVERY.CONQUEST_INFRA_DAMAGE;
-  if (previousRuler && previousRuler !== star.id && previousRuler !== currentRuler) {
-    damage += DEFAULT_CONQUEST_RECOVERY.RECONQUEST_EXTRA_DAMAGE;
-  }
-
-  star.infrastructureDamage = Math.min(
-    DEFAULT_CONQUEST_RECOVERY.MAX_INFRA_DAMAGE,
-    (star.infrastructureDamage || 0) + damage
-  );
-
-  // Immediate conquest shock.
-  star.stability = Math.max(
-    0.1,
-    (star.stability || 1.0) - (
-      DEFAULT_CONQUEST_RECOVERY.CONQUEST_STABILITY_SHOCK_BASE +
-      damage * DEFAULT_CONQUEST_RECOVERY.CONQUEST_STABILITY_SHOCK_DAMAGE_FACTOR
-    )
-  );
-  star.strength = Math.max(
-    0.1,
-    star.strength * (1 - (damage * DEFAULT_CONQUEST_RECOVERY.CONQUEST_STRENGTH_SHOCK_FACTOR))
-  );
-  star.administrativeTech = Math.max(
-    0,
-    star.administrativeTech - Math.max(
-      1,
-      Math.round(damage * DEFAULT_CONQUEST_RECOVERY.CONQUEST_ADMIN_TECH_SHOCK_FACTOR)
-    )
-  );
-}
 
 function updateInfrastructureRecovery(star: Star, currentPhase: number): void {
   const currentDamage = star.infrastructureDamage || 0;

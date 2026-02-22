@@ -3,7 +3,7 @@
   background: #001122;
   border: 1px solid #0088cc;
   color: #0ff;
-  font-family: 'Courier New', monospace;
+  font-family: var(--font-main);
   font-size: 12px;
 }
 .filter-select {

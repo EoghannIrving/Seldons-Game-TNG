@@ -1,5 +1,6 @@
 import { Galaxy } from '../src/core/galaxy';
 import { GalaxyConfig, GalaxyShape, GalaxyState } from '../src/core/types';
+import { getDemographicsCount } from '../src/core/demographics-series';
 import { LocalStorageArchiveAdapter } from '../src/utils/archive-storage-adapters';
 import { DEFAULT_GAME_ID, SaveRepositoryV2Impl } from '../src/utils/save-repository-v2';
 import { StorageManager } from '../src/utils/storage';
@@ -92,7 +93,7 @@ function hashState(state: GalaxyState): string {
     zeitgeist: Number(state.zeitgeist.toFixed(6)),
     crisisCount: state.activeCrises.length,
     eventCount: state.events.length,
-    demographicsCount: state.demographics.length,
+    demographicsCount: getDemographicsCount(state.demographics),
     stars,
   };
 

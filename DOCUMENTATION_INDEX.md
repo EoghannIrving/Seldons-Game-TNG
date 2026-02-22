@@ -1,6 +1,6 @@
 # Documentation Index - Seldon's Game TNG
 
-**Last Updated:** 2026-02-17
+**Last Updated:** 2026-02-21
 
 This index helps you navigate the documentation for Seldon's Game TNG. All documents are organized by purpose and current relevance.
 
@@ -13,6 +13,7 @@ This index helps you navigate the documentation for Seldon's Game TNG. All docum
 2. `ROADMAP.md` - What's planned for the future
 3. `Design Documents Archive/ARCHIVE_SCALABILITY_ASSESSMENT.md` - Archive scaling and lossless data strategy
 4. `Implementation History/PHASE_9B_COMPLETE.md` - Latest major feature details
+5. `DEMOGRAPHICS_RETENTION_IMPLEMENTATION_CHECKLIST.md` - Demographics retention implementation and validation plan
 
 ---
 
@@ -22,10 +23,11 @@ This index helps you navigate the documentation for Seldon's Game TNG. All docum
 **Purpose:** Complete record of implemented features
 **Audience:** Developers, users, stakeholders
 **Contents:**
-- All completed phases (0, 1, 2, 3, 5, 6, 7, 8, 9A, 9B)
+- All completed phases (0, 1, 2, 3, 5, 6, 7, 8, 9A, 9B) plus Population-Tech-Power tuning patch (2026-02-18)
+- Simulation overlay update: `Expansion Footprint` layer (stellar-tinted empire spread cloud) added to `VIEW OPTIONS` and renderer pass (2026-02-19)
 - WebUI Review delivery log through Phase G (navigator sitemap, progressive narrative disclosure, internal encyclopedia links, rotating factoids, relationship hover previews)
-- Narrative relevance Phase A/B/C/D delivery (deterministic support ranking, cluster rollups, role-aligned summary evidence mapping, and chapter arc typing with confidence)
-- Current architecture and file structure
+- Narrative relevance Phase A/B/C/D/E delivery (deterministic support ranking, cluster rollups, role-aligned summary evidence mapping, chapter arc typing, and core extraction/memoization hardening)
+- Current architecture and file structure (all core modules, rendering, utils, workers)
 - Configuration parameters in use
 - Performance metrics
 - Success criteria met
@@ -43,13 +45,11 @@ This index helps you navigate the documentation for Seldon's Game TNG. All docum
 **Purpose:** Future development plans
 **Audience:** Developers, contributors
 **Contents:**
-- Immediate priorities (Phase 10 Government & Succession, Phase 11 relationships)
-- Audio and atmosphere plans (Phase 12)
-- Visual polish plans (Phase 13)
-- Multiviewer (Phase 14)
-- 3D View (Phase 15)
-- Deep narrative encyclopedia plans (Phase 16)
-- Content variety and naming systems (Phase 17)
+- Recently completed summary (Population-Tech-Power tuning, WebUI Review, Narrative Relevance)
+- Immediate priority: Phase 10 Government & Succession System
+- Planned: Phase 11 Advanced Relationships
+- Future phases: Audio (12), Visual Polish (13), Multiviewer (14), 3D View (15), Deep Narrative Encyclopedia (16), Content Variety & Naming (17)
+- Experimental concepts (ideation only)
 
 **When to read:**
 - You want to contribute to development
@@ -79,7 +79,7 @@ This index helps you navigate the documentation for Seldon's Game TNG. All docum
 
 ### Design Documents Archive/Narrative_Relevance_and_Arc_Design.md
 **Purpose:** Narrative chapter depth and support-event relevance design + rollout plan
-**Status:** Active design; Phase A implemented (2026-02-17)
+**Status:** ✅ Complete; Phases A–E implemented (2026-02-17)
 **Contents:**
 - Relevance scoring model and deterministic tie-break policy
 - Support-event selection constraints and rationale strategy
@@ -104,6 +104,21 @@ This index helps you navigate the documentation for Seldon's Game TNG. All docum
 **When to read:**
 - You are implementing the population/tech model migration
 - You are tuning star detail capital visual density from simulation stats
+
+---
+
+### DEMOGRAPHICS_RETENTION_IMPLEMENTATION_CHECKLIST.md
+**Purpose:** Execution checklist for long-run demographics retention and memory-safe history handling
+**Status:** Implemented (2026-02-21)
+**Contents:**
+- Compact demographics storage model and migration path
+- Snapshot memory decoupling requirements
+- Chart scaling requirements for 5,000+ phases
+- Regression test and documentation sync checklist
+
+**When to read:**
+- You are modifying demographics storage, save/load, or chart behavior
+- You need acceptance criteria for long-run retention changes
 
 ---
 
@@ -169,9 +184,14 @@ This index helps you navigate the documentation for Seldon's Game TNG. All docum
 - Orbital capital portrait pivot decisions and milestones
 - Regression/build gates tied to implementation phases
 
-### Implementation History/PHASE_5_COMPLETE.md
-**Purpose:** Detailed implementation notes for cyclical history mechanics
-**Status:** ? Complete
+### Design Documents Archive/DETAIL_VIEW_LAYOUT_AND_ENGAGEMENT_REVIEW.md
+**Purpose:** Iteration document for star detail layout, user-friendliness, and engagement improvements
+**Status:** Draft (2026-02-19)
+**Contents:**
+- Current UX findings with code anchors
+- Encyclopedia-first design principles for detail view
+- Out-of-the-box engagement concept backlog
+- Phased iteration plan and validation metrics
 
 ### seldon-game/README.md
 **Purpose:** Build and run instructions
@@ -523,3 +543,5 @@ All documentation uses **GitHub Flavored Markdown** with:
 
 *"The mathematics of psychohistory are precise. The documentation should be too."*
 — Adapted from Hari Seldon
+
+

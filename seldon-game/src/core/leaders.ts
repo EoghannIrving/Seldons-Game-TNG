@@ -7,6 +7,7 @@
 
 import { Star, GalaxyState, EventType } from './types';
 import { SeededRandom } from '../utils/seed-random';
+import { getLeaderTitle } from './government';
 
 // Config
 const LEADER_SPAWN_CHANCE = 0.0005; // 0.05% per star per phase (Very Rare, ~1 per 20 phases @ 100 stars)
@@ -81,20 +82,26 @@ export function updateLeaders(star: Star, state: GalaxyState): { text: string; t
     const nameIndex = Math.floor(rng.random() * LEADER_NAMES.length);
     const name = LEADER_NAMES[nameIndex] || 'Unknown Hero';
     
+    // Phase 10: Title derived from government type
+    const titleSeed = uniqueSeed + nameIndex * 31;
+    const title = star.governmentType ? getLeaderTitle(star.governmentType, titleSeed) : undefined;
+
     star.geniusLeader = {
       name,
       bonusMultiplier: 2.0, // Double capacity!
-      expiresAt: phase + duration
+      expiresAt: phase + duration,
+      title,
     };
 
+    const titlePrefix = title ? `${title} ` : '';
     star.history.push({
       type: EventType.LeaderSpawn,
       phase,
-      description: `A genius leader, ${name}, has risen to power! Administrative efficiency doubles.`
+      description: `${titlePrefix}${name} has risen to power! Administrative efficiency doubles.`
     });
-    
+
     return {
-      text: `A Great Leader, ${name}, has risen on ${star.name}!`,
+      text: `${titlePrefix}${name} has risen on ${star.name}!`,
       type: 'success',
       starId: star.id
     };

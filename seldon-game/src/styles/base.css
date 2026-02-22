@@ -13,7 +13,10 @@
   --panel-bg: rgba(0, 20, 40, 0.9);
   --modal-bg: rgba(0, 0, 0, 0.85);
   --modal-content-bg: linear-gradient(135deg, #001122 0%, #002244 100%);
-  --font-main: 'Courier New', monospace;
+  --font-ui: "Aptos", "Segoe UI", "Noto Sans", "Helvetica Neue", Arial, sans-serif;
+  --font-reading: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+  --font-mono: "Cascadia Mono", "Consolas", "Courier New", monospace;
+  --font-main: var(--font-ui);
   --shadow-color: rgba(0, 255, 255, 0.3);
   --archive-tab-active-bg: #334455;
   --archive-event-bg: rgba(255, 255, 255, 0.02);
@@ -34,7 +37,10 @@ body.theme-zx {
   --panel-bg: #000000; /* Solid black */
   --modal-bg: rgba(0, 0, 0, 0.9);
   --modal-content-bg: #000000;
-  --font-main: 'Courier New', monospace; /* Keep Courier, closest to system font */
+  --font-ui: "Cascadia Mono", "Consolas", "Courier New", monospace;
+  --font-reading: "Cascadia Mono", "Consolas", "Courier New", monospace;
+  --font-mono: "Cascadia Mono", "Consolas", "Courier New", monospace;
+  --font-main: var(--font-ui); /* Keep mono presentation in ZX theme */
   --shadow-color: transparent; /* No soft shadows */
   --archive-tab-active-bg: #303000;
   --archive-event-bg: rgba(255, 255, 0, 0.08);
@@ -226,8 +232,14 @@ body {
   background: #001122;
   border: 1px solid #0088cc;
   color: #0ff;
-  font-family: 'Courier New', monospace;
+  font-family: var(--font-main);
   font-size: 12px;
+}
+
+#encyclopediaWorkspace,
+#encyclopediaWorkspace p,
+#encyclopediaWorkspace li {
+  font-family: var(--font-reading);
 }
 .filter-select {
   background: #001122;

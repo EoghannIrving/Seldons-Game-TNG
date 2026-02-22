@@ -1,0 +1,153 @@
+Phase 1: 636 pairs checked, 93 formed. Total alliances: 93
+Phase 21: 106 pairs checked, 0 formed. Total alliances: 52
+Phase 41: 86 pairs checked, 0 formed. Total alliances: 49
+Phase 61: 73 pairs checked, 0 formed. Total alliances: 45
+Phase 81: 127 pairs checked, 3 formed. Total alliances: 56
+Phase 101: 244 pairs checked, 4 formed. Total alliances: 65
+Phase 121: 209 pairs checked, 0 formed. Total alliances: 67
+Phase 141: 368 pairs checked, 14 formed. Total alliances: 78
+Phase 161: 738 pairs checked, 8 formed. Total alliances: 98
+Phase 181: 563 pairs checked, 15 formed. Total alliances: 94
+Phase 201: 527 pairs checked, 17 formed. Total alliances: 97
+Phase 221: 761 pairs checked, 13 formed. Total alliances: 126
+Phase 241: 1260 pairs checked, 24 formed. Total alliances: 167
+Phase 261: 946 pairs checked, 17 formed. Total alliances: 163
+Phase 281: 1027 pairs checked, 15 formed. Total alliances: 157
+Phase 301: 1262 pairs checked, 23 formed. Total alliances: 159
+Phase 321: 1049 pairs checked, 13 formed. Total alliances: 158
+Phase 341: 1118 pairs checked, 7 formed. Total alliances: 154
+Phase 361: 1080 pairs checked, 29 formed. Total alliances: 155
+Phase 381: 980 pairs checked, 12 formed. Total alliances: 160
+Phase 401: 684 pairs checked, 13 formed. Total alliances: 129
+Phase 421: 948 pairs checked, 16 formed. Total alliances: 147
+Phase 441: 1277 pairs checked, 35 formed. Total alliances: 189
+Phase 461: 800 pairs checked, 11 formed. Total alliances: 126
+Phase 481: 1007 pairs checked, 9 formed. Total alliances: 141
+Phase 501: 824 pairs checked, 30 formed. Total alliances: 119
+Phase 521: 660 pairs checked, 11 formed. Total alliances: 110
+Phase 541: 665 pairs checked, 22 formed. Total alliances: 114
+Phase 561: 1128 pairs checked, 24 formed. Total alliances: 169
+Phase 581: 1473 pairs checked, 15 formed. Total alliances: 207
+Phase 601: 1076 pairs checked, 29 formed. Total alliances: 154
+Phase 621: 844 pairs checked, 12 formed. Total alliances: 144
+Phase 641: 1286 pairs checked, 27 formed. Total alliances: 185
+Phase 661: 930 pairs checked, 11 formed. Total alliances: 147
+Phase 681: 902 pairs checked, 10 formed. Total alliances: 148
+Phase 701: 995 pairs checked, 19 formed. Total alliances: 153
+Phase 721: 1231 pairs checked, 26 formed. Total alliances: 198
+Phase 741: 1087 pairs checked, 25 formed. Total alliances: 186
+Phase 761: 972 pairs checked, 16 formed. Total alliances: 167
+Phase 781: 1064 pairs checked, 15 formed. Total alliances: 162
+Phase 801: 510 pairs checked, 17 formed. Total alliances: 107
+Phase 821: 678 pairs checked, 9 formed. Total alliances: 120
+Phase 841: 823 pairs checked, 12 formed. Total alliances: 124
+Phase 861: 800 pairs checked, 18 formed. Total alliances: 134
+Phase 881: 622 pairs checked, 15 formed. Total alliances: 113
+Phase 901: 544 pairs checked, 18 formed. Total alliances: 102
+Phase 921: 501 pairs checked, 7 formed. Total alliances: 83
+Phase 941: 550 pairs checked, 6 formed. Total alliances: 105
+Phase 961: 923 pairs checked, 10 formed. Total alliances: 108
+Phase 981: 1082 pairs checked, 8 formed. Total alliances: 134
+Phase 1001: 1024 pairs checked, 5 formed. Total alliances: 118
+Phase 1021: 664 pairs checked, 4 formed. Total alliances: 108
+Phase 1041: 781 pairs checked, 6 formed. Total alliances: 113
+Phase 1061: 916 pairs checked, 32 formed. Total alliances: 147
+Phase 1081: 859 pairs checked, 20 formed. Total alliances: 132
+Phase 1101: 745 pairs checked, 8 formed. Total alliances: 120
+Phase 1121: 736 pairs checked, 10 formed. Total alliances: 123
+Phase 1141: 626 pairs checked, 12 formed. Total alliances: 97
+Phase 1161: 645 pairs checked, 4 formed. Total alliances: 102
+Phase 1181: 572 pairs checked, 6 formed. Total alliances: 95
+
+=== Detailed collapse analysis starting at Ph1200 ===
+
+Phase 1201: 448 pairs checked, 6 formed. Total alliances: 73
+Ph1201: Shaula controls 8 major systems
+  Ruler: vitality=0.61, decadence=0.29, darkAge=true, severeDarkAge=true
+  AdminLoad: 0.500
+  Radole: loyalty=0.124, tenure=285ph, norm=0.043, net=-0.0571/ph, revThresh=-0.25, canRevolt=no
+  Lagash: loyalty=-0.098, tenure=63ph, norm=0.109, net=-0.0730/ph, revThresh=-0.15, canRevolt=no
+  Aldebaran: loyalty=-0.137, tenure=214ph, norm=0.065, net=-0.0598/ph, revThresh=-0.25, canRevolt=no
+  Pollux: loyalty=0.365, tenure=557ph, norm=0.080, net=-0.0546/ph, revThresh=-0.40, canRevolt=no
+  Adhara: loyalty=-0.151, tenure=190ph, norm=0.082, net=-0.0618/ph, revThresh=-0.25, canRevolt=no
+  Rastaban: loyalty=0.002, tenure=60ph, norm=0.108, net=-0.0730/ph, revThresh=-0.15, canRevolt=no
+  Mebsuta: loyalty=-0.300, tenure=190ph, norm=0.112, net=-0.0654/ph, revThresh=-0.25, canRevolt=YES
+
+Ph1202: Shaula controls 8 major systems
+  Ruler: vitality=0.61, decadence=0.29, darkAge=true, severeDarkAge=true
+  AdminLoad: 0.500
+  Radole: loyalty=0.093, tenure=286ph, norm=0.043, net=-0.0571/ph, revThresh=-0.25, canRevolt=no
+  Lagash: loyalty=-0.150, tenure=64ph, norm=0.109, net=-0.0730/ph, revThresh=-0.15, canRevolt=YES
+  Aldebaran: loyalty=-0.171, tenure=215ph, norm=0.065, net=-0.0598/ph, revThresh=-0.25, canRevolt=no
+  Pollux: loyalty=0.327, tenure=558ph, norm=0.080, net=-0.0546/ph, revThresh=-0.40, canRevolt=no
+  Adhara: loyalty=-0.186, tenure=191ph, norm=0.082, net=-0.0618/ph, revThresh=-0.25, canRevolt=no
+  Rastaban: loyalty=-0.044, tenure=61ph, norm=0.108, net=-0.0730/ph, revThresh=-0.15, canRevolt=no
+  Mebsuta: loyalty=-0.339, tenure=191ph, norm=0.112, net=-0.0654/ph, revThresh=-0.25, canRevolt=YES
+
+Ph1203: Shaula controls 8 major systems
+  Ruler: vitality=0.61, decadence=0.29, darkAge=true, severeDarkAge=true
+  AdminLoad: 0.500
+  Radole: loyalty=0.052, tenure=287ph, norm=0.043, net=-0.0571/ph, revThresh=-0.25, canRevolt=no
+  Lagash: loyalty=-0.212, tenure=65ph, norm=0.109, net=-0.0730/ph, revThresh=-0.15, canRevolt=YES
+  Aldebaran: loyalty=-0.214, tenure=216ph, norm=0.065, net=-0.0598/ph, revThresh=-0.25, canRevolt=no
+  Pollux: loyalty=0.280, tenure=559ph, norm=0.080, net=-0.0546/ph, revThresh=-0.40, canRevolt=no
+  Adhara: loyalty=-0.232, tenure=192ph, norm=0.082, net=-0.0618/ph, revThresh=-0.25, canRevolt=no
+  Rastaban: loyalty=-0.101, tenure=62ph, norm=0.108, net=-0.0730/ph, revThresh=-0.15, canRevolt=no
+  Mebsuta: loyalty=-0.388, tenure=192ph, norm=0.112, net=-0.0654/ph, revThresh=-0.25, canRevolt=YES
+
+Ph1204: Shaula controls 8 major systems
+  Ruler: vitality=0.62, decadence=0.29, darkAge=true, severeDarkAge=true
+  AdminLoad: 0.500
+  Radole: loyalty=0.019, tenure=288ph, norm=0.043, net=-0.0571/ph, revThresh=-0.25, canRevolt=no
+  Lagash: loyalty=-0.266, tenure=66ph, norm=0.109, net=-0.0730/ph, revThresh=-0.15, canRevolt=YES
+  Aldebaran: loyalty=-0.250, tenure=217ph, norm=0.065, net=-0.0598/ph, revThresh=-0.25, canRevolt=YES
+  Pollux: loyalty=0.240, tenure=560ph, norm=0.080, net=-0.0546/ph, revThresh=-0.40, canRevolt=no
+  Adhara: loyalty=-0.270, tenure=193ph, norm=0.082, net=-0.0618/ph, revThresh=-0.25, canRevolt=YES
+  Rastaban: loyalty=-0.150, tenure=63ph, norm=0.108, net=-0.0730/ph, revThresh=-0.15, canRevolt=no
+  Mebsuta: loyalty=-0.430, tenure=193ph, norm=0.112, net=-0.0654/ph, revThresh=-0.25, canRevolt=YES
+
+Phase 1221: 719 pairs checked, 6 formed. Total alliances: 100
+Phase 1241: 762 pairs checked, 16 formed. Total alliances: 112
+Phase 1261: 834 pairs checked, 3 formed. Total alliances: 120
+Ph1277: Shaula controls 12 major systems
+  Ruler: vitality=0.76, decadence=0.25, darkAge=false, severeDarkAge=false
+  AdminLoad: 0.500
+  Nephelos: loyalty=0.013, tenure=1ph, norm=0.125, net=-0.0150/ph, revThresh=-0.45, canRevolt=no
+  Gammer: loyalty=0.010, tenure=1ph, norm=0.147, net=-0.0176/ph, revThresh=-0.45, canRevolt=no
+  Rigel: loyalty=-0.014, tenure=1ph, norm=0.172, net=-0.0207/ph, revThresh=-0.45, canRevolt=no
+  Adhara: loyalty=0.010, tenure=1ph, norm=0.082, net=-0.0098/ph, revThresh=-0.45, canRevolt=no
+  Alphecca: loyalty=-0.007, tenure=1ph, norm=0.118, net=-0.0141/ph, revThresh=-0.45, canRevolt=no
+  Alpherg: loyalty=-0.006, tenure=1ph, norm=0.106, net=-0.0127/ph, revThresh=-0.45, canRevolt=no
+  Rana: loyalty=-0.012, tenure=1ph, norm=0.158, net=-0.0189/ph, revThresh=-0.45, canRevolt=no
+  Rigel: loyalty=0.003, tenure=1ph, norm=0.135, net=-0.0162/ph, revThresh=-0.45, canRevolt=no
+  Suhail: loyalty=-0.012, tenure=1ph, norm=0.155, net=-0.0186/ph, revThresh=-0.45, canRevolt=no
+  Alzirr: loyalty=-0.015, tenure=1ph, norm=0.178, net=-0.0214/ph, revThresh=-0.45, canRevolt=no
+  Atik: loyalty=0.011, tenure=1ph, norm=0.079, net=-0.0095/ph, revThresh=-0.45, canRevolt=no
+
+Ph1278: Shaula controls 8 major systems
+  Ruler: vitality=0.76, decadence=0.25, darkAge=false, severeDarkAge=false
+  AdminLoad: 0.500
+  Nephelos: loyalty=0.022, tenure=2ph, norm=0.125, net=-0.0150/ph, revThresh=-0.45, canRevolt=no
+  Gammer: loyalty=0.017, tenure=2ph, norm=0.147, net=-0.0176/ph, revThresh=-0.45, canRevolt=no
+  Adhara: loyalty=0.016, tenure=2ph, norm=0.082, net=-0.0098/ph, revThresh=-0.45, canRevolt=no
+  Alphecca: loyalty=-0.018, tenure=2ph, norm=0.118, net=-0.0141/ph, revThresh=-0.45, canRevolt=no
+  Alpherg: loyalty=-0.015, tenure=2ph, norm=0.106, net=-0.0127/ph, revThresh=-0.45, canRevolt=no
+  Rigel: loyalty=0.003, tenure=2ph, norm=0.135, net=-0.0162/ph, revThresh=-0.45, canRevolt=no
+  Atik: loyalty=0.019, tenure=2ph, norm=0.079, net=-0.0095/ph, revThresh=-0.45, canRevolt=no
+
+Ph1279: Shaula controls 11 major systems
+  Ruler: vitality=0.77, decadence=0.24, darkAge=false, severeDarkAge=false
+  AdminLoad: 0.500
+  Terminus: loyalty=-0.018, tenure=1ph, norm=0.211, net=-0.0253/ph, revThresh=-0.45, canRevolt=no
+  Nephelos: loyalty=0.037, tenure=3ph, norm=0.125, net=-0.0150/ph, revThresh=-0.45, canRevolt=no
+  Gammer: loyalty=0.029, tenure=3ph, norm=0.147, net=-0.0176/ph, revThresh=-0.45, canRevolt=no
+  Adhara: loyalty=0.027, tenure=3ph, norm=0.082, net=-0.0098/ph, revThresh=-0.45, canRevolt=no
+  Alphecca: loyalty=-0.024, tenure=3ph, norm=0.118, net=-0.0141/ph, revThresh=-0.45, canRevolt=no
+  Alpherg: loyalty=-0.021, tenure=3ph, norm=0.106, net=-0.0127/ph, revThresh=-0.45, canRevolt=no
+  Rana: loyalty=-0.012, tenure=1ph, norm=0.158, net=-0.0189/ph, revThresh=-0.45, canRevolt=no
+  Rigel: loyalty=0.008, tenure=3ph, norm=0.135, net=-0.0162/ph, revThresh=-0.45, canRevolt=no
+  Suhail: loyalty=-0.011, tenure=1ph, norm=0.155, net=-0.0186/ph, revThresh=-0.45, canRevolt=no
+  Atik: loyalty=0.032, tenure=3ph, norm=0.079, net=-0.0095/ph, revThresh=-0.45, canRevolt=no
+
+Phase 1281: 757 pairs checked, 14 formed. Total alliances: 112
+Phase 1301: 558 pairs checked, 3 formed. Total alliances: 112

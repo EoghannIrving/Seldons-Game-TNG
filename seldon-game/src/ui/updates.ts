@@ -97,7 +97,7 @@ export function updateNewsFeed(galaxy: any) {
     // Only show names for first 3 stars to avoid clutter
     const displayCount = 3;
     const targets = event.targetStarIds.slice(0, displayCount);
-    let starNames = targets.map(id => galaxy.getStar(id)?.name || id).join(', ');
+    let starNames = targets.map((id: string) => galaxy.getStar(id)?.name || id).join(', ');
     if (event.targetStarIds.length > displayCount) {
       starNames += ` +${event.targetStarIds.length - displayCount} more`;
     }

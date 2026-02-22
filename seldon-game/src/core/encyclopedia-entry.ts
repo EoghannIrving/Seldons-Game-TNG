@@ -1,4 +1,5 @@
-import { GalaxyState, Star, StarTier, Trait } from './types';
+import { GalaxyState, Star, StarTier, Trait, GovernmentType, EventType } from './types';
+import { getIdeologyLabel, getGovernmentName } from './government';
 import { STAR_TYPE_PROPERTIES } from './star-properties';
 
 export type EntryDataState = 'missing' | 'partial' | 'complete';
@@ -11,6 +12,7 @@ export type EntrySectionKind =
   | 'governance'
   | 'relations_summary'
   | 'dynasty_family_tree'
+  | 'government_history'   // Phase 10: Regime timeline
   | 'ecology_profile'
   | 'capital_administration'
   | 'capital_survey_profile';
@@ -55,7 +57,8 @@ export interface StarEncyclopediaEntry {
 interface CoreStatusPayload {
   tier: StarTier;
   starType: string;
-  epoch: 'imperial' | 'communal';
+  governmentType: string;
+  ideologyLabel: string;
   regionId?: string;
   regionName: string;
   traits: string[];
@@ -117,6 +120,18 @@ interface DynastyFamilyTreePayload {
     fromRulerName: string;
     toRulerName: string;
     reason: string;
+    fromDynastId?: string;
+    source?: 'government_succession' | 'ruler_change' | 'unknown';
+    sourceDetail?: 'internal' | 'conquest' | 'revolt' | 'challenger' | 'unknown';
+  }[];
+  rulerChanges?: {
+    phase: number;
+    fromRulerName: string;
+    toRulerName: string;
+    reason: string;
+    fromDynastId?: string;
+    source?: 'government_succession' | 'ruler_change' | 'unknown';
+    sourceDetail?: 'internal' | 'conquest' | 'revolt' | 'challenger' | 'unknown';
   }[];
   tree?: FamilyTreeNode;
 }
@@ -128,7 +143,10 @@ export interface FamilyTreeNode {
   isLegitimized: boolean;
   birthPhase: number;
   deathPhase?: number;
-  parents: FamilyTreeNode[];
+  traits: string[];            // inherited dynasty traits for display
+  parents: FamilyTreeNode[];   // ancestors (up to 3 generations up)
+  children: FamilyTreeNode[];  // direct children (up to 2 generations down, max 6 shown)
+  childrenTotal: number;       // actual child count before cap (for "...and N more heirs" display)
   spouse?: FamilyTreeNode;
 }
 
@@ -151,55 +169,139 @@ function getNode(
     isLegitimized: dynast.isLegitimized,
     birthPhase: dynast.birthPhase,
     deathPhase: dynast.deathPhase,
+    traits: [...dynast.traits],
     parents: [],
+    children: [],
+    childrenTotal: 0,
     spouse: undefined,
   };
   memo.set(dynastId, node);
   return node;
 }
 
-function buildTree(
+/** Max displayed children per node before "...and N more heirs" truncation. */
+const MAX_CHILDREN_DISPLAY = 6;
+/** How many generations of ancestors to climb (3 = great-grandparent). */
+const ANCESTOR_DEPTH = 3;
+/** How many generations of descendants to recurse into (2 = grandchildren). */
+const DESCENDANT_DEPTH = 2;
+
+/**
+ * Build ancestor chain upward from dynastId, capped at ANCESTOR_DEPTH.
+ * Each level also resolves spouse and children (1 level deep only for ancestors).
+ */
+function buildAncestors(
   dynastId: string,
   galaxyState: GalaxyState,
-  memo: Map<string, FamilyTreeNode>
+  memo: Map<string, FamilyTreeNode>,
+  depthRemaining: number
 ): FamilyTreeNode | undefined {
   const relationships = galaxyState.dynasticRelationships || [];
   const rootNode = getNode(dynastId, galaxyState, memo);
   if (!rootNode) return undefined;
 
-  const parentRelationships = relationships.filter(
-    (r) => r.toDynastId === dynastId && r.type === 'parent'
-  );
-  for (const rel of parentRelationships) {
-    const parentNode = buildTree(rel.fromDynastId, galaxyState, memo);
-    if (parentNode) {
-      rootNode.parents.push(parentNode);
-    }
-  }
-
-  const spouseRelationship = relationships.find(
+  // Spouse
+  const spouseRel = relationships.find(
     (r) =>
       (r.fromDynastId === dynastId || r.toDynastId === dynastId) &&
       r.type === 'spouse'
   );
-  if (spouseRelationship) {
-    const spouseId =
-      spouseRelationship.fromDynastId === dynastId
-        ? spouseRelationship.toDynastId
-        : spouseRelationship.fromDynastId;
+  if (spouseRel) {
+    const spouseId = spouseRel.fromDynastId === dynastId
+      ? spouseRel.toDynastId
+      : spouseRel.fromDynastId;
     rootNode.spouse = getNode(spouseId, galaxyState, memo);
+  }
+
+  // Ancestors
+  if (depthRemaining > 0) {
+    const parentRels = relationships.filter(
+      (r) => r.toDynastId === dynastId && r.type === 'parent'
+    );
+    for (const rel of parentRels) {
+      const parentNode = buildAncestors(rel.fromDynastId, galaxyState, memo, depthRemaining - 1);
+      if (parentNode) {
+        rootNode.parents.push(parentNode);
+      }
+    }
   }
 
   return rootNode;
 }
 
-function findAncestors(
+/**
+ * Populate children downward from dynastId, capped at DESCENDANT_DEPTH.
+ * Children are sorted by birth phase (oldest first).
+ * Truncated to MAX_CHILDREN_DISPLAY; childrenTotal records the real count.
+ */
+function buildDescendants(
   dynastId: string,
   galaxyState: GalaxyState,
+  memo: Map<string, FamilyTreeNode>,
+  depthRemaining: number
+): void {
+  if (depthRemaining <= 0) return;
+  const relationships = galaxyState.dynasticRelationships || [];
+  const node = memo.get(dynastId);
+  if (!node) return;
 
+  const childRels = relationships.filter(
+    (r) => r.fromDynastId === dynastId && r.type === 'parent'
+  );
+
+  // Sort by birth phase so children appear oldest-first
+  const children = childRels
+    .map((r) => galaxyState.dynasts.get(r.toDynastId))
+    .filter(Boolean)
+    .sort((a, b) => (a!.birthPhase) - (b!.birthPhase));
+
+  node.childrenTotal = children.length;
+  const displayed = children.slice(0, MAX_CHILDREN_DISPLAY);
+
+  for (const childDynast of displayed) {
+    if (!childDynast) continue;
+    // Reuse existing memo node or create a fresh child node
+    let childNode = memo.get(childDynast.id);
+    if (!childNode) {
+      childNode = getNode(childDynast.id, galaxyState, memo);
+    }
+    if (!childNode) continue;
+
+    // Attach spouse for the child node
+    const spouseRel = relationships.find(
+      (r) =>
+        (r.fromDynastId === childDynast.id || r.toDynastId === childDynast.id) &&
+        r.type === 'spouse'
+    );
+    if (spouseRel && !childNode.spouse) {
+      const spouseId = spouseRel.fromDynastId === childDynast.id
+        ? spouseRel.toDynastId
+        : spouseRel.fromDynastId;
+      childNode.spouse = getNode(spouseId, galaxyState, memo);
+    }
+
+    node.children.push(childNode);
+
+    // Recurse one more generation down
+    buildDescendants(childDynast.id, galaxyState, memo, depthRemaining - 1);
+  }
+}
+
+/**
+ * Build the full bidirectional family tree centred on the current ruler.
+ * - Ancestors: up to ANCESTOR_DEPTH (3) generations up
+ * - Descendants: up to DESCENDANT_DEPTH (2) generations down
+ * - Spouse resolved at every level
+ */
+export function buildFamilyTree(
+  dynastId: string,
+  galaxyState: GalaxyState,
 ): FamilyTreeNode | undefined {
   const memo = new Map<string, FamilyTreeNode>();
-  return buildTree(dynastId, galaxyState, memo);
+  const root = buildAncestors(dynastId, galaxyState, memo, ANCESTOR_DEPTH);
+  if (!root) return undefined;
+  buildDescendants(dynastId, galaxyState, memo, DESCENDANT_DEPTH);
+  return root;
 }
 
 interface EcologyProfilePayload {
@@ -278,7 +380,8 @@ export function buildCoreStatusSection(star: Star, galaxyState: GalaxyState): En
     payload: {
       tier: star.tier,
       starType,
-      epoch: star.epoch === 0 ? 'imperial' : 'communal',
+      governmentType: getGovernmentName(star.governmentType ?? GovernmentType.Autocracy),
+      ideologyLabel: getIdeologyLabel(star.ideology ?? 0),
       regionId: star.regionId,
       regionName,
       traits: star.traits.map((trait) => toTitleCase(trait)),
@@ -295,7 +398,15 @@ export function buildCoreStatusSection(star: Star, galaxyState: GalaxyState): En
 
 export function buildGovernanceSection(star: Star, galaxyState: GalaxyState): EntrySection<GovernancePayload> {
   const isIndependent = star.ruler === star.id;
-  const ruler = star.ruler ? galaxyState.stars.get(star.ruler) : null;
+  const rulerStar = star.ruler ? galaxyState.stars.get(star.ruler) : null;
+
+  // Resolve ruler display name from the Dynast system when possible,
+  // falling back to the star name for legacy/bootstrap entries.
+  const resolveRulerName = (s: Star | null | undefined): string => {
+    if (!s) return 'Unknown';
+    const dynast = s.currentDynastId ? galaxyState.dynasts?.get(s.currentDynastId) : undefined;
+    return dynast?.name ?? s.name;
+  };
 
   return {
     id: 'governance',
@@ -307,7 +418,7 @@ export function buildGovernanceSection(star: Star, galaxyState: GalaxyState): En
     payload: {
       isIndependent,
       rulerId: star.ruler,
-      rulerName: isIndependent ? star.name : ruler?.name ?? 'Unknown',
+      rulerName: isIndependent ? resolveRulerName(star) : resolveRulerName(rulerStar),
       subjectCount: star.subjects.length,
       vitality: star.vitality,
       loyalty: isIndependent ? undefined : star.loyalty,
@@ -404,13 +515,32 @@ export function buildDynastyFamilyTreeSection(
     };
   }
 
-  const lineageRecords = (galaxyState.dynastySuccessionRecords || []).filter(
-    (r) => r.starId === star.id
-  );
+  const archivedLineageRecords = galaxyState.dynastySuccessionArchiveByStar?.[star.id] || [];
+  const rawLineageRecords = archivedLineageRecords.length > 0
+    ? archivedLineageRecords
+    : (galaxyState.dynastySuccessionRecords || []).filter(
+        (r) => r.starId === star.id
+      );
+  const seenLineageKeys = new Set<string>();
+  const lineageRecords = rawLineageRecords.filter((r) => {
+    const key = [
+      r.starId,
+      r.phase,
+      r.fromDynastId ?? '',
+      r.toDynastId ?? '',
+      r.reason,
+      r.contested ? '1' : '0',
+      r.source ?? '',
+      r.sourceDetail ?? '',
+    ].join('|');
+    if (seenLineageKeys.has(key)) return false;
+    seenLineageKeys.add(key);
+    return true;
+  });
 
-  const tree = findAncestors(rulingDynast.id, galaxyState);
+  const tree = buildFamilyTree(rulingDynast.id, galaxyState);
   const hasLineageData = lineageRecords.length > 0;
-  const hasTreeData = tree && (tree.parents.length > 0 || !!tree.spouse);
+  const hasTreeData = tree && (tree.parents.length > 0 || tree.children.length > 0 || !!tree.spouse);
   const dataState: EntryDataState = hasTreeData
     ? 'complete'
     : hasLineageData
@@ -434,13 +564,39 @@ export function buildDynastyFamilyTreeSection(
             .map((r) => {
               const from = r.fromDynastId ? galaxyState.dynasts.get(r.fromDynastId) : null;
               const to = r.toDynastId ? galaxyState.dynasts.get(r.toDynastId) : null;
+              const source = r.source ?? 'unknown';
+              const sourceDetail = r.sourceDetail ?? (source === 'government_succession' ? 'internal' : 'unknown');
               return {
                 phase: r.phase,
                 fromRulerName: from?.name || 'Unknown',
                 toRulerName: to?.name || 'Unknown',
                 reason: r.reason,
+                fromDynastId: r.fromDynastId,
+                source,
+                sourceDetail,
               };
             })
+            .filter((r) => r.source === 'government_succession')
+            .sort((a, b) => b.phase - a.phase)
+        : [],
+      rulerChanges: hasLineageData
+        ? lineageRecords
+            .map((r) => {
+              const from = r.fromDynastId ? galaxyState.dynasts.get(r.fromDynastId) : null;
+              const to = r.toDynastId ? galaxyState.dynasts.get(r.toDynastId) : null;
+              const source = r.source ?? 'unknown';
+              const sourceDetail = r.sourceDetail ?? 'unknown';
+              return {
+                phase: r.phase,
+                fromRulerName: from?.name || 'Unknown',
+                toRulerName: to?.name || 'Unknown',
+                reason: r.reason,
+                fromDynastId: r.fromDynastId,
+                source,
+                sourceDetail,
+              };
+            })
+            .filter((r) => r.source !== 'government_succession')
             .sort((a, b) => b.phase - a.phase)
         : [],
     },
@@ -665,6 +821,87 @@ export function buildCapitalSurveyProfileSection(star: Star): EntrySection {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Phase 10: Government History Section
+// ---------------------------------------------------------------------------
+
+interface GovernmentRegimeEntry {
+  governmentType: string;   // Human-readable name
+  startPhase: number;
+  endPhase?: number;        // undefined = currently active
+  houseName: string;
+  successionCount: number;
+  endReason?: string;
+  durationPhases?: number;  // Computed for display
+  convertedBy?: string;     // Phase 10F: Name of Theocracy that peacefully converted this star
+}
+
+interface GovernmentHistoryPayload {
+  currentGovernment: string;
+  currentIdeology: string;
+  currentHouseName: string;
+  currentRulerName?: string;
+  regimes: GovernmentRegimeEntry[];
+}
+
+export function buildGovernmentHistorySection(
+  star: Star,
+  galaxyState: GalaxyState
+): EntrySection<GovernmentHistoryPayload> {
+  const govHistory = galaxyState.governmentHistory?.get(star.id) || [];
+  const currentDynast = star.currentDynastId ? galaxyState.dynasts.get(star.currentDynastId) : undefined;
+  const currentDynasty = currentDynast ? galaxyState.dynasties.get(currentDynast.dynastyId) : undefined;
+
+  // Build a lookup: for each regime that ended via Peaceful Ideological Conversion,
+  // find the converter star name from the star's history events.
+  const conversionsByEndPhase = new Map<number, string>();
+  for (const evt of star.history) {
+    if (
+      evt.type === EventType.GovernmentTransition &&
+      evt.metadata?.endReason === 'Peaceful Ideological Conversion' &&
+      evt.metadata?.converterName &&
+      !evt.metadata?.isConverterRecord
+    ) {
+      conversionsByEndPhase.set(evt.phase, evt.metadata.converterName as string);
+    }
+  }
+
+  const regimes: GovernmentRegimeEntry[] = govHistory.map((record) => ({
+    governmentType: getGovernmentName(record.governmentType),
+    startPhase: record.startPhase,
+    endPhase: record.endPhase,
+    houseName: record.houseName,
+    successionCount: record.successionCount,
+    endReason: record.endReason,
+    durationPhases: record.endPhase !== undefined
+      ? record.endPhase - record.startPhase
+      : galaxyState.phase - record.startPhase,
+    convertedBy: record.endPhase !== undefined
+      ? conversionsByEndPhase.get(record.endPhase)
+      : undefined,
+  }));
+
+  // Most recent first for display
+  const orderedRegimes = [...regimes].reverse();
+
+  return {
+    id: 'government-history',
+    title: 'Lineage & Government History',
+    kind: 'government_history',
+    priority: 42, // Just after dynasty_family_tree (40)
+    dataVersion: 1,
+    dataState: govHistory.length > 1 ? 'complete' : 'partial',
+    payload: {
+      currentGovernment: getGovernmentName(star.governmentType ?? GovernmentType.Autocracy),
+      currentIdeology: getIdeologyLabel(star.ideology ?? 0),
+      currentHouseName: currentDynasty?.houseName ?? `${star.name} Line`,
+      currentRulerName: currentDynast?.name,
+      regimes: orderedRegimes,
+    },
+    emptyState: 'No government records found for this system.',
+  };
+}
+
 export function buildStarEncyclopediaEntry(star: Star, galaxyState: GalaxyState): StarEncyclopediaEntry {
   const sections: EntrySection<unknown>[] = [
     buildCoreStatusSection(star, galaxyState),
@@ -672,6 +909,7 @@ export function buildStarEncyclopediaEntry(star: Star, galaxyState: GalaxyState)
     buildGovernanceSection(star, galaxyState),
     buildRelationsSummarySection(star, galaxyState),
     buildDynastyFamilyTreeSection(star, galaxyState),
+    buildGovernmentHistorySection(star, galaxyState),
     buildEcologyProfileSection(star),
     buildCapitalAdministrationSection(star),
     buildCapitalSurveyProfileSection(star),

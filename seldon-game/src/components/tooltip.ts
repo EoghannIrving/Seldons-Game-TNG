@@ -1,6 +1,7 @@
 import { Star } from '../core/types';
 import { STAR_TYPE_PROPERTIES } from '../core/star-properties';
 import { TRAIT_PROPERTIES } from '../core/star-properties';
+import { getIdeologyLabel, getGovernmentName } from '../core/government';
 
 let tooltipElement: HTMLDivElement | null = null;
 
@@ -76,10 +77,12 @@ export function showTooltip(star: Star, x: number, y: number, galaxy?: any) {
     const rulerStar = star.ruler && galaxy ? galaxy.getStar(star.ruler) : null;
     const rulerName = isIndependent ? 'INDEPENDENT' : rulerStar?.name || 'Unknown';
 
-    // Epoch display
-    const epochIcon = star.epoch === 0 ? '👑' : '🤝';
-    const epochName = star.epoch === 0 ? 'Imperial' : 'Communal';
-    const epochColor = star.epoch === 0 ? '#ff8844' : '#88ff88';
+    // Phase 10: Government & Ideology display (replaces epoch)
+    const govName = star.governmentType ? getGovernmentName(star.governmentType) : 'Unknown';
+    const ideologyLabel = star.ideology !== undefined ? getIdeologyLabel(star.ideology) : 'Unknown';
+    const ideologyColor = star.ideology !== undefined
+      ? (star.ideology < -0.33 ? '#ff8844' : star.ideology > 0.33 ? '#88ff88' : '#88bbdd')
+      : '#88bbdd';
 
     // Traits (show up to 3)
     const topTraits = star.traits.slice(0, 3);
@@ -147,13 +150,14 @@ export function showTooltip(star: Star, x: number, y: number, galaxy?: any) {
           <div style="margin-top: 6px; padding-top: 6px; border-top: 1px solid #334455; font-size: 10px; color: #99bbdd;">
             Recent Events:<br>
             ${recentEvents.map(e => {
-              const icon = e.type === 'crisis' ? '⚠️' :
-                          e.type === 'war' ? '⚔️' :
-                          e.type === 'leader' ? '👑' :
-                          e.type === 'rebellion' ? '✊' :
-                          e.type === 'plague' ? '☄️' :
-                          e.type === 'conquest' ? '⚔️' :
-                          e.type === 'independence' ? '🗽' : '•';
+              const eType = e.type as string;
+              const icon = eType === 'crisis' ? '⚠️' :
+                          eType === 'war' ? '⚔️' :
+                          eType === 'leader' ? '👑' :
+                          eType === 'rebellion' ? '✊' :
+                          eType === 'plague' ? '☄️' :
+                          eType === 'conquest' ? '⚔️' :
+                          eType === 'independence' ? '🗽' : '•';
               const desc = e.description || e.type;
               return `<div style="margin-bottom: 2px;">${icon} ${desc}</div>`;
             }).join('')}
@@ -168,7 +172,7 @@ export function showTooltip(star: Star, x: number, y: number, galaxy?: any) {
             ${starTypeProps.name}
         </div>
         <div style="color: #88bbdd;">
-            ${epochIcon} <span style="color: ${epochColor};">${epochName}</span> |
+            <span style="color: ${ideologyColor};">${govName}</span> · <span style="color: ${ideologyColor};">${ideologyLabel}</span> |
             Str: <span style="color: #0ff;">${formatLargeNumber(star.strength || 0)}</span> |
             Pwr: <span style="color: #0ff;">${formatLargeNumber(star.power || 0)}</span><br>
             Pop: <span style="color: #0ff;">${formatLargeNumber(star.population)}</span> |

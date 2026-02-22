@@ -1,6 +1,6 @@
 import { Galaxy } from '../src/core/galaxy';
 import { NarrativeGenerator } from '../src/core/narrative';
-import { GalaxyConfig, GalaxyShape } from '../src/core/types';
+import { EventType, GalaxyConfig, GalaxyShape } from '../src/core/types';
 
 function assert(condition: unknown, message: string): void {
   if (!condition) {
@@ -31,6 +31,30 @@ function main(): void {
 
   const star = galaxy.getAllStars()[0];
   assert(star, 'Expected at least one star in galaxy');
+  const p = galaxy.state.phase;
+  star!.history.push(
+    {
+      type: EventType.Succession,
+      phase: p - 1,
+      description: 'Synthetic succession for narrative smoke coverage',
+      metadata: {
+        fromDynastName: 'Arlen',
+        toDynastName: 'Siona',
+        houseName: 'House Venn',
+        reason: 'inheritance',
+      },
+    },
+    {
+      type: EventType.GovernmentTransition,
+      phase: p,
+      description: 'Synthetic coup transition for narrative smoke coverage',
+      metadata: {
+        oldGov: 'republic',
+        newGov: 'military-junta',
+        endReason: 'Military Coup',
+      },
+    }
+  );
 
   const recentA = NarrativeGenerator.generateStarRecentNarrative(galaxy.state, star!.id, {
     phaseWindow: 5,
@@ -53,6 +77,9 @@ function main(): void {
   assert(JSON.stringify(recentA) === JSON.stringify(recentB), 'Recent narrative must be deterministic');
   assert(JSON.stringify(longA) === JSON.stringify(longB), 'Long narrative must be deterministic');
   assert(longA.lines.length <= 80, 'Long narrative should respect max entries');
+  const recentText = recentA.entries.flatMap((entry) => entry.lines).join(' ').toLowerCase();
+  assert(recentText.includes('succession'), 'Recent narrative should explicitly call out succession events');
+  assert(recentText.includes('coup'), 'Recent narrative should explicitly call out coups');
 
   console.log('[PASS] narrative-detail-smoke');
 }

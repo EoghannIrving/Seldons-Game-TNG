@@ -8,14 +8,19 @@ import {
   Star,
   GalaxyConfig,
   GalaxyState,
-  Epoch,
+  DemographicSeries,
+  DemographicSnapshot,
   EventType,
   GalaxyShape,
   StarTier,
   Dynasty,
   Dynast,
+  DynastySuccessionRecord,
   DynastySuccessionReason,
+  GovernmentType,
+  Trait,
 } from './types';
+import { assignGovernmentType, deriveInitialIdeology, updateIdeology, updateGovernment, evaluateTheocraticConversion, ConversionResult } from './government';
 import {
   applyGrowth,
   calculateAllPowers,
@@ -32,9 +37,10 @@ import { SeededRandom } from '../utils/seed-random';
 import { assignStarType, assignTraits } from '../utils/star-generation';
 import { detectAndRecordEvents, initializeStarTracking, preUpdateGoldenAgeCheck } from './event-tracking';
 import { getStarName } from '../data/star-names';
+import { pickPoliticalName, buildHouseName, pickFounderName } from '../data/personal-names';
 import { updateAlliances, updateCulturalInfluence, spreadCulturalInfluence } from './diplomacy';
 import { updateTradeRoutes, updateWars } from './trade-war';
-import { updateVitality } from './decay';
+import { updateVitality, updateEmpireHealth } from './decay';
 import { SpatialIndex } from './spatial-index';
 import { feedbackSystem } from './feedback';
 import { updateZeitgeist } from './zeitgeist';
@@ -44,8 +50,18 @@ import { updateCrises } from './crises';
 import { updateReforms } from './decay';
 import { generateRegions } from './regions';
 import { EventManager } from './events';
+import {
+  appendDemographicSnapshot,
+  createEmptyDemographicSeries,
+  getDemographicPhaseWindow,
+  getDemographicSnapshotAt,
+  getDemographicsCount,
+  getLatestDemographicSnapshots,
+  normalizeDemographicsData,
+} from './demographics-series';
 
 export class Galaxy {
+  private static readonly SUCCESSION_ARCHIVE_VERSION = 1;
   state: GalaxyState;
   // Phase 4: Deprecated distanceMatrix in favor of on-demand calculation + SpatialIndex
   // private distanceMatrix: Map<string, Map<string, number>>;
@@ -57,6 +73,7 @@ export class Galaxy {
   // Phase 3: History for playback
   public history: Map<number, GalaxyState> = new Map();
   private readonly SNAPSHOT_INTERVAL = 10;
+  private demographicsSeries: DemographicSeries = createEmptyDemographicSeries();
   
   // Phase 5: Notification Queue for UI
   public notificationQueue: { text: string; type: 'info' | 'success' | 'warning' | 'danger'; starId?: string }[] = [];
@@ -71,11 +88,15 @@ export class Galaxy {
       activeCrises: [],
       regions: [],
       events: [],
-      demographics: [],
+      demographics: this.demographicsSeries,
       dynasties: new Map(),
       dynasts: new Map(),
       dynasticRelationships: [],
       dynastySuccessionRecords: [],
+      dynastySuccessionArchiveByStar: {},
+      dynastySuccessionArchiveVersion: Galaxy.SUCCESSION_ARCHIVE_VERSION,
+      phaseConquestLog: [],
+      governmentHistory: new Map(),
     };
 
     // Phase 7: Initialize Event Manager
@@ -94,6 +115,75 @@ export class Galaxy {
     
     // Save initial state (Phase 0)
     this.saveSnapshot();
+  }
+
+  private buildSuccessionArchiveKey(record: DynastySuccessionRecord): string {
+    return [
+      record.starId,
+      String(record.phase),
+      record.fromDynastId ?? '',
+      record.toDynastId ?? '',
+      record.reason,
+      record.contested ? '1' : '0',
+      record.source ?? '',
+      record.sourceDetail ?? '',
+    ].join('|');
+  }
+
+  private syncSuccessionArchiveFromRecentRecords(): void {
+    const archive = this.state.dynastySuccessionArchiveByStar || (this.state.dynastySuccessionArchiveByStar = {});
+    const recent = this.state.dynastySuccessionRecords || [];
+    if (recent.length === 0) return;
+
+    const seenByStar = new Map<string, Set<string>>();
+    for (const record of recent) {
+      if (!record || typeof record.starId !== 'string' || record.starId.length === 0) continue;
+      const bucket = archive[record.starId] || (archive[record.starId] = []);
+      let seen = seenByStar.get(record.starId);
+      if (!seen) {
+        seen = new Set(bucket.map((existing) => this.buildSuccessionArchiveKey(existing)));
+        seenByStar.set(record.starId, seen);
+      }
+      const key = this.buildSuccessionArchiveKey(record);
+      if (seen.has(key)) continue;
+      bucket.push(JSON.parse(JSON.stringify(record)) as DynastySuccessionRecord);
+      seen.add(key);
+    }
+  }
+
+  private ensureSuccessionArchiveInitialized(): void {
+    if (!this.state.dynastySuccessionArchiveByStar) {
+      this.state.dynastySuccessionArchiveByStar = {};
+    }
+    if (!this.state.dynastySuccessionArchiveVersion) {
+      this.state.dynastySuccessionArchiveVersion = Galaxy.SUCCESSION_ARCHIVE_VERSION;
+    }
+    this.syncSuccessionArchiveFromRecentRecords();
+  }
+
+  private ensureDemographicsSeries(): DemographicSeries {
+    if (this.state.demographics === this.demographicsSeries) {
+      return this.demographicsSeries;
+    }
+    this.demographicsSeries = normalizeDemographicsData(this.state.demographics);
+    this.state.demographics = this.demographicsSeries;
+    return this.demographicsSeries;
+  }
+
+  public getDemographicsCount(): number {
+    return getDemographicsCount(this.ensureDemographicsSeries());
+  }
+
+  public getDemographicAt(index: number): DemographicSnapshot | null {
+    return getDemographicSnapshotAt(this.ensureDemographicsSeries(), index);
+  }
+
+  public getDemographicWindow(startPhase: number, endPhase: number): DemographicSnapshot[] {
+    return getDemographicPhaseWindow(this.ensureDemographicsSeries(), startPhase, endPhase);
+  }
+
+  public getLatestDemographics(count: number): DemographicSnapshot[] {
+    return getLatestDemographicSnapshots(this.ensureDemographicsSeries(), count);
   }
 
   /**
@@ -202,8 +292,21 @@ export class Galaxy {
       const initialStrength = 50 + rng.random() * 150;
       const initialGrowth = 0.9 + rng.random() * 0.6;
       const initialCentralization = rng.random() * 0.75;
-      const initialEpoch = rng.random() < 0.5 ? Epoch.Imperial : Epoch.Communal;
-      const initialPopulation = Math.max(1_000_000, Math.floor(initialStrength * (500_000 + (initialGrowth * 250_000))));
+      const initialTier = (() => {
+        const majorPct = this.state.config.tierDistribution?.major ?? 0.05;
+        const regionalPct = this.state.config.tierDistribution?.regional ?? 0.20;
+        const tierRoll = rng.random();
+        if (tierRoll > (1 - majorPct)) return StarTier.Major;
+        if (tierRoll > (1 - majorPct - regionalPct)) return StarTier.Regional;
+        return StarTier.Minor;
+      })();
+      const initialPopulation = (() => {
+        const tierBoost = initialTier === StarTier.Major ? 0.34 : (initialTier === StarTier.Regional ? 0.14 : 0);
+        const rareCoreBoost = rng.random() < 0.08 ? (0.16 + (rng.random() * 0.22)) : 0;
+        const popLog = 7.70 + (rng.random() * 1.60) + tierBoost + rareCoreBoost; // ~50M..8B baseline, majors can start higher
+        const pop = Math.floor(Math.pow(10, popLog));
+        return Math.max(50_000_000, Math.min(15_000_000_000, pop));
+      })();
 
       const star: Star = {
         id: `star_${i}`,
@@ -218,18 +321,7 @@ export class Galaxy {
 
         // Phase 6: Configurable Tiered Personality System
         // Assign tier based on initial strength potential or random distribution
-        tier: (() => {
-          // Use configured distribution
-          const majorPct = this.state.config.tierDistribution?.major ?? 0.05;
-          const regionalPct = this.state.config.tierDistribution?.regional ?? 0.20;
-          
-          const tierRoll = rng.random();
-          // e.g. if major is 5%, roll > 0.95
-          if (tierRoll > (1 - majorPct)) return StarTier.Major;
-          // e.g. if regional is 20%, roll > 0.75 (1 - 0.05 - 0.20)
-          if (tierRoll > (1 - majorPct - regionalPct)) return StarTier.Regional;
-          return StarTier.Minor;
-        })(),
+        tier: initialTier,
 
         // Original initialization:
         // strength: 50 + rng.random() * 150
@@ -241,7 +333,10 @@ export class Galaxy {
         growth: initialGrowth,
         centralization: initialCentralization,
         power: 0,
-        epoch: initialEpoch,
+
+        // Phase 10: Government & Ideology (assigned after traits are set)
+        ideology: 0,                          // Placeholder — set below after traits known
+        governmentType: GovernmentType.Autocracy, // Placeholder — set below after traits known
 
         // Initially independent (self-ruling)
         ruler: null,
@@ -285,6 +380,8 @@ export class Galaxy {
         // Phase 5: Cyclical History
         administrativeTech: 0, // Starts at 0, grows over time
         decadence: 0,          // Starts at 0
+        declineStress: 0,
+        empireCohesion: 0.58,
         foundationTier: 0,
         geniusLeader: undefined,
         powerHistory: [],      // Initialize empty history
@@ -294,6 +391,10 @@ export class Galaxy {
         infrastructureDamage: 0,
         darkAge: false,
         severeDarkAge: false,
+        darkAgeDuration: 0,
+        severeDarkAgeDuration: 0,
+        postCollapseRecoveryPhases: 0,
+        revoltIncubation: 0,
         
         // Phase 5: History Logging
         // history: [], // REMOVED: history is defined in Star interface but not initialized here as [] because it's optional or should be initialized if required.
@@ -302,7 +403,22 @@ export class Galaxy {
 
       // Set self as ruler initially
       star.ruler = star.id;
+
+      // Phase 10: Assign government type and ideology now that traits are known
+      star.governmentType = assignGovernmentType(star.traits);
+      star.ideology = deriveInitialIdeology(star.traits);
+
+      // Bootstrap dynasty first so we can use the derived house name in the history record
       this.bootstrapDynastyForStar(star);
+
+      // Phase 10: Open the first government history record using the proper house name
+      const bootstrapDynasty = star.dynastyId ? this.state.dynasties.get(star.dynastyId) : undefined;
+      this.state.governmentHistory.set(star.id, [{
+        governmentType: star.governmentType,
+        startPhase: 0,
+        houseName: bootstrapDynasty?.houseName ?? `${star.name} Line`,
+        successionCount: 0,
+      }]);
 
       this.state.stars.set(star.id, star);
       this.spatialIndex.insert(star);
@@ -398,6 +514,9 @@ export class Galaxy {
       return;
     }
 
+    // Clear the per-phase conquest log so each phase starts fresh.
+    this.state.phaseConquestLog = [];
+
     // 0. Phase 5: Update Cyclical History (Zeitgeist & Global State)
     updateZeitgeist(this.state);
 
@@ -422,13 +541,21 @@ export class Galaxy {
     }
     this.eventManager.applyEventEffects(this.state);
 
+    // 1a. Update Seldon Crises early so their effects influence this phase's
+    // power/ruler/revolt calculations instead of appearing one phase late.
+    updateCrises(this.state);
+
     // 1. Update per-star long-cycle variables, then apply population growth / derived strength.
     for (const star of this.state.stars.values()) {
       updateAdministrativeTech(star, this.state);
       applyGrowth(star, this.state);
       updateDecadence(star, this.state);
       updateReforms(star, this.state.phase);
-      
+
+      // Phase 10: Update ideology drift and evaluate government transitions
+      updateIdeology(star, this.state);
+      updateGovernment(star, this.state);
+
       const notification = updateLeaders(star, this.state);
       if (notification) {
         // Phase 6: Only show notifications for Major/Regional stars to reduce spam
@@ -437,6 +564,30 @@ export class Galaxy {
         }
       }
     }
+
+    // Phase 10F: Theocratic cultural conversion (runs after ideology has settled)
+    for (const star of this.state.stars.values()) {
+      if (star.governmentType === GovernmentType.Theocracy && star.ruler === star.id) {
+        const conversions: ConversionResult[] = evaluateTheocraticConversion(star, this.state);
+        for (const conv of conversions) {
+          // Only notify for non-minor converters or non-minor targets to avoid spam
+          const converterStar = this.state.stars.get(conv.converterStarId);
+          const targetStar = this.state.stars.get(conv.targetStarId);
+          if (converterStar?.tier !== 'minor' || targetStar?.tier !== 'minor') {
+            this.notificationQueue.push({
+              text: `The faith of ${conv.converterStarName} has peacefully converted ${conv.targetStarName} to the Theocracy.`,
+              type: 'info',
+              starId: conv.targetStarId,
+            });
+          }
+        }
+      }
+    }
+
+    // 1.5. Cache empire health for all ruler stars.
+    // Runs after updateDecadence/updateVitality have settled for this phase,
+    // so calculateAllPowers and determineRuler read a consistent, freshly computed value.
+    updateEmpireHealth(this.state);
 
     // 2. Calculate all star powers
     calculateAllPowers(this.state);
@@ -447,16 +598,73 @@ export class Galaxy {
         preUpdateGoldenAgeCheck(star, this.state.phase);
     }
 
-    // 3. Determine new rulers based on influence
-    // Phase 4: Updated to use SpatialIndex via Galaxy instance
+    // 3. Determine new rulers based on influence.
+    // IMPORTANT: collect ALL new rulers before writing any back. If we write star.ruler
+    // mid-loop, a star conquered early in the iteration immediately becomes a subject with
+    // a stability threshold — but then its former neighbour gets evaluated next, sees the
+    // now-subject star's power with no stability protection (currentRuler just changed),
+    // and the two stars mutually conquer each other every phase, leaving both permanently
+    // independent. Snapshot → compute all → apply all prevents this race condition.
     const previousRulers = new Map<string, string | null>();
     for (const star of this.state.stars.values()) {
       previousRulers.set(star.id, star.ruler);
     }
+    const newRulers = new Map<string, string>();
     for (const star of this.state.stars.values()) {
-      // Pass the galaxy instance to allow access to spatialIndex and getDistance
-      const newRuler = determineRuler(star, this.state, this);
-      star.ruler = newRuler;
+      newRulers.set(star.id, determineRuler(star, this.state, this));
+    }
+
+    // Resolve mutual-conquest cycles and subject-chains before applying.
+    //
+    // Problem 1 — mutual pairs: Star A's new ruler is B and B's new ruler is A.
+    // Both determineRuler calls saw two independent stars (bestInfluence=0), so each
+    // claimed the other. The stronger one (by power) wins and rules the weaker.
+    //
+    // Problem 2 — chains: Star A's new ruler is B, but B's new ruler is C (B is also
+    // a subject). This produces a sub-empire chain (A→B→C) which causes:
+    //   • double-counting in calculateAllPowers (A's strength flows to B, B's flows to C)
+    //   • DUAL-STATUS confusion where B is both a ruler (has subjects) and a subject
+    // Fix: flatten chains so every subject points directly to its top-level ruler.
+    //
+    // Both passes run iteratively until stable (handles long chains in one sweep each).
+
+    // Pass 1: resolve mutual pairs (A→B and B→A simultaneously).
+    for (const [starId, newRuler] of newRulers) {
+      if (newRuler === starId) continue;
+      const rulerNewRuler = newRulers.get(newRuler);
+      if (rulerNewRuler === starId) {
+        const starPower  = this.state.stars.get(starId)?.power  ?? 0;
+        const rulerPower = this.state.stars.get(newRuler)?.power ?? 0;
+        if (starPower >= rulerPower) {
+          newRulers.set(newRuler, starId);
+          newRulers.set(starId,   starId);
+        } else {
+          newRulers.set(starId,   newRuler);
+          newRulers.set(newRuler, newRuler);
+        }
+      }
+    }
+
+    // Pass 2: flatten chains — if A→B and B→C (B is not self-ruling), set A→C.
+    // Repeat until no changes (handles chains of length > 2).
+    let changed = true;
+    let safetyLimit = 0;
+    while (changed && safetyLimit++ < 20) {
+      changed = false;
+      for (const [starId, newRuler] of newRulers) {
+        if (newRuler === starId) continue;           // Already independent
+        const topRuler = newRulers.get(newRuler);
+        if (topRuler !== undefined && topRuler !== newRuler) {
+          // newRuler is itself a subject of topRuler — skip the middle man
+          newRulers.set(starId, topRuler);
+          changed = true;
+        }
+      }
+    }
+
+    for (const [starId, newRuler] of newRulers) {
+      const star = this.state.stars.get(starId);
+      if (star) star.ruler = newRuler;
     }
 
     // 4. Update subject lists
@@ -480,6 +688,13 @@ export class Galaxy {
     // Phase 4: Optimized to use Galaxy instance and handle internal iteration
     checkRevolutionConditions(this.state);
 
+    // 7b. Rebuild subject lists after revolutions — checkRevolutionConditions sets
+    // star.ruler = star.id for revolting stars but the subject lists built in step 4
+    // still contain those stars under their old ruler. Without this second rebuild,
+    // a star that just revolted appears as an independent (ruler=self) yet still
+    // shows up in its former ruler's subjects array for the rest of this phase.
+    updateSubjectLists(this.state);
+
     // 8. Phase 4: Update cultural influence values
     updateCulturalInfluence(this.state);
 
@@ -497,21 +712,60 @@ export class Galaxy {
     // 12. Phase 4: Process trade route formations and severances
     updateTradeRoutes(this.state, this);
 
-    // 13. Update Seldon Crises (Phase 5.5)
-    updateCrises(this.state);
-
-    // 14. Update history for all stars
+    // 13. Update history for all stars
     detectAndRecordEvents(this.state, this);
 
-    // 15. Phase 8: Record Demographics
+    // 14. Phase 8: Record Demographics
     this.recordDemographics();
 
-    // 16. Increment phase
+    // 15. Increment phase
     this.state.phase++;
 
-    // 15. Save snapshot if needed
+    // Preserve long-term lineage history before trimming recent buffers.
+    this.syncSuccessionArchiveFromRecentRecords();
+
+    // 16. Trim unbounded arrays to prevent OOM at 2000+ phases.
+    // These grow every phase and are not needed beyond a rolling window.
+    this.trimUnboundedArrays();
+
+    // 18. Save snapshot if needed
     if (this.state.phase % this.SNAPSHOT_INTERVAL === 0) {
       this.saveSnapshot();
+    }
+  }
+
+  /**
+   * Trim arrays that grow unboundedly with phase count.
+   * Called once per phase after all updates are complete.
+   * Keeps enough history for gameplay (UI, trend analysis) without OOM.
+   */
+  private trimUnboundedArrays(): void {
+    // Global succession records — keep last 500 (used only for historical display)
+    const RECENT_SUCCESSION_CAP = 5000;
+    if (this.state.dynastySuccessionRecords && this.state.dynastySuccessionRecords.length > RECENT_SUCCESSION_CAP) {
+      this.state.dynastySuccessionRecords = this.state.dynastySuccessionRecords.slice(-RECENT_SUCCESSION_CAP);
+    }
+
+    // Global dynastic relationships — keep last 1000
+    const DYNASTIC_RELATIONSHIP_CAP = 50000;
+    if (this.state.dynasticRelationships && this.state.dynasticRelationships.length > DYNASTIC_RELATIONSHIP_CAP) {
+      this.state.dynasticRelationships = this.state.dynasticRelationships.slice(-DYNASTIC_RELATIONSHIP_CAP);
+    }
+
+    // Global galactic events — keep last 200 (resolved ones accumulate fastest)
+    if (this.state.events && this.state.events.length > 200) {
+      this.state.events = this.state.events.slice(-200);
+    }
+
+    // Per-star history arrays — cap at 200 events per star
+    // (leaders die ~every 20-40 phases, conquests/revolts are sporadic)
+    const STAR_HISTORY_CAP = 200;
+    if (this.state.stars) {
+      for (const star of this.state.stars.values()) {
+        if (star.history && star.history.length > STAR_HISTORY_CAP) {
+          star.history = star.history.slice(-STAR_HISTORY_CAP);
+        }
+      }
     }
   }
 
@@ -520,7 +774,7 @@ export class Galaxy {
    */
   private recordDemographics(): void {
     if (!this.state.stars) return;
-    if (!this.state.demographics) this.state.demographics = [];
+    const demographics = this.ensureDemographicsSeries();
 
     // Compatibility repair for saves created before averageTech precision fix.
     // If all stored averages are integer-only but per-star tech history has fractional values,
@@ -533,19 +787,11 @@ export class Galaxy {
     let imperialPower = 0;
     let activeWars = 0;
     
-    // Track empire powers for pie chart
-    const empirePowerMap = new Map<string, number>();
-
     // Calculate stats
     for (const star of this.state.stars.values()) {
       totalPopulation += star.population;
       totalTech += star.administrativeTech;
       maxPower = Math.max(maxPower, star.power);
-      
-      // Add to empire power total
-      const rulerId = star.ruler || star.id;
-      const currentTotal = empirePowerMap.get(rulerId) || 0;
-      empirePowerMap.set(rulerId, currentTotal + star.power);
 
       // Largest empire check
       if (star.ruler === star.id) {
@@ -566,55 +812,32 @@ export class Galaxy {
 
       activeWars += star.atWarWith.length;
 
-      // Phase 8: Per-star history
+      // Phase 8: Per-star history for charting.
+      // Capped at 500 entries to prevent OOM at 2000+ phases.
+      // The chart always shows the most recent 500 snapshots (one per phase).
+      const HISTORY_CAP = 500;
+
       if (!star.strengthHistory) star.strengthHistory = [];
       star.strengthHistory.push(star.strength);
+      if (star.strengthHistory.length > HISTORY_CAP) star.strengthHistory.shift();
 
       if (!star.techHistory) star.techHistory = [];
       star.techHistory.push(star.administrativeTech);
+      if (star.techHistory.length > HISTORY_CAP) star.techHistory.shift();
+
+      if (!star.populationHistory) star.populationHistory = [];
+      star.populationHistory.push(star.population);
+      if (star.populationHistory.length > HISTORY_CAP) star.populationHistory.shift();
 
       if (!star.subjectsHistory) star.subjectsHistory = [];
       star.subjectsHistory.push(star.subjects.length);
+      if (star.subjectsHistory.length > HISTORY_CAP) star.subjectsHistory.shift();
     }
 
     // Active wars is counted twice (A vs B, B vs A), so divide by 2
     activeWars = Math.floor(activeWars / 2);
 
-    // Calculate Political Share (Top 5 Empires)
-    const sortedEmpires = Array.from(empirePowerMap.entries()).sort((a, b) => b[1] - a[1]);
-    const politicalShare: { name: string, count: number, color: string }[] = [];
-    let otherPower = 0;
-
-    for (let i = 0; i < sortedEmpires.length; i++) {
-        const entry = sortedEmpires[i];
-        if (!entry) continue;
-
-        if (i < 5) {
-            const [id, power] = entry;
-            const star = this.state.stars.get(id);
-            // Generate a stable color based on ID
-            const hash = id.split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0);
-            const hue = (hash * 137) % 360; // Use golden angle approximation for distribution
-            
-            politicalShare.push({
-                name: star ? star.name : 'Unknown',
-                count: Math.floor(power),
-                color: `hsl(${hue}, 70%, 60%)`
-            });
-        } else {
-            otherPower += entry[1];
-        }
-    }
-    
-    if (otherPower > 0) {
-        politicalShare.push({
-            name: 'Minor Powers',
-            count: Math.floor(otherPower),
-            color: '#666666'
-        });
-    }
-
-    const snapshot = {
+    const snapshot: DemographicSnapshot = {
       phase: this.state.phase,
       totalPopulation: Math.floor(totalPopulation),
       averageTech: this.state.stars.size > 0 ? (totalTech / this.state.stars.size) : 0,
@@ -622,20 +845,19 @@ export class Galaxy {
       activeWars,
       activeCrises: this.state.activeCrises ? this.state.activeCrises.length : 0,
       imperialPower: Math.floor(imperialPower),
-      politicalShare
     };
 
-    this.state.demographics.push(snapshot);
+    appendDemographicSnapshot(demographics, snapshot);
   }
 
   private repairLegacyAverageTechSnapshots(): void {
-    const snapshots = this.state.demographics;
-    if (!snapshots || snapshots.length === 0) return;
+    const snapshots = this.ensureDemographicsSeries();
+    if (snapshots.phase.length === 0) return;
 
-    const allIntegerAverages = snapshots.every((snap) =>
-      typeof snap.averageTech === 'number'
-      && Number.isFinite(snap.averageTech)
-      && Math.abs(snap.averageTech - Math.round(snap.averageTech)) < 1e-9
+    const allIntegerAverages = snapshots.averageTech.every((averageTech) =>
+      typeof averageTech === 'number'
+      && Number.isFinite(averageTech)
+      && Math.abs(averageTech - Math.round(averageTech)) < 1e-9
     );
     if (!allIntegerAverages) return;
 
@@ -653,7 +875,7 @@ export class Galaxy {
     }
     if (!hasFractionalHistory || maxHistoryLen === 0) return;
 
-    for (let i = 0; i < snapshots.length; i++) {
+    for (let i = 0; i < snapshots.averageTech.length; i++) {
       let sum = 0;
       let count = 0;
       for (const star of this.state.stars.values()) {
@@ -663,7 +885,7 @@ export class Galaxy {
           count++;
         }
       }
-      if (count > 0) snapshots[i]!.averageTech = sum / count;
+      if (count > 0) snapshots.averageTech[i] = sum / count;
     }
   }
 
@@ -674,6 +896,8 @@ export class Galaxy {
     // Deep clone the state
     // We can use structuredClone if available, or manual cloning
     try {
+      this.ensureSuccessionArchiveInitialized();
+
       // Create a deep copy of the stars map
       const starsCopy = new Map();
       for (const [id, star] of this.state.stars) {
@@ -689,11 +913,18 @@ export class Galaxy {
         activeCrises: this.state.activeCrises ? JSON.parse(JSON.stringify(this.state.activeCrises)) : [],
         regions: this.state.regions,
         events: this.state.events ? JSON.parse(JSON.stringify(this.state.events)) : [],
-        demographics: this.state.demographics ? JSON.parse(JSON.stringify(this.state.demographics)) : [],
+        // Snapshot restore only needs a local anchor point for chart continuity.
+        demographics: getLatestDemographicSnapshots(this.ensureDemographicsSeries(), 1),
         dynasties: new Map(Array.from(this.state.dynasties.entries()).map(([id, dynasty]) => [id, JSON.parse(JSON.stringify(dynasty))])),
         dynasts: new Map(Array.from(this.state.dynasts.entries()).map(([id, dynast]) => [id, JSON.parse(JSON.stringify(dynast))])),
         dynasticRelationships: this.state.dynasticRelationships ? JSON.parse(JSON.stringify(this.state.dynasticRelationships)) : [],
-        dynastySuccessionRecords: this.state.dynastySuccessionRecords ? JSON.parse(JSON.stringify(this.state.dynastySuccessionRecords)) : []
+        dynastySuccessionRecords: this.state.dynastySuccessionRecords ? JSON.parse(JSON.stringify(this.state.dynastySuccessionRecords)) : [],
+        dynastySuccessionArchiveByStar: this.state.dynastySuccessionArchiveByStar ? JSON.parse(JSON.stringify(this.state.dynastySuccessionArchiveByStar)) : {},
+        dynastySuccessionArchiveVersion: this.state.dynastySuccessionArchiveVersion || Galaxy.SUCCESSION_ARCHIVE_VERSION,
+        phaseConquestLog: this.state.phaseConquestLog ? JSON.parse(JSON.stringify(this.state.phaseConquestLog)) : [],
+        governmentHistory: this.state.governmentHistory
+          ? new Map(Array.from(this.state.governmentHistory.entries()).map(([id, recs]) => [id, JSON.parse(JSON.stringify(recs))]))
+          : new Map(),
         // We don't need to clone distanceMatrix as it's static
         // distanceMatrix: this.distanceMatrix
       };
@@ -759,6 +990,7 @@ export class Galaxy {
   restoreState(snapshotPhase: number): boolean {
     const snapshot = this.history.get(snapshotPhase);
     if (!snapshot) return false;
+    const retainedDemographics = this.getDemographicWindow(0, snapshotPhase);
 
     // Restore state
     // Deep clone again to prevent modifying the snapshot
@@ -775,7 +1007,7 @@ export class Galaxy {
       activeCrises: snapshot.activeCrises ? JSON.parse(JSON.stringify(snapshot.activeCrises)) : [],
       regions: snapshot.regions || [],
       events: snapshot.events ? JSON.parse(JSON.stringify(snapshot.events)) : [],
-      demographics: snapshot.demographics ? JSON.parse(JSON.stringify(snapshot.demographics)) : [],
+      demographics: retainedDemographics.length > 0 ? retainedDemographics : (snapshot.demographics ? JSON.parse(JSON.stringify(snapshot.demographics)) : []),
       dynasties: snapshot.dynasties
         ? new Map(Array.from(snapshot.dynasties.entries()).map(([id, dynasty]) => [id, JSON.parse(JSON.stringify(dynasty))]))
         : new Map(),
@@ -783,31 +1015,51 @@ export class Galaxy {
         ? new Map(Array.from(snapshot.dynasts.entries()).map(([id, dynast]) => [id, JSON.parse(JSON.stringify(dynast))]))
         : new Map(),
       dynasticRelationships: snapshot.dynasticRelationships ? JSON.parse(JSON.stringify(snapshot.dynasticRelationships)) : [],
-      dynastySuccessionRecords: snapshot.dynastySuccessionRecords ? JSON.parse(JSON.stringify(snapshot.dynastySuccessionRecords)) : []
+      dynastySuccessionRecords: snapshot.dynastySuccessionRecords ? JSON.parse(JSON.stringify(snapshot.dynastySuccessionRecords)) : [],
+      dynastySuccessionArchiveByStar: snapshot.dynastySuccessionArchiveByStar ? JSON.parse(JSON.stringify(snapshot.dynastySuccessionArchiveByStar)) : {},
+      dynastySuccessionArchiveVersion: snapshot.dynastySuccessionArchiveVersion || Galaxy.SUCCESSION_ARCHIVE_VERSION,
+      phaseConquestLog: snapshot.phaseConquestLog ? JSON.parse(JSON.stringify(snapshot.phaseConquestLog)) : [],
+      governmentHistory: snapshot.governmentHistory
+        ? new Map(Array.from(snapshot.governmentHistory.entries()).map(([id, recs]) => [id, JSON.parse(JSON.stringify(recs))]))
+        : new Map(),
       // distanceMatrix: this.distanceMatrix
     };
+    this.ensureSuccessionArchiveInitialized();
+    this.ensureDemographicsSeries();
 
     return true;
   }
 
   private bootstrapDynastyForStar(star: Star): void {
-    const dynastyId = `dynasty:${star.id}`;
-    const founderDynastId = `dynast:${star.id}:0`;
+    // Use the same hyphen-format IDs as updateDynastyAges so the succession
+    // system recognises and handles bootstrap dynasts correctly.
+    const dynastyId = `dynasty-${star.id}-0`;
+    const founderDynastId = `dynast-${star.id}-0-0`;
+
+    // Culturally-derived names
+    const founderNameData = pickFounderName(star, this.state.config.seed, 0);
+    const houseName = buildHouseName(founderNameData.lastName);
+
+    // Derive 1–2 founding traits (same logic as updateDynastyAges)
+    const rng = new SeededRandom(this.state.config.seed + star.id.length * 7);
+    const dynastyTraits = this._deriveDynastyFoundingTraitsBootstrap(star, rng);
+
     const dynasty: Dynasty = {
       id: dynastyId,
-      houseName: `${star.name} Line`,
+      houseName,
       foundingPhase: 0,
       founderDynastId,
       cultureTags: [],
+      dynastyTraits,
     };
     const founder: Dynast = {
       id: founderDynastId,
       dynastyId,
-      name: `${star.name} Founder`,
+      name: founderNameData.fullName,
       birthPhase: 0,
       homeStarId: star.id,
-      traits: star.traits.map((trait) => String(trait)),
-      titles: ['Founding Ruler'],
+      traits: [...dynastyTraits],  // Founder gets the founding traits, not all star traits
+      titles: ['Founder'],
       isLegitimized: true,
       isBastard: false,
     };
@@ -815,6 +1067,31 @@ export class Galaxy {
     this.state.dynasts.set(founderDynastId, founder);
     star.dynastyId = dynastyId;
     star.currentDynastId = founderDynastId;
+  }
+
+  /**
+   * Bootstrap-time duplicate of deriveDynastyFoundingTraits from psychohistory.ts.
+   * Kept here to avoid a circular import (galaxy.ts → psychohistory.ts → galaxy.ts).
+   * Must stay in sync with the psychohistory version.
+   */
+  private _deriveDynastyFoundingTraitsBootstrap(star: Star, rng: SeededRandom): Trait[] {
+    const CANDIDATES: Trait[] = [
+      Trait.Imperialist, Trait.Militaristic, Trait.Ambitious,
+      Trait.Republican, Trait.Traditionalist, Trait.Scholarly,
+      Trait.Spiritualist, Trait.Cosmopolitan, Trait.Xenophobic,
+      Trait.Mercantile, Trait.Agrarian, Trait.Stoic, Trait.Cautious, Trait.Volatile,
+    ];
+    const starSet = new Set(star.traits as string[]);
+    const preferred = CANDIDATES.filter(t => starSet.has(t as string));
+    const fallback  = CANDIDATES.filter(t => !starSet.has(t as string));
+    const pool = [...preferred, ...fallback];
+    if (pool.length === 0) return [];
+    const first = pool[Math.floor(rng.random() * Math.min(pool.length, preferred.length || pool.length))]!;
+    const second: Trait | undefined =
+      rng.random() < 0.5
+        ? pool.filter(t => t !== first)[Math.floor(rng.random() * (pool.length - 1))]
+        : undefined;
+    return second !== undefined ? [first, second] : [first];
   }
 
   private recordDynastySuccessionChanges(previousRulers: Map<string, string | null>): void {
@@ -828,10 +1105,23 @@ export class Galaxy {
       const newDynastId = `dynast:${newRulerId}:${phase + 1}`;
       const dynastyId = `dynasty:${newRulerId}`;
       const rulerStar = this.state.stars.get(newRulerId);
+
+      // Use culturally-derived names for conquest regents when rulerStar is available
+      let dynastName: string;
+      let houseName: string;
+      if (rulerStar) {
+        const nameData = pickFounderName(rulerStar, this.state.config.seed, phase);
+        dynastName = nameData.fullName;
+        houseName = buildHouseName(nameData.lastName);
+      } else {
+        dynastName = pickPoliticalName(star, this.state.config.seed, phase);
+        houseName = `${newRulerId} Line`;
+      }
+
       const dynast: Dynast = {
         id: newDynastId,
         dynastyId,
-        name: `${rulerStar?.name || newRulerId} Regent ${phase + 1}`,
+        name: dynastName,
         birthPhase: Math.max(0, phase - 18),
         homeStarId: star.id,
         traits: rulerStar?.traits.map((trait) => String(trait)) ?? [],
@@ -843,10 +1133,11 @@ export class Galaxy {
       if (!this.state.dynasties.has(dynastyId)) {
         this.state.dynasties.set(dynastyId, {
           id: dynastyId,
-          houseName: `${rulerStar?.name || newRulerId} Line`,
+          houseName,
           foundingPhase: phase,
           founderDynastId: newDynastId,
           cultureTags: [],
+          dynastyTraits: [],
         });
       }
       star.dynastyId = dynastyId;
@@ -854,14 +1145,20 @@ export class Galaxy {
 
       const reason: DynastySuccessionReason = previousRuler === star.id
         ? 'coup'
-        : (star.ruler === star.id ? 'civil_war' : 'inheritance');
+        : (star.ruler === star.id ? 'civil_war' : 'appointment');
+      const sourceDetail: 'conquest' | 'revolt' | 'challenger' =
+        previousRuler === star.id
+          ? 'conquest'
+          : (star.ruler === star.id ? 'revolt' : 'challenger');
       this.state.dynastySuccessionRecords.push({
         starId: star.id,
         phase,
         fromDynastId: fromDynastId || undefined,
         toDynastId: newDynastId,
         reason,
-        contested: reason !== 'inheritance',
+        contested: true,
+        source: 'ruler_change',
+        sourceDetail,
       });
     }
   }

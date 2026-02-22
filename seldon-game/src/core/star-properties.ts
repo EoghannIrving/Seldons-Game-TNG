@@ -132,14 +132,14 @@ export const TRAIT_PROPERTIES: Record<Trait, TraitProperties> = {
   [Trait.Adaptable]: {
     name: 'Adaptable',
     category: TraitCategory.Political,
-    description: 'Changes epoch easily based on circumstances',
+    description: 'Adapts government type and ideology readily based on circumstances',
     icon: '🔄',
     growthModifier: 1.05,
   },
   [Trait.Traditionalist]: {
     name: 'Traditionalist',
     category: TraitCategory.Political,
-    description: 'Resists epoch changes, maintains cultural identity',
+    description: 'Resists government transitions and ideological drift, maintains cultural identity',
     icon: '📜',
     centralizationModifier: 1.1,
   },

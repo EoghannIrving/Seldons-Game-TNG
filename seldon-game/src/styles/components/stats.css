@@ -5,9 +5,10 @@
 }
 
 .hud-label {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-dim);
-  letter-spacing: 1px;
+  letter-spacing: 0.6px;
+  font-weight: 600;
 }
 
 .hud-value {

@@ -135,6 +135,18 @@ export class NarrativeGenerator {
         'House {houseName} consolidated its rule over {star} as {toDynastName} succeeded {fromDynastName}.',
         'A new chapter for {star} began as {toDynastName} took over from {fromDynastName} of House {houseName}.',
       ],
+      government_transition: [
+        '{star}\'s {oldGov} collapsed under sustained ideological pressure. A {endReason} established a new {newGov}.',
+        'Political upheaval at {star} ended the {oldGov} era. The {newGov} now holds power following a {endReason}.',
+        'After {star}\'s institutions drifted beyond recovery, a {endReason} replaced the {oldGov} with a {newGov}.',
+        'The {oldGov} at {star} gave way to a {newGov}. The transition, driven by a {endReason}, reshaped local governance.',
+      ],
+      religious_conversion: [
+        'Without a single soldier, {converter} reshaped {star}. The {oldGov} dissolved as the population embraced the Theocracy.',
+        'Faith spread farther than any army. {star}\'s {oldGov} peacefully gave way to the Theocracy, drawn by the influence of {converter}.',
+        'The cultural reach of {converter} proved decisive. {star} abandoned its {oldGov} and joined the Theocratic fold.',
+        'Missionaries and merchants from {converter} had long walked {star}\'s streets. When the conversion came, it was a quiet dawn — not a battle cry.',
+      ],
     quiet: [
       '{star} spent this phase consolidating prior gains without major rupture.',
       'No major upheaval touched {star}; governance remained steady.',
@@ -146,6 +158,93 @@ export class NarrativeGenerator {
       'Administrative posture stayed {adminState}, with power moving {powerTrend}.',
       'Political confidence remained {stabilityState} as momentum moved {powerTrend}.',
       'System resilience was {stabilityState}, and power drifted {powerTrend}.',
+    ],
+  };
+
+  private static readonly RECENT_TEMPLATE_POOLS: Record<string, string[]> = {
+    conquest: [
+      '{star} pushed outward and took {target}.',
+      '{target} fell under {star} after a bruising advance.',
+      '{star} forced the border outward and folded in {target}.',
+      '{star} committed to expansion and absorbed {target}.',
+    ],
+    liberation: [
+      '{target} broke from outside rule, loosening {star}\'s grip.',
+      'Control around {star} thinned as {target} reclaimed self-rule.',
+      '{star} took a setback when {target} slipped free.',
+      '{target} walked out of enforced alignment, weakening {star}\'s hold.',
+    ],
+    war: [
+      'War opened around {star}, and diplomacy gave way to force.',
+      'Around {star}, warnings turned into volleys.',
+      '{star} moved from brinkmanship into open conflict.',
+      'Hostilities near {star} intensified and pulled everyone onto a wartime footing.',
+    ],
+    crisis: [
+      'A crisis hit {star}, and routine governance buckled.',
+      '{star} entered emergency conditions under sustained systemic stress.',
+      'At {star}, crisis pressure overtook normal policymaking.',
+      '{star} was pushed into triage mode by escalating instability.',
+    ],
+    reform: [
+      '{star} rewired institutions to steady a shaken order.',
+      'Reforms at {star} aimed to recover day-to-day control.',
+      '{star} enacted structural changes to stop policy drift.',
+      'Governance at {star} shifted toward repair and consolidation.',
+    ],
+    prosperity: [
+      '{star} entered a growth run across markets and civic systems.',
+      'Prosperity expanded at {star}, with confidence and output both rising.',
+      '{star} posted a broad upswing in commercial and social stability.',
+      'Economic momentum at {star} translated into visible civic gains.',
+    ],
+    decline: [
+      '{star} slipped into decline as institutional capacity thinned.',
+      'Decay pressures at {star} eroded earlier gains.',
+      '{star} lost strategic tempo under cumulative internal strain.',
+      'Governance at {star} weakened as decline spread across sectors.',
+    ],
+    diplomacy: [
+      '{star} redrafted alliances to match a harsher balance of power.',
+      'Diplomatic terms around {star} were renegotiated under pressure.',
+      '{star} shifted negotiating posture to protect regional leverage.',
+      'Around {star}, alliance expectations were reset as trust realigned.',
+    ],
+    general: [
+      'A {eventLabel} event at {star} nudged momentum {direction}.',
+      '{star} hit a {eventLabel} turn and the trajectory bent {direction}.',
+      '{star} absorbed a {eventLabel} jolt, with results trending {direction}.',
+      '{star} moved through a {eventLabel} phase and came out leaning {direction}.',
+    ],
+    succession: [
+      'Rule at {star} passed from {fromDynastName} to {toDynastName} of House {houseName}.',
+      '{toDynastName} succeeded {fromDynastName}, keeping House {houseName} in command of {star}.',
+      'A succession transfer at {star} elevated {toDynastName} over House {houseName}.',
+      '{star} entered a new reign as {toDynastName} replaced {fromDynastName}.',
+    ],
+    government_transition: [
+      'A {endReason} ended {star}\'s {oldGov}. A {newGov} took its place.',
+      '{star} flipped from {oldGov} to {newGov} after a {endReason}.',
+      'The {oldGov} at {star} fell. A {newGov} now holds power.',
+      '{star}\'s political order broke. A {endReason} installed a {newGov}.',
+    ],
+    religious_conversion: [
+      'The faith of {converter} reached {star}. The {oldGov} ended without violence.',
+      '{star} joined the Theocracy peacefully, its {oldGov} dissolving under {converter}\'s influence.',
+      'No war was needed. {converter}\'s reach brought {star}\'s {oldGov} to a quiet end.',
+      'Cultural conversion from {converter} reshaped {star}\'s {oldGov} into a Theocracy.',
+    ],
+    quiet: [
+      'No major rupture hit {star} in this phase.',
+      '{star} held steady while larger currents moved elsewhere.',
+      'It was a quiet interval for {star}, with no headline disruption.',
+      '{star} passed this stretch without a major external shock.',
+    ],
+    consequence: [
+      'Power moved {powerTrend}, and confidence stayed {stabilityState}.',
+      'Day-to-day governance held together at a {adminState} level.',
+      'The system felt {stabilityState} even as momentum drifted {powerTrend}.',
+      'Command capacity looked {adminState}, with power trending {powerTrend}.',
     ],
   };
 
@@ -231,7 +330,6 @@ export class NarrativeGenerator {
   ): StarRecentNarrativeDocument {
     const star = state.stars.get(starId);
     const phaseWindow = options.phaseWindow ?? 5;
-    const maxLinesPerPhase = options.maxLinesPerPhase ?? 3;
     const includeFounding = options.includeFounding ?? false;
 
     if (!star) {
@@ -253,64 +351,224 @@ export class NarrativeGenerator {
       byPhase.set(event.phase, bucket);
     }
 
-    const entries: RecentNarrativeEntry[] = [];
     const currentPhase = state.phase;
     const minPhase = Math.max(0, currentPhase - phaseWindow + 1);
-
-    for (let phase = currentPhase; phase >= minPhase; phase--) {
-      const phaseEvents = byPhase.get(phase) ?? [];
-      if (phaseEvents.length === 0) {
-        entries.push({
-          phase,
-          lines: [
-            this.fillTemplate(
-              this.pickTemplate('quiet', state.config.seed, star.id, phase, 'quiet', 'recent'),
-              { star: star.name }
-            ),
-          ],
-          significance: 'low',
-          tags: ['quiet'],
-        });
-        continue;
-      }
-
-      const sortedBySignificance = [...phaseEvents].sort(
-        (a, b) => this.getSignificanceRank(this.classifySignificance(b.type)) - this.getSignificanceRank(this.classifySignificance(a.type))
-      );
-      const primary = sortedBySignificance[0]!;
-      const significance = this.classifySignificance(primary.type);
-
-      const lines: string[] = [];
-      const campaign = this.findCampaignForPhase(campaignByPhase, phase, phaseEvents);
-      lines.push(campaign
-        ? this.buildCampaignLeadLine(star, phase, primary, campaign, 'recent')
-        : this.buildNarrativeSentence(state, star, phase, primary, 'recent'));
-
-      const consequence = this.buildConsequenceLine(state, star, phase, phaseEvents);
-      if (consequence) lines.push(consequence);
-
-      const context = campaign
-        ? this.buildCampaignContextLine(campaign, phase)
-        : this.buildContextLine(state, primary);
-      if (context) lines.push(context);
-
-      const unique = Array.from(new Set(lines)).slice(0, maxLinesPerPhase);
-      entries.push({
-        phase,
-        lines: unique,
-        significance,
-        tags: Array.from(new Set(phaseEvents.map((e) => this.familyForType(e.type)))),
-      });
-    }
-
-    const collapsedEntries = this.collapseRecentEntries(entries);
+    const phases: number[] = [];
+    for (let phase = minPhase; phase <= currentPhase; phase++) phases.push(phase);
+    const tags = Array.from(new Set(
+      phases.flatMap((phase) => (byPhase.get(phase) ?? []).map((event) => this.familyForType(event.type)))
+    ));
+    const windowEvents = phases.flatMap((phase) => byPhase.get(phase) ?? []);
+    const significance: 'low' | 'medium' | 'high' = windowEvents.some((event) => this.classifySignificance(event.type) === 'high')
+      ? 'high'
+      : (windowEvents.some((event) => this.classifySignificance(event.type) === 'medium') ? 'medium' : 'low');
+    const storyLines = this.buildRecentFivePhaseStory(state, star, minPhase, currentPhase, byPhase, campaignByPhase);
+    const recentEntry: RecentNarrativeEntry = {
+      phase: currentPhase,
+      phaseEnd: minPhase,
+      lines: storyLines,
+      significance,
+      tags: tags.length > 0 ? tags : ['quiet'],
+    };
     return {
       title: `Recent Chronicle of ${star.name}`,
       subtitle: `Phases ${Math.max(0, currentPhase - phaseWindow + 1)}-${currentPhase}`,
       source: 'star-history',
       phaseWindow,
-      entries: collapsedEntries,
+      entries: [recentEntry],
     };
+  }
+
+  private static buildRecentFivePhaseStory(
+    state: GalaxyState,
+    star: Star,
+    minPhase: number,
+    currentPhase: number,
+    byPhase: Map<number, HistoricalEvent[]>,
+    campaignByPhase: Map<string, NamedCampaign>
+  ): string[] {
+    const phases: number[] = [];
+    for (let phase = minPhase; phase <= currentPhase; phase++) phases.push(phase);
+
+    const choose = (options: string[], key: string): string => {
+      const hash = this.stableHash(`${state.config.seed}|${star.id}|recent-story|${key}`);
+      return options[hash % options.length]!;
+    };
+    const sentence = (text: string): string => {
+      const collapsed = text.replace(/\s+/g, ' ').trim().replace(/[.?!]\s*$/, '');
+      return `${collapsed}.`;
+    };
+
+    const snapshots = phases.map((phase) => {
+      const events = byPhase.get(phase) ?? [];
+      const primary = events.length > 0
+        ? [...events].sort(
+          (a, b) => this.getSignificanceRank(this.classifySignificance(b.type)) - this.getSignificanceRank(this.classifySignificance(a.type))
+        )[0]!
+        : null;
+      const campaign = primary ? this.findCampaignForPhase(campaignByPhase, phase, events) : undefined;
+      const family = primary ? this.familyForType(primary.type) : 'quiet';
+      const targetId = primary?.relatedStars?.[0];
+      const targetName = targetId ? this.getStarName(state, targetId) : null;
+      return { phase, events, primary, campaign, family, targetName };
+    });
+
+    const activeSnapshots = snapshots.filter((snapshot) => snapshot.primary !== null);
+const totalEvents = snapshots.reduce((sum, snapshot) => sum + snapshot.events.length, 0);
+    const familyCounts = new Map<string, number>();
+    for (const snapshot of activeSnapshots) {
+      familyCounts.set(snapshot.family, (familyCounts.get(snapshot.family) ?? 0) + 1);
+    }
+    const dominantFamily = Array.from(familyCounts.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'quiet';
+
+    const counterpartCounts = new Map<string, number>();
+    for (const snapshot of activeSnapshots) {
+      if (!snapshot.targetName) continue;
+      counterpartCounts.set(snapshot.targetName, (counterpartCounts.get(snapshot.targetName) ?? 0) + 1);
+    }
+    const recurringCounterpart = Array.from(counterpartCounts.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+
+    const register = choose(['historian', 'strategic-brief', 'civic-observer', 'archive-neutral'], 'register') as
+      'historian' | 'strategic-brief' | 'civic-observer' | 'archive-neutral';
+
+    const familyMood = (): string => {
+      if (dominantFamily === 'war' || dominantFamily === 'conquest') return 'persistent conflict pressure';
+      if (dominantFamily === 'crisis') return 'sustained crisis management';
+      if (dominantFamily === 'reform') return 'institutional repair';
+      if (dominantFamily === 'prosperity') return 'renewed confidence and expansion';
+      if (dominantFamily === 'decline') return 'gradual erosion';
+      if (dominantFamily === 'diplomacy') return 'high-stakes negotiation';
+      if (dominantFamily === 'succession') return 'leadership transition';
+      return 'relative restraint';
+    };
+
+    const allianceCount = star.allies?.length ?? 0;
+    const tradeCount = star.tradeRoutes?.length ?? 0;
+    const warCount = star.atWarWith?.length ?? 0;
+    const subjectCount = star.subjects?.length ?? 0;
+    const loyaltyPct = Math.round((star.loyalty ?? 0) * 100);
+    const powerDelta = Math.round((star.power ?? 0) - (star.strength ?? 0));
+
+    const mentionedCampaigns = new Set<string>();
+    const campaignRef = (campaign: NamedCampaign): string => {
+      if (!mentionedCampaigns.has(campaign.campaignId)) {
+        mentionedCampaigns.add(campaign.campaignId);
+        return campaign.nameOfficial;
+      }
+      return campaign.nameCommon ?? 'the campaign';
+    };
+
+    const mentionedCounterparts = new Set<string>();
+    const counterpartRef = (name: string): string => {
+      if (!mentionedCounterparts.has(name)) {
+        mentionedCounterparts.add(name);
+        return name;
+      }
+      return register === 'civic-observer' ? 'that world' : 'that counterpart';
+    };
+
+    const introSentences: string[] = [];
+    if (register === 'historian') {
+      introSentences.push(sentence(totalEvents === 0
+        ? `${star.name} crossed phases ${minPhase}-${currentPhase} in uncommon quiet`
+        : `${star.name} crossed phases ${minPhase}-${currentPhase} with ${totalEvents} material events on record`));
+      introSentences.push(sentence(`The period was defined less by spectacle than by ${familyMood()}`));
+    } else if (register === 'strategic-brief') {
+      introSentences.push(sentence(`Window ${minPhase}-${currentPhase}: ${star.name} registered ${totalEvents} notable events`));
+      introSentences.push(sentence(`Primary driver for the window was ${familyMood()}`));
+    } else if (register === 'civic-observer') {
+      introSentences.push(sentence(totalEvents === 0
+        ? `Over phases ${minPhase}-${currentPhase}, people around ${star.name} mostly caught their breath`
+        : `Over phases ${minPhase}-${currentPhase}, life around ${star.name} was shaped by ${totalEvents} sharp turns`));
+      introSentences.push(sentence(`From the ground, the mood felt like ${familyMood()}`));
+    } else {
+      introSentences.push(sentence(`Archive window ${minPhase}-${currentPhase} for ${star.name} includes ${totalEvents} classified events`));
+      introSentences.push(sentence(`Aggregated pattern indicates ${familyMood()}`));
+    }
+    introSentences.push(sentence(warCount > 0
+      ? `Active war links remained at ${warCount}, keeping baseline tension elevated`
+      : `With no active wars, pressure shifted into governance and coordination`));
+    introSentences.push(sentence(`Network posture held at ${allianceCount} allies and ${tradeCount} trade routes, with ${subjectCount} subject worlds in orbit`));
+    introSentences.push(sentence(star.ruler && star.ruler !== star.id
+      ? `Because ${star.name} sits under external rule, each event also carried a local-autonomy question`
+      : `${star.name} retained decision authority at the center of the window`));
+
+    const phaseOpeners = [
+      choose(['At the opening of phase', 'In phase', 'By phase'], `phase-open-0`),
+      choose(['In phase', 'Through phase', 'At phase'], `phase-open-1`),
+      choose(['By phase', 'In phase', 'During phase'], `phase-open-2`),
+      choose(['During phase', 'In phase', 'At phase'], `phase-open-3`),
+      choose(['By the close of phase', 'In phase', 'At phase'], `phase-open-4`),
+    ];
+
+    const phaseSentences = snapshots.map((snapshot, idx) => {
+      const opener = `${phaseOpeners[idx] ?? 'In phase'} ${snapshot.phase}`;
+      if (!snapshot.primary) {
+        const quietEffect = warCount > 0
+          ? 'border alerts stayed active and command attention remained defensive'
+          : ((allianceCount + tradeCount) > 0
+            ? 'trade and diplomatic traffic carried continuity through the lull'
+            : 'local administration used the pause to stabilize routine operations');
+        return sentence(`${opener}, no major rupture landed, and ${quietEffect}`);
+      }
+
+      const primary = snapshot.primary;
+      const eventLabel = this.humanizeEventType(primary.type);
+      const parallel = snapshot.events.length > 1
+        ? choose([
+          'parallel incidents in the same phase amplified the effect',
+          'other events in the same cycle widened the response burden',
+          'side shocks in that cycle prevented a clean response',
+        ], `parallel-${snapshot.phase}`)
+        : choose([
+          'the event set the tone for that cycle',
+          'the response stayed focused on that one shift',
+          'the cycle was shaped by a single dominant turn',
+        ], `single-${snapshot.phase}`);
+
+      if (snapshot.campaign) {
+        const theater = snapshot.campaign.theaterRegionName ?? 'the local frontier';
+        const base = sentence(`${opener}, ${campaignRef(snapshot.campaign)} drove events across ${theater}, and ${parallel}`);
+        const leadershipNote = this.buildRecentLeadershipCallout(star, snapshot.events);
+        return leadershipNote ? `${base} ${leadershipNote}` : base;
+      }
+
+      const counterpartClause = snapshot.targetName
+        ? `with ${counterpartRef(snapshot.targetName)} as the key outside actor`
+        : 'without a single external actor dictating the pace';
+      const base = sentence(`${opener}, ${star.name} moved through a ${eventLabel} turn ${counterpartClause}, and ${parallel}`);
+      const leadershipNote = this.buildRecentLeadershipCallout(star, snapshot.events);
+      return leadershipNote ? `${base} ${leadershipNote}` : base;
+    });
+
+    const closeSentences: string[] = [];
+    closeSentences.push(sentence(`Across the full window, the governing pattern remained ${familyMood()}`));
+    closeSentences.push(sentence(recurringCounterpart
+      ? `${recurringCounterpart} appeared repeatedly in the causal chain, making it the most consequential external reference`
+      : 'No single counterpart dominated the sequence, so pressure arrived from multiple directions'));
+    closeSentences.push(sentence(`Material conditions ended at ${allianceCount} alliances, ${tradeCount} trade links, and ${warCount} active wars`));
+    closeSentences.push(sentence(star.ruler && star.ruler !== star.id
+      ? `As a subject world with loyalty near ${loyaltyPct}%, ${star.name} closed the window under continued autonomy pressure`
+      : `${star.name} closed the window independent, with power running ${powerDelta >= 0 ? `${powerDelta} points above` : `${Math.abs(powerDelta)} points below`} baseline strength`));
+    closeSentences.push(sentence(choose([
+      'The next phase will test whether these gains and losses consolidate into a durable direction',
+      'The immediate question is whether this pattern hardens into doctrine or breaks on first stress',
+      'What follows depends on whether the current alignment can survive one more cycle of pressure',
+    ], 'close-future')));
+
+    const sentences = [...introSentences, ...phaseSentences, ...closeSentences].slice(0, 15);
+
+    const paragraph1 = sentences.slice(0, 5).join(' ');
+    const paragraph2 = sentences.slice(5, 10).join(' ');
+    const paragraph3 = sentences.slice(10, 15).join(' ');
+
+    return [
+      paragraph1,
+      '',
+      paragraph2,
+      '',
+      paragraph3,
+    ];
   }
 
   public static generateStarLongNarrative(
@@ -483,6 +741,7 @@ export class NarrativeGenerator {
       type === EventType.Conquest ||
       type === EventType.Liberation ||
       type === EventType.Revolution ||
+      type === EventType.GovernmentTransition ||
       type === EventType.WarDeclared ||
       type === EventType.PeaceTreaty ||
       type === EventType.Plague ||
@@ -505,6 +764,7 @@ export class NarrativeGenerator {
     if (type === EventType.DarkAge || type === EventType.Collapse || type === EventType.DecadenceCollapse) return 'decline';
     if (type === EventType.AllianceFormed || type === EventType.AllianceBroken || type === EventType.DiplomaticIncident) return 'diplomacy';
     if (type === EventType.Succession) return 'succession';
+    if (type === EventType.GovernmentTransition) return 'government_transition';
     return 'general';
   }
 
@@ -525,6 +785,40 @@ export class NarrativeGenerator {
       });
     }
 
+    if (event.type === EventType.GovernmentTransition && event.metadata) {
+      const isPeacefulConversion = event.metadata.endReason === 'Peaceful Ideological Conversion';
+      const isConverterRecord = event.metadata.isConverterRecord === true;
+
+      // Converter-side record: the Theocracy that did the converting
+      if (isConverterRecord && event.metadata.convertedStarName) {
+        const template = this.pickTemplate('religious_conversion', state.config.seed, star.id, phase, 'converter', mode);
+        return this.fillTemplate(template, {
+          star: event.metadata.convertedStarName,
+          converter: star.name,
+          oldGov: 'former government',
+        });
+      }
+
+      // Target-side record: the star that was peacefully converted
+      if (isPeacefulConversion) {
+        const template = this.pickTemplate('religious_conversion', state.config.seed, star.id, phase, String(event.type), mode);
+        return this.fillTemplate(template, {
+          star: star.name,
+          converter: event.metadata.converterName || 'a neighboring Theocracy',
+          oldGov: event.metadata.oldGov?.replace(/-/g, ' ') || 'old government',
+        });
+      }
+
+      // Standard government transition (coup, revolution, etc.)
+      const template = this.pickTemplate('government_transition', state.config.seed, star.id, phase, String(event.type), mode);
+      return this.fillTemplate(template, {
+        star: star.name,
+        oldGov: event.metadata.oldGov?.replace(/-/g, ' ') || 'old government',
+        newGov: event.metadata.newGov?.replace(/-/g, ' ') || 'new government',
+        endReason: event.metadata.endReason || 'political upheaval',
+      });
+    }
+
     const family = this.familyForType(event.type);
     const targetId = event.relatedStars?.[0];
     const target = targetId ? this.getStarName(state, targetId) : 'a neighboring system';
@@ -536,43 +830,6 @@ export class NarrativeGenerator {
       eventLabel: this.humanizeEventType(event.type),
       direction: this.directionForEventType(event.type),
     });
-  }
-
-  private static buildConsequenceLine(
-    state: GalaxyState,
-    star: Star,
-    phase: number,
-    events: HistoricalEvent[]
-  ): string {
-    const powerTrend = star.power > star.strength ? 'upward' : star.power < star.strength ? 'downward' : 'flat';
-    const stabilityState = star.stability > 0.7 ? 'strong' : star.stability > 0.45 ? 'mixed' : 'fragile';
-    const adminState = star.administrativeTech > 1.1 ? 'adaptive' : star.administrativeTech > 0.8 ? 'stable' : 'strained';
-
-    const hasWar = events.some((e) => e.type === EventType.WarDeclared || e.type === EventType.Conquest);
-    const hasCrisis = events.some((e) => e.type === EventType.CrisisStarted || e.type === EventType.CrisisResolved);
-
-    let line = this.fillTemplate(
-      this.pickTemplate('consequence', state.config.seed, star.id, phase, hasWar ? 'war' : hasCrisis ? 'crisis' : 'general', 'recent'),
-      {
-        star: star.name,
-        powerTrend,
-        stabilityState,
-        adminState,
-      }
-    );
-
-    if (hasWar && !line.toLowerCase().includes('conflict')) {
-      line += ' Conflict pressure remained elevated.';
-    }
-
-    return line;
-  }
-
-  private static buildContextLine(state: GalaxyState, event: HistoricalEvent): string | null {
-    const targetId = event.relatedStars?.[0];
-    if (!targetId) return null;
-    const targetName = this.getStarName(state, targetId);
-    return `Context: ${targetName} remained a central counterpart in this phase.`;
   }
 
   private static buildCampaignIndex(state: GalaxyState, star: Star): Map<string, NamedCampaign> {
@@ -843,6 +1100,57 @@ export class NarrativeGenerator {
     return `${base} ${addendum}`;
   }
 
+  private static buildRecentLeadershipCallout(star: Star, events: HistoricalEvent[]): string | null {
+    const fragments: string[] = [];
+    const normalizeGovName = (value: unknown, fallback: string): string => {
+      if (typeof value !== 'string' || value.trim().length === 0) return fallback;
+      return value.replace(/-/g, ' ').trim().toLowerCase();
+    };
+
+    const transition = events.find((event) => event.type === EventType.GovernmentTransition && event.metadata);
+    if (transition?.metadata) {
+      const endReasonRaw = typeof transition.metadata.endReason === 'string'
+        ? transition.metadata.endReason.trim()
+        : 'Political upheaval';
+      const endReasonLower = endReasonRaw.toLowerCase();
+      const oldGov = normalizeGovName(transition.metadata.oldGov, 'old government');
+      const newGov = normalizeGovName(transition.metadata.newGov, 'new government');
+      if (endReasonLower.includes('coup')) {
+        fragments.push(`Leadership changed in a coup that ended the ${oldGov} and installed a ${newGov}`);
+      } else {
+        fragments.push(`Leadership changed through a ${endReasonLower}, replacing the ${oldGov} with a ${newGov}`);
+      }
+    }
+
+    const succession = events.find((event) => event.type === EventType.Succession && event.metadata);
+    if (succession?.metadata) {
+      const fromName = typeof succession.metadata.fromDynastName === 'string' && succession.metadata.fromDynastName.trim().length > 0
+        ? succession.metadata.fromDynastName.trim()
+        : 'the prior ruler';
+      const toName = typeof succession.metadata.toDynastName === 'string' && succession.metadata.toDynastName.trim().length > 0
+        ? succession.metadata.toDynastName.trim()
+        : 'a new claimant';
+      const houseName = typeof succession.metadata.houseName === 'string' && succession.metadata.houseName.trim().length > 0
+        ? succession.metadata.houseName.trim()
+        : null;
+      const reason = typeof succession.metadata.reason === 'string'
+        ? succession.metadata.reason
+        : 'inheritance';
+
+      if (reason === 'coup') {
+        fragments.push(`A succession coup displaced ${fromName} and put ${toName}${houseName ? ` of ${houseName}` : ''} in command`);
+      } else if (reason === 'civil_war') {
+        fragments.push(`A contested succession around ${star.name} followed the fall of ${fromName} and elevated ${toName}`);
+      } else {
+        fragments.push(`A succession transferred rule from ${fromName} to ${toName}${houseName ? ` of ${houseName}` : ''}`);
+      }
+    }
+
+    if (fragments.length === 0) return null;
+    const combined = fragments.join('; ');
+    return `${combined}.`;
+  }
+
   private static pickTemplate(
     family: string,
     seed: number,
@@ -851,7 +1159,12 @@ export class NarrativeGenerator {
     typeKey: string,
     mode: 'recent' | 'long'
   ): string {
-    const pool = this.TEMPLATE_POOLS[family] ?? this.TEMPLATE_POOLS.general ?? ['{star} recorded a notable event with mixed outcomes.'];
+    const pool = (mode === 'recent'
+      ? this.RECENT_TEMPLATE_POOLS[family]
+      : undefined)
+      ?? this.TEMPLATE_POOLS[family]
+      ?? this.TEMPLATE_POOLS.general
+      ?? ['{star} recorded a notable event with mixed outcomes.'];
     const hash = this.stableHash(`${seed}|${starId}|${phase}|${typeKey}|${mode}|${family}`);
     return pool[hash % pool.length]!;
   }
@@ -906,6 +1219,9 @@ export class NarrativeGenerator {
     ) {
       return 'stability';
     }
+
+    // Government transitions are inherently destabilising in the short term
+    if (type === EventType.GovernmentTransition) return 'instability';
 
     return 'mixed outcomes';
   }
@@ -1016,29 +1332,6 @@ export class NarrativeGenerator {
       }
     }
     return bestRegion;
-  }
-
-  private static collapseRecentEntries(entries: RecentNarrativeEntry[]): RecentNarrativeEntry[] {
-    if (entries.length <= 1) return entries;
-    const collapsed: RecentNarrativeEntry[] = [];
-
-    const signatureFor = (entry: RecentNarrativeEntry): string =>
-      `${entry.significance}|${entry.lines.join(' || ')}`;
-
-    for (const entry of entries) {
-      const prev = collapsed[collapsed.length - 1];
-      if (!prev) {
-        collapsed.push({ ...entry });
-        continue;
-      }
-      if (signatureFor(prev) === signatureFor(entry)) {
-        const prevEnd = prev.phaseEnd ?? prev.phase;
-        prev.phaseEnd = Math.min(prevEnd, entry.phaseEnd ?? entry.phase);
-      } else {
-        collapsed.push({ ...entry });
-      }
-    }
-    return collapsed;
   }
 
   private static collapseLongLines(lines: NarrativeLine[]): NarrativeLine[] {

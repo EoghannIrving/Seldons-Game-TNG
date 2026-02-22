@@ -4,8 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Seldon's Game - Enhanced Edition</title>
-    <script type="module" crossorigin src="./assets/index-BossMNki.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-CSoB4quk.css">
+    <script type="module" crossorigin src="./assets/index-JUhhRIM0.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-BHz7dQgz.css">
   </head>
   <body>
     <div id="gameArea">
@@ -39,7 +39,7 @@
           <div class="header-controls">
             <button id="headerPlayBtn" class="header-control-btn" aria-label="Play or Pause">▶ Play</button>
             <button id="headerStepBtn" class="header-control-btn" aria-label="Step one phase">Step</button>
-            <button id="headerSpeedBtn" class="header-control-btn header-speed-btn" aria-label="Playback speed">5x</button>
+            <button id="headerSpeedBtn" class="header-control-btn header-speed-btn" aria-label="Playback speed">1x</button>
           </div>
           <div class="header-stats">
             <div class="hud-stat">
@@ -75,10 +75,9 @@
         </div>
       </div>
     </div>
-
     <!-- Settings Modal -->
     <div id="settingsModal" class="modal">
-      <div class="modal-content">
+      <div class="modal-content settings-modal-content">
         <h2>Galaxy Settings</h2>
 
         <div class="setting-group">
@@ -119,32 +118,53 @@
           </select>
         </div>
 
-        <div class="setting-group">
-          <label for="seedInput">Seed (optional):</label>
-          <input type="text" id="seedInput" placeholder="Leave blank for random" aria-label="Enter a seed for galaxy generation">
-        </div>
+        <details class="advanced-settings">
+          <summary>Advanced Settings</summary>
+          <p class="advanced-settings-help">Use these controls to tune simulation behavior and diagnostics.</p>
+
+          <div class="setting-group">
+            <label for="interactionFactorInput">Influence Falloff:</label>
+            <input type="number" id="interactionFactorInput" min="0" max="50" step="1" value="10" aria-label="Set influence falloff interaction factor">
+            <small class="setting-help-text">Higher values reduce short-range domination and slow early consolidation.</small>
+          </div>
+
+          <div class="setting-group">
+            <label for="seedModeSelect">Seed Source:</label>
+            <select id="seedModeSelect" aria-label="Choose seed source">
+              <option value="random" selected>Random</option>
+              <option value="current">Current Galaxy Seed</option>
+              <option value="custom">Custom Seed</option>
+            </select>
+            <small class="setting-help-text">Choose random for a fresh map, current for reproducible variants, or custom to enter a seed.</small>
+          </div>
+
+          <div class="setting-group">
+            <label for="seedInput">Custom Seed:</label>
+            <input type="text" id="seedInput" placeholder="Enter custom seed value" aria-label="Enter a custom seed for galaxy generation">
+          </div>
+
+          <div class="integrity-check-box">
+            <div class="flex justify-between items-center gap-10 margin-bottom-8">
+              <span class="font-size-12 color-dim">Save Integrity Diagnostics</span>
+              <button id="runIntegrityCheckBtn" class="font-size-11 padding-4-8" aria-label="Run save integrity check">Run Integrity Check</button>
+            </div>
+            <div id="saveIntegrityReport" class="integrity-report">
+              No verification run yet.
+            </div>
+          </div>
+        </details>
 
         <div class="warning-box">
-          ⚠️ Creating a new galaxy will delete your current save
-        </div>
-
-        <div class="integrity-check-box">
-          <div class="flex justify-between items-center gap-10 margin-bottom-8">
-            <span class="font-size-12 color-dim">Save Integrity Diagnostics</span>
-            <button id="runIntegrityCheckBtn" class="font-size-11 padding-4-8" aria-label="Run save integrity check">Run Integrity Check</button>
-          </div>
-          <div id="saveIntegrityReport" class="integrity-report">
-            No verification run yet.
-          </div>
+          Warning: Resetting or generating a galaxy will overwrite your current save
         </div>
 
         <div class="modal-buttons">
-          <button type="button" id="createGalaxyBtn" class="primary-btn" aria-label="Create new galaxy">Create New Galaxy</button>
+          <button type="button" id="resetGalaxyBtn" aria-label="Reset current galaxy">Reset Current Galaxy</button>
+          <button type="button" id="createGalaxyBtn" class="primary-btn" aria-label="Generate new galaxy">Generate New Galaxy</button>
           <button type="button" id="cancelSettingsBtn" aria-label="Cancel and close settings">Cancel</button>
         </div>
       </div>
     </div>
-
     <!-- Notification Area -->
     <div id="notificationArea" style="
       position: fixed; 
@@ -159,8 +179,7 @@
       width: 600px;
       align-items: center;
     "></div>
-
+
   </body>
 </html>
-
 

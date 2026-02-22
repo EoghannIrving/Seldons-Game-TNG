@@ -11,6 +11,17 @@
 
 import { Star, GalaxyState, Trait, EventType, StarTier } from './types';
 import type { Galaxy } from './galaxy';
+import { SeededRandom } from '../utils/seeded-random';
+
+/** Deterministic hash — same algorithm used in psychohistory.ts */
+function stableHash(input: string): number {
+  let hash = 2166136261;
+  for (let i = 0; i < input.length; i++) {
+    hash ^= input.charCodeAt(i);
+    hash = (hash * 16777619) >>> 0;
+  }
+  return hash;
+}
 
 /**
  * Calculate cultural affinity between two stars
@@ -22,6 +33,22 @@ function calculateCulturalAffinity(star1: Star, star2: Star): number {
 
   if (totalUniqueTraits === 0) return 0;
   return sharedTraits / totalUniqueTraits;
+}
+
+// Maximum number of alliances a star can maintain — political bandwidth is finite
+const MAX_ALLIES = 5;
+
+/**
+ * Compute what fraction of stars are subjects (0 = all independent, 1 = all absorbed).
+ * Used to scale down inter-independent-state diplomacy when large empires dominate the map.
+ */
+function getConsolidationFactor(galaxy: GalaxyState): number {
+  if (!galaxy.stars || galaxy.stars.size === 0) return 0;
+  let subjectCount = 0;
+  for (const star of galaxy.stars.values()) {
+    if (star.ruler !== star.id) subjectCount++;
+  }
+  return subjectCount / galaxy.stars.size;
 }
 
 /**
@@ -39,77 +66,77 @@ function shouldFormAlliance(
   if (star1.ruler !== star1.id || star2.ruler !== star2.id) return false;
 
   // Must be within diplomatic range
-  const DIPLOMATIC_RANGE = 200; // Roughly 10 grid units apart
+  const DIPLOMATIC_RANGE = 200;
   if (distance > DIPLOMATIC_RANGE) return false;
 
   // Already allied?
   if (star1.allies.includes(star2.id)) return false;
 
-  // Base alliance chance
-  let allianceChance = 0.15; // 15% base per phase
+  // Hard cap: stars cannot maintain unlimited alliances
+  if (star1.allies.length >= MAX_ALLIES || star2.allies.length >= MAX_ALLIES) return false;
 
-  // Proximity bonus - closer stars more likely to ally
-  const proximityBonus = Math.max(0, (DIPLOMATIC_RANGE - distance) / DIPLOMATIC_RANGE) * 0.15;
-  allianceChance += proximityBonus; // Up to +15% for very close neighbors
+  // Declining stars don't seek new alliances — they're too internally unstable
+  if ((star1.vitality ?? 1) < 0.3 || (star2.vitality ?? 1) < 0.3) return false;
+  if ((star1.decadence || 0) > 0.7 || (star2.decadence || 0) > 0.7) return false;
+
+  // Base alliance chance — lower than before so accumulation is slow
+  let allianceChance = 0.04; // 4% base per phase (was 15%)
+
+  // Proximity bonus
+  const proximityBonus = Math.max(0, (DIPLOMATIC_RANGE - distance) / DIPLOMATIC_RANGE) * 0.06;
+  allianceChance += proximityBonus;
 
   // Cultural affinity bonus
   const affinity = calculateCulturalAffinity(star1, star2);
-  allianceChance += affinity * 0.25; // Up to +25% for perfect cultural match
+  allianceChance += affinity * 0.08;
 
-  // Common threat bonus (nearby powerful empire)
+  // Common threat detection — scan nearby empires (≥3 subjects) for both stars
   let nearbyThreat = false;
-  
-  // Phase 4: Use SpatialIndex to find nearby threats instead of O(N) scan
-  // Check around both stars (approx radius 12 units for 225 dist check)
-  // sqrt(150) ~= 12.25
+  let nearbyThreatSize = 0; // size of the most threatening nearby empire
   const threatRadius = 13;
-  
-  // Combine candidates from both stars' neighborhoods
   const candidates1 = galaxyInstance.spatialIndex.queryRadius(star1.position.x, star1.position.y, threatRadius);
   const candidates2 = galaxyInstance.spatialIndex.queryRadius(star2.position.x, star2.position.y, threatRadius);
   const uniqueCandidates = new Set([...candidates1, ...candidates2]);
-  
+
   for (const otherId of uniqueCandidates) {
     if (otherId === star1.id || otherId === star2.id) continue;
-    
     const otherStar = galaxy.stars.get(otherId);
     if (!otherStar) continue;
-    
-    if (otherStar.subjects.length < 3) continue; // Any empire with 3+ subjects is a threat
-
-    // Verify actual distance (spatial index is approximate box/radius)
+    if (otherStar.subjects.length < 3) continue;
     const d1 = galaxyInstance.getDistance(star1.id, otherId);
     const d2 = galaxyInstance.getDistance(star2.id, otherId);
-
-    if (d1 < 150 || d2 < 150) { // Threat within ~8-9 grid units
+    if (d1 < 150 || d2 < 150) {
       nearbyThreat = true;
+      nearbyThreatSize = Math.max(nearbyThreatSize, otherStar.subjects.length);
       break;
     }
   }
 
   if (nearbyThreat) {
-    allianceChance += 0.25; // +25% when threatened
+    // Larger nearby empire = stronger incentive to ally (scales from +0.08 to +0.16)
+    allianceChance += Math.min(0.16, 0.08 + nearbyThreatSize * 0.005);
   }
 
-  // Republican/Cosmopolitan stars more likely to ally
-  const star1Diplomatic = star1.traits.includes(Trait.Republican) ||
-                          star1.traits.includes(Trait.Cosmopolitan);
-  const star2Diplomatic = star2.traits.includes(Trait.Republican) ||
-                          star2.traits.includes(Trait.Cosmopolitan);
-
-  if (star1Diplomatic) allianceChance += 0.10;
-  if (star2Diplomatic) allianceChance += 0.10;
-
-  // Phase 5.7: Dark Age Penalties
-  // Harder to form alliances during Dark Ages
-  if (star1.darkAge || star2.darkAge) {
-    allianceChance -= 0.15; // Cancels base chance
-  }
-  if (star1.severeDarkAge || star2.severeDarkAge) {
-    allianceChance -= 0.25; // Significant penalty
+  // Consolidation suppression: when empires dominate the map, the remaining independent
+  // stars have fewer peers to ally with — and if they're not already threatened,
+  // there's less impetus for new pacts. This naturally reduces the raw alliance count
+  // without touching the threat-driven alliances.
+  const consolidation = getConsolidationFactor(galaxy);
+  if (consolidation > 0.2 && !nearbyThreat) {
+    // Up to -50% alliance chance when galaxy is 70% consolidated and no threat visible
+    allianceChance *= Math.max(0.5, 1 - (consolidation - 0.2) * 1.0);
   }
 
-  return Math.random() < allianceChance;
+  const star1Diplomatic = star1.traits.includes(Trait.Republican) || star1.traits.includes(Trait.Cosmopolitan);
+  const star2Diplomatic = star2.traits.includes(Trait.Republican) || star2.traits.includes(Trait.Cosmopolitan);
+  if (star1Diplomatic) allianceChance += 0.04;
+  if (star2Diplomatic) allianceChance += 0.04;
+
+  if (star1.darkAge || star2.darkAge) allianceChance -= 0.05;
+  if (star1.severeDarkAge || star2.severeDarkAge) allianceChance -= 0.10;
+
+  const allianceRng = new SeededRandom(stableHash(`alliance|${galaxy.config.seed}|${galaxy.phase}|${star1.id}|${star2.id}`));
+  return allianceRng.next() < allianceChance;
 }
 
 /**
@@ -186,13 +213,14 @@ function updateCulturalDynamics(
   if (rev1 || rev2) distanceChange += 1;
 
   // Decreases
-  // -1 if active trade route
+  // -1 if active trade route (genuine economic bond)
   if (star1.tradeRoutes.includes(star2.id)) distanceChange -= 1;
 
-  // -1 if active alliance (Always true here)
-  distanceChange -= 1;
+  // Note: being in an alliance does NOT automatically reduce cultural distance —
+  // the alliance exists because of low distance, not the other way around.
+  // Removed the self-referential "-1 for being allied" that made alliances unbreakable.
 
-  // -2 if common enemy
+  // -2 if common enemy (shared existential threat is the strongest bond)
   const commonEnemies = star1.atWarWith.filter(enemyId => star2.atWarWith.includes(enemyId));
   if (commonEnemies.length > 0) distanceChange -= 2;
 
@@ -340,32 +368,38 @@ export function updateAlliances(galaxy: GalaxyState, galaxyInstance: Galaxy): vo
 
   // Check existing alliances for dissolution
   for (const star of stars) {
-    // Minor stars participate in alliances but don't drive complex checks every turn
     if (star.tier === StarTier.Minor && galaxy.phase % 5 !== 0) continue;
 
     for (const allyId of [...star.allies]) {
-      // Avoid processing twice
       if (allyId < star.id) continue;
 
       const ally = galaxy.stars.get(allyId);
       if (!ally) {
-        // Ally no longer exists, remove
         star.allies = star.allies.filter(id => id !== allyId);
         continue;
       }
 
-      const distance = galaxyInstance.getDistance(star.id, allyId);
+      // Alliance breaks immediately if either party is no longer independent
+      if (star.ruler !== star.id || ally.ruler !== ally.id) {
+        breakAlliance(star, ally, galaxy.phase, 'conquest');
+        continue;
+      }
 
-      // Revised Drift Model
+      // Alliance breaks if either party is in severe decline (decadent/near-dead)
+      // — failing empires cannot maintain distant diplomatic commitments
+      const starDeclining = (star.vitality ?? 1) < 0.25 || (star.decadence || 0) > 0.85;
+      const allyDeclining = (ally.vitality ?? 1) < 0.25 || (ally.decadence || 0) > 0.85;
+      if (starDeclining || allyDeclining) {
+        const breakRng = new SeededRandom(stableHash(`alliance-break|${galaxy.config.seed}|${galaxy.phase}|${star.id}|${ally.id}`));
+        if (breakRng.next() < 0.15) { // 15%/phase chance to break when one party is collapsing
+          breakAlliance(star, ally, galaxy.phase, 'divergence');
+          continue;
+        }
+      }
+
+      const distance = galaxyInstance.getDistance(star.id, allyId);
       if (updateCulturalDynamics(star, ally, distance, galaxy.phase)) {
-        // Determine reason
-        let reason: 'conquest' | 'divergence' | 'incident' = 'divergence';
-        
-        if (star.ruler !== star.id || ally.ruler !== ally.id) {
-          reason = 'conquest';
-        } 
-        
-        breakAlliance(star, ally, galaxy.phase, reason);
+        breakAlliance(star, ally, galaxy.phase, 'divergence');
       }
     }
   }
@@ -423,20 +457,24 @@ export function updateAlliances(galaxy: GalaxyState, galaxyInstance: Galaxy): vo
  * Used when determining if a star can be conquered
  */
 export function getAllianceDefense(star: Star, galaxy: GalaxyState, galaxyInstance: Galaxy): number {
+  // Alliance defense provides a meaningful but bounded defensive bonus.
+  // Each ally contributes 20% of their influence (reduced from 50%).
+  // Total defense is capped at the star's own power — allies can help but never dominate.
+  // This prevents large alliance webs from making stars permanently unconquerable.
   let totalDefense = 0;
 
   for (const allyId of star.allies) {
     const ally = galaxy.stars.get(allyId);
     if (!ally) continue;
 
-    // Allied stars contribute a portion of their power
     const distance = galaxyInstance.getDistance(star.id, allyId);
-    const defensiveContribution = ally.power / (distance + 1) * 0.5; // 50% of potential influence
-
+    const defensiveContribution = ally.power / (distance + 1) * 0.2;
     totalDefense += defensiveContribution;
   }
 
-  return totalDefense;
+  // Cap: alliance defense cannot exceed the star's own power projection
+  const ownPower = star.power;
+  return Math.min(totalDefense, ownPower * 0.5);
 }
 
 /**
@@ -496,17 +534,20 @@ export function spreadCulturalInfluence(galaxy: GalaxyState, galaxyInstance: Gal
 
       // Influence check - Reduced speed to prevent rapid trait cycling
       const influenceChance = (star.culturalInfluence / (distance + 50)) * 0.02;
-      
-      if (Math.random() < influenceChance) {
+
+      // Single seeded RNG per star–neighbor pair per phase; draw values in sequence
+      const culturalRng = new SeededRandom(stableHash(`culture|${galaxy.config.seed}|${galaxy.phase}|${star.id}|${neighborId}`));
+
+      if (culturalRng.next() < influenceChance) {
         // Try to spread a trait
         if (star.traits.length > 0) {
-          const traitToSpread = star.traits[Math.floor(Math.random() * star.traits.length)];
-          
+          const traitToSpread = star.traits[Math.floor(culturalRng.next() * star.traits.length)];
+
           if (traitToSpread && !neighbor.traits.includes(traitToSpread)) {
             // Add trait if space
             if (neighbor.traits.length < MAX_TRAITS) {
               neighbor.traits.push(traitToSpread);
-              
+
               // Record event
               neighbor.history.push({
                 type: EventType.CulturalAssimilation,
@@ -514,9 +555,9 @@ export function spreadCulturalInfluence(galaxy: GalaxyState, galaxyInstance: Gal
                 description: `Adopted ${traitToSpread} culture from ${star.name}`,
                 relatedStars: [star.id]
               });
-            } 
+            }
             // Chance to replace trait if full - Reduced from 30% to 10%
-            else if (Math.random() < 0.1) {
+            else if (culturalRng.next() < 0.1) {
               const removedTrait = neighbor.traits.shift();
               neighbor.traits.push(traitToSpread);
 

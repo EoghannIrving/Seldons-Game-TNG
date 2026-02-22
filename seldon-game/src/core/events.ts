@@ -207,53 +207,48 @@ export class EventManager {
     }
 
     // 2. Apply active effects
+    // NOTE: star.strength AND star.power are both recalculated from population every phase
+    // by applyGrowth + calculateAllPowers. Any write to star.strength is overwritten on the
+    // next phase. All persistent effects MUST target star.infrastructureDamage (read as input
+    // by applyGrowth's governanceFactor and I term, so it survives recalculation) or
+    // star.administrativeTech / star.decadence.
     for (const event of galaxy.events) {
         if (event.resolved) continue;
 
-        // Apply distinct effects based on type
         switch (event.type) {
             case EventType.TradeBoom:
-                this.applyStrengthModifier(galaxy, event.targetStarIds, 0.02); // +2% wealth/pop per turn
+                // Economic boom repairs supply chains — small infrastructure recovery per phase.
+                // Negative damage = repair. Clamped to 0 in applyInfrastructureDamage.
+                this.applyInfrastructureDamage(galaxy, event.targetStarIds, -0.01);
                 break;
             case EventType.Plague:
-                this.applyStrengthModifier(galaxy, event.targetStarIds, -0.05); // -5% pop per turn (deadly!)
-                this.applyPowerModifier(galaxy, event.targetStarIds, -0.10); // Power collapses faster
+                // Demographic and infrastructure collapse; population shock handled by applyGrowth.
+                // Infrastructure damage reduces K and governanceFactor persistently.
+                this.applyInfrastructureDamage(galaxy, event.targetStarIds, 0.03);
                 break;
             case EventType.TechBreakthrough:
-                this.applyAdminTechModifier(galaxy, event.targetStarIds, 0.005); // Small admin boost
+                // Small ongoing admin efficiency gain
+                this.applyAdminTechModifier(galaxy, event.targetStarIds, 0.005);
                 break;
             case EventType.StellarFlare:
-                this.applyPowerModifier(galaxy, event.targetStarIds, -0.10); // Disruption reduces effective power
+                // Stellar radiation disrupts logistics networks and surface infrastructure.
+                // Infrastructure damage persists after the event, representing repair backlogs.
+                this.applyInfrastructureDamage(galaxy, event.targetStarIds, 0.05);
                 break;
             case EventType.PirateRaid:
-                this.applyStrengthModifier(galaxy, event.targetStarIds, -0.01); // Minor loss
+                // Pirates raid convoys and outposts — gradual infrastructure attrition.
+                this.applyInfrastructureDamage(galaxy, event.targetStarIds, 0.012);
                 break;
-             case EventType.HyperlaneCollapse:
-                // Isolate system? For now just reduce growth and power
-                this.applyStrengthModifier(galaxy, event.targetStarIds, -0.02);
-                this.applyPowerModifier(galaxy, event.targetStarIds, -0.05);
+            case EventType.HyperlaneCollapse:
+                // Isolation: supply disruption damages infrastructure each phase.
+                this.applyInfrastructureDamage(galaxy, event.targetStarIds, 0.02);
+                break;
+            case EventType.DiplomaticIncident:
+                // Tensions reduce loyalty between the two involved stars.
+                // Implemented as a direct loyalty nudge on each target toward the other.
+                this.applyDiplomaticPressure(galaxy, event.targetStarIds);
                 break;
         }
-    }
-  }
-
-  private applyStrengthModifier(galaxy: GalaxyState, starIds: string[], amount: number) {
-    for (const id of starIds) {
-      const star = galaxy.stars.get(id);
-      if (star) {
-        star.strength *= (1 + amount);
-        // Ensure min strength
-        if (star.strength < 0.1) star.strength = 0.1;
-      }
-    }
-  }
-
-  private applyPowerModifier(galaxy: GalaxyState, starIds: string[], amount: number) {
-    for (const id of starIds) {
-      const star = galaxy.stars.get(id);
-      if (star) {
-        star.power *= (1 + amount);
-      }
     }
   }
 
@@ -262,6 +257,27 @@ export class EventManager {
       const star = galaxy.stars.get(id);
       if (star) {
         star.administrativeTech = (star.administrativeTech || 1.0) + amount;
+      }
+    }
+  }
+
+  private applyInfrastructureDamage(galaxy: GalaxyState, starIds: string[], amount: number) {
+    for (const id of starIds) {
+      const star = galaxy.stars.get(id);
+      if (star) {
+        star.infrastructureDamage = Math.max(0, Math.min(1, (star.infrastructureDamage || 0) + amount));
+      }
+    }
+  }
+
+  private applyDiplomaticPressure(galaxy: GalaxyState, starIds: string[]) {
+    // Each star in the incident loses a small amount of loyalty toward the other party.
+    // If either is currently a subject of the other, the incident seeds future revolt.
+    if (starIds.length < 2) return;
+    for (const id of starIds) {
+      const star = galaxy.stars.get(id);
+      if (star) {
+        star.loyalty = Math.max(-1.0, (star.loyalty || 0) - 0.05);
       }
     }
   }

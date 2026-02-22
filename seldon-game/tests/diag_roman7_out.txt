@@ -1,0 +1,557 @@
+
+=== ROMAN MODEL v8: timeBonus=0.016, adminStrain×0.008, coeff=0.12, tenure up to +0.015 ===
+
+Seed 1771415222623 stars=200 cluster...
+Phase 1: 640 pairs checked, 91 formed. Total alliances: 91
+Phase 21: 241 pairs checked, 0 formed. Total alliances: 97
+Phase 41: 220 pairs checked, 0 formed. Total alliances: 93
+Phase 61: 171 pairs checked, 8 formed. Total alliances: 77
+Phase 81: 127 pairs checked, 0 formed. Total alliances: 71
+Phase 101: 160 pairs checked, 2 formed. Total alliances: 70
+Phase 121: 206 pairs checked, 3 formed. Total alliances: 69
+Phase 141: 271 pairs checked, 8 formed. Total alliances: 76
+Phase 161: 482 pairs checked, 13 formed. Total alliances: 103
+Phase 181: 586 pairs checked, 3 formed. Total alliances: 112
+Phase 201: 773 pairs checked, 6 formed. Total alliances: 128
+Phase 221: 762 pairs checked, 9 formed. Total alliances: 130
+Phase 241: 713 pairs checked, 5 formed. Total alliances: 127
+Phase 261: 395 pairs checked, 7 formed. Total alliances: 110
+Phase 281: 772 pairs checked, 13 formed. Total alliances: 131
+Phase 301: 934 pairs checked, 23 formed. Total alliances: 166
+Phase 321: 779 pairs checked, 17 formed. Total alliances: 130
+Phase 341: 759 pairs checked, 3 formed. Total alliances: 126
+Phase 361: 866 pairs checked, 9 formed. Total alliances: 132
+Phase 381: 1013 pairs checked, 5 formed. Total alliances: 148
+Phase 401: 755 pairs checked, 6 formed. Total alliances: 136
+Phase 421: 684 pairs checked, 12 formed. Total alliances: 112
+Phase 441: 787 pairs checked, 7 formed. Total alliances: 134
+Phase 461: 678 pairs checked, 17 formed. Total alliances: 134
+Phase 481: 571 pairs checked, 3 formed. Total alliances: 111
+Phase 501: 646 pairs checked, 3 formed. Total alliances: 116
+Phase 521: 703 pairs checked, 12 formed. Total alliances: 105
+Phase 541: 831 pairs checked, 12 formed. Total alliances: 110
+Phase 561: 897 pairs checked, 15 formed. Total alliances: 110
+Phase 581: 805 pairs checked, 7 formed. Total alliances: 124
+Phase 601: 572 pairs checked, 10 formed. Total alliances: 90
+Phase 621: 756 pairs checked, 12 formed. Total alliances: 109
+Phase 641: 907 pairs checked, 22 formed. Total alliances: 131
+Phase 661: 766 pairs checked, 3 formed. Total alliances: 106
+Phase 681: 474 pairs checked, 2 formed. Total alliances: 93
+Phase 701: 521 pairs checked, 4 formed. Total alliances: 97
+Phase 721: 453 pairs checked, 13 formed. Total alliances: 92
+Phase 741: 705 pairs checked, 15 formed. Total alliances: 117
+Phase 761: 591 pairs checked, 12 formed. Total alliances: 93
+Phase 781: 451 pairs checked, 7 formed. Total alliances: 84
+Phase 801: 38 pairs checked, 2 formed. Total alliances: 20
+Phase 821: 536 pairs checked, 6 formed. Total alliances: 63
+Phase 841: 807 pairs checked, 6 formed. Total alliances: 91
+Phase 861: 642 pairs checked, 14 formed. Total alliances: 85
+Phase 881: 413 pairs checked, 7 formed. Total alliances: 79
+Phase 901: 524 pairs checked, 6 formed. Total alliances: 88
+Phase 921: 493 pairs checked, 7 formed. Total alliances: 96
+Phase 941: 169 pairs checked, 3 formed. Total alliances: 50
+Phase 961: 334 pairs checked, 5 formed. Total alliances: 66
+Phase 981: 220 pairs checked, 4 formed. Total alliances: 49
+Phase 1001: 191 pairs checked, 2 formed. Total alliances: 52
+Phase 1021: 588 pairs checked, 2 formed. Total alliances: 83
+Phase 1041: 689 pairs checked, 7 formed. Total alliances: 94
+Phase 1061: 362 pairs checked, 3 formed. Total alliances: 66
+Phase 1081: 439 pairs checked, 3 formed. Total alliances: 91
+Phase 1101: 804 pairs checked, 13 formed. Total alliances: 123
+Phase 1121: 536 pairs checked, 11 formed. Total alliances: 82
+Phase 1141: 792 pairs checked, 15 formed. Total alliances: 97
+Phase 1161: 500 pairs checked, 5 formed. Total alliances: 74
+Phase 1181: 633 pairs checked, 13 formed. Total alliances: 89
+Phase 1201: 694 pairs checked, 3 formed. Total alliances: 112
+Phase 1221: 671 pairs checked, 13 formed. Total alliances: 106
+Phase 1241: 558 pairs checked, 3 formed. Total alliances: 82
+Phase 1261: 245 pairs checked, 3 formed. Total alliances: 52
+Phase 1281: 491 pairs checked, 4 formed. Total alliances: 87
+Phase 1301: 426 pairs checked, 4 formed. Total alliances: 91
+Phase 1321: 427 pairs checked, 8 formed. Total alliances: 76
+Phase 1341: 534 pairs checked, 7 formed. Total alliances: 91
+Phase 1361: 571 pairs checked, 8 formed. Total alliances: 88
+Phase 1381: 300 pairs checked, 0 formed. Total alliances: 72
+Phase 1401: 265 pairs checked, 5 formed. Total alliances: 63
+Phase 1421: 343 pairs checked, 2 formed. Total alliances: 60
+Phase 1441: 441 pairs checked, 4 formed. Total alliances: 70
+Phase 1461: 500 pairs checked, 6 formed. Total alliances: 84
+Phase 1481: 162 pairs checked, 3 formed. Total alliances: 53
+Phase 1501: 163 pairs checked, 3 formed. Total alliances: 49
+Phase 1521: 275 pairs checked, 5 formed. Total alliances: 62
+Phase 1541: 372 pairs checked, 4 formed. Total alliances: 82
+Phase 1561: 144 pairs checked, 0 formed. Total alliances: 46
+Phase 1581: 168 pairs checked, 5 formed. Total alliances: 45
+Phase 1601: 161 pairs checked, 5 formed. Total alliances: 54
+Phase 1621: 333 pairs checked, 3 formed. Total alliances: 71
+Phase 1641: 146 pairs checked, 4 formed. Total alliances: 50
+Phase 1661: 191 pairs checked, 4 formed. Total alliances: 55
+Phase 1681: 196 pairs checked, 8 formed. Total alliances: 48
+Phase 1701: 526 pairs checked, 6 formed. Total alliances: 73
+Phase 1721: 590 pairs checked, 7 formed. Total alliances: 88
+Phase 1741: 461 pairs checked, 1 formed. Total alliances: 87
+Phase 1761: 229 pairs checked, 7 formed. Total alliances: 60
+Phase 1781: 306 pairs checked, 1 formed. Total alliances: 85
+Phase 1801: 223 pairs checked, 7 formed. Total alliances: 55
+Phase 1821: 251 pairs checked, 7 formed. Total alliances: 68
+Phase 1841: 306 pairs checked, 7 formed. Total alliances: 80
+Phase 1861: 408 pairs checked, 5 formed. Total alliances: 83
+Phase 1881: 521 pairs checked, 16 formed. Total alliances: 90
+Phase 1901: 314 pairs checked, 4 formed. Total alliances: 71
+Phase 1921: 164 pairs checked, 3 formed. Total alliances: 56
+Phase 1941: 263 pairs checked, 1 formed. Total alliances: 51
+Phase 1961: 309 pairs checked, 6 formed. Total alliances: 59
+Phase 1981: 528 pairs checked, 11 formed. Total alliances: 79
+  Peak: 58.0% at Ph792 by Albali
+  Longest >=50% run: 20 phases
+  Longest >=40% run: 60 phases
+  Longest >=30% run: 70 phases
+  Ph50: 36 polities | Top3: Deneb(4), Procyon(3), Elnath(3) | Leader=8.0%
+  Ph100: 30 polities | Top3: Deneb(5), Santanni(4), Smitheus(4) | Leader=10.0%
+  Ph200: 47 polities | Top3: Solaria(2), Albali(2), Tabit(2) | Leader=4.0%
+  Ph300: 47 polities | Top3: Solaria(3), Castor(2), Trantor(1) | Leader=6.0%
+  Ph400: 46 polities | Top3: Pollux(3), Solaria(2), Dubhe(2) | Leader=6.0%
+  Ph500: 50 polities | Top3: Trantor(1), Terminus(1), Kalgan(1) | Leader=2.0%
+  Ph750: 47 polities | Top3: Rhodia(2), Arcturus(2), Regor(2) | Leader=4.0%
+  Ph1000: 25 polities | Top3: Albali(22), Rhodia(3), Azha(2) | Leader=44.0%
+  Ph1500: 25 polities | Top3: Albali(23), Diphda(3), Fum al Samakah(2) | Leader=46.0%
+  Ph2000: 42 polities | Top3: Albali(7), Fomalhaut(2), Fum al Samakah(2) | Leader=14.0%
+
+Seed 42 stars=120 spiral...
+Phase 1: 472 pairs checked, 61 formed. Total alliances: 61
+Phase 21: 53 pairs checked, 0 formed. Total alliances: 32
+Phase 41: 44 pairs checked, 0 formed. Total alliances: 29
+Phase 61: 147 pairs checked, 5 formed. Total alliances: 46
+Phase 81: 165 pairs checked, 0 formed. Total alliances: 51
+Phase 101: 175 pairs checked, 3 formed. Total alliances: 54
+Phase 121: 178 pairs checked, 0 formed. Total alliances: 55
+Phase 141: 74 pairs checked, 6 formed. Total alliances: 30
+Phase 161: 80 pairs checked, 0 formed. Total alliances: 37
+Phase 181: 26 pairs checked, 0 formed. Total alliances: 18
+Phase 201: 345 pairs checked, 3 formed. Total alliances: 60
+Phase 221: 381 pairs checked, 3 formed. Total alliances: 79
+Phase 241: 154 pairs checked, 7 formed. Total alliances: 51
+Phase 261: 481 pairs checked, 7 formed. Total alliances: 80
+Phase 281: 587 pairs checked, 10 formed. Total alliances: 105
+Phase 301: 891 pairs checked, 18 formed. Total alliances: 129
+Phase 321: 660 pairs checked, 12 formed. Total alliances: 93
+Phase 341: 357 pairs checked, 7 formed. Total alliances: 75
+Phase 361: 321 pairs checked, 12 formed. Total alliances: 65
+Phase 381: 69 pairs checked, 0 formed. Total alliances: 26
+Phase 401: 149 pairs checked, 1 formed. Total alliances: 44
+Phase 421: 508 pairs checked, 7 formed. Total alliances: 79
+Phase 441: 706 pairs checked, 4 formed. Total alliances: 99
+Phase 461: 301 pairs checked, 1 formed. Total alliances: 51
+Phase 481: 355 pairs checked, 9 formed. Total alliances: 60
+Phase 501: 407 pairs checked, 20 formed. Total alliances: 67
+Phase 521: 274 pairs checked, 2 formed. Total alliances: 53
+Phase 541: 378 pairs checked, 1 formed. Total alliances: 71
+Phase 561: 213 pairs checked, 12 formed. Total alliances: 44
+Phase 581: 191 pairs checked, 2 formed. Total alliances: 48
+Phase 601: 417 pairs checked, 8 formed. Total alliances: 70
+Phase 621: 106 pairs checked, 3 formed. Total alliances: 33
+Phase 641: 57 pairs checked, 1 formed. Total alliances: 21
+Phase 661: 171 pairs checked, 1 formed. Total alliances: 44
+Phase 681: 163 pairs checked, 0 formed. Total alliances: 45
+Phase 701: 179 pairs checked, 0 formed. Total alliances: 42
+Phase 721: 55 pairs checked, 3 formed. Total alliances: 29
+Phase 741: 67 pairs checked, 2 formed. Total alliances: 25
+Phase 761: 165 pairs checked, 0 formed. Total alliances: 42
+Phase 781: 154 pairs checked, 1 formed. Total alliances: 31
+Phase 801: 80 pairs checked, 1 formed. Total alliances: 23
+Phase 821: 207 pairs checked, 2 formed. Total alliances: 43
+Phase 841: 127 pairs checked, 2 formed. Total alliances: 33
+Phase 861: 55 pairs checked, 0 formed. Total alliances: 22
+Phase 881: 168 pairs checked, 2 formed. Total alliances: 36
+Phase 901: 340 pairs checked, 4 formed. Total alliances: 57
+Phase 921: 191 pairs checked, 3 formed. Total alliances: 39
+Phase 941: 289 pairs checked, 9 formed. Total alliances: 42
+Phase 961: 428 pairs checked, 0 formed. Total alliances: 65
+Phase 981: 287 pairs checked, 0 formed. Total alliances: 41
+Phase 1001: 197 pairs checked, 7 formed. Total alliances: 33
+Phase 1021: 376 pairs checked, 6 formed. Total alliances: 52
+Phase 1041: 325 pairs checked, 1 formed. Total alliances: 54
+Phase 1061: 159 pairs checked, 1 formed. Total alliances: 44
+Phase 1081: 208 pairs checked, 4 formed. Total alliances: 45
+Phase 1101: 155 pairs checked, 0 formed. Total alliances: 37
+Phase 1121: 213 pairs checked, 4 formed. Total alliances: 49
+Phase 1141: 305 pairs checked, 5 formed. Total alliances: 53
+Phase 1161: 188 pairs checked, 4 formed. Total alliances: 41
+Phase 1181: 94 pairs checked, 1 formed. Total alliances: 21
+Phase 1201: 136 pairs checked, 3 formed. Total alliances: 32
+Phase 1221: 150 pairs checked, 2 formed. Total alliances: 28
+Phase 1241: 206 pairs checked, 1 formed. Total alliances: 36
+Phase 1261: 328 pairs checked, 5 formed. Total alliances: 44
+Phase 1281: 476 pairs checked, 1 formed. Total alliances: 54
+Phase 1301: 425 pairs checked, 4 formed. Total alliances: 49
+Phase 1321: 361 pairs checked, 3 formed. Total alliances: 34
+Phase 1341: 384 pairs checked, 3 formed. Total alliances: 79
+Phase 1361: 432 pairs checked, 4 formed. Total alliances: 75
+Phase 1381: 279 pairs checked, 2 formed. Total alliances: 53
+Phase 1401: 271 pairs checked, 0 formed. Total alliances: 50
+Phase 1421: 414 pairs checked, 2 formed. Total alliances: 69
+Phase 1441: 61 pairs checked, 3 formed. Total alliances: 15
+Phase 1461: 25 pairs checked, 1 formed. Total alliances: 9
+Phase 1481: 218 pairs checked, 3 formed. Total alliances: 44
+Phase 1501: 178 pairs checked, 3 formed. Total alliances: 43
+Phase 1521: 98 pairs checked, 2 formed. Total alliances: 32
+Phase 1541: 215 pairs checked, 1 formed. Total alliances: 46
+Phase 1561: 217 pairs checked, 4 formed. Total alliances: 53
+Phase 1581: 40 pairs checked, 1 formed. Total alliances: 19
+Phase 1601: 175 pairs checked, 3 formed. Total alliances: 43
+Phase 1621: 339 pairs checked, 0 formed. Total alliances: 62
+Phase 1641: 225 pairs checked, 2 formed. Total alliances: 45
+Phase 1661: 55 pairs checked, 0 formed. Total alliances: 18
+Phase 1681: 284 pairs checked, 0 formed. Total alliances: 63
+Phase 1701: 345 pairs checked, 2 formed. Total alliances: 63
+Phase 1721: 405 pairs checked, 7 formed. Total alliances: 75
+Phase 1741: 454 pairs checked, 5 formed. Total alliances: 77
+Phase 1761: 507 pairs checked, 3 formed. Total alliances: 78
+Phase 1781: 496 pairs checked, 5 formed. Total alliances: 82
+Phase 1801: 198 pairs checked, 16 formed. Total alliances: 45
+Phase 1821: 184 pairs checked, 0 formed. Total alliances: 45
+Phase 1841: 91 pairs checked, 4 formed. Total alliances: 26
+Phase 1861: 186 pairs checked, 7 formed. Total alliances: 50
+Phase 1881: 261 pairs checked, 2 formed. Total alliances: 58
+Phase 1901: 438 pairs checked, 10 formed. Total alliances: 65
+Phase 1921: 494 pairs checked, 4 formed. Total alliances: 73
+Phase 1941: 593 pairs checked, 8 formed. Total alliances: 86
+Phase 1961: 273 pairs checked, 2 formed. Total alliances: 53
+Phase 1981: 174 pairs checked, 0 formed. Total alliances: 50
+  Peak: 76.7% at Ph865 by Sayshell
+  Longest >=50% run: 40 phases
+  Longest >=40% run: 46 phases
+  Longest >=30% run: 54 phases
+  Ph50: 18 polities | Top3: Askone(6), Aurora(5), Siwenna(2) | Leader=20.0%
+  Ph100: 23 polities | Top3: Atria(3), Kalgan(2), Siwenna(2) | Leader=10.0%
+  Ph200: 22 polities | Top3: Aurora(8), Sadalmelik(2), Trantor(1) | Leader=26.7%
+  Ph300: 29 polities | Top3: Regulus(2), Kalgan(1), Iss(1) | Leader=6.7%
+  Ph400: 20 polities | Top3: Sayshell(11), Tazenda(1), Ifni(1) | Leader=36.7%
+  Ph500: 18 polities | Top3: Sayshell(12), Iss(2), Whassalian(1) | Leader=40.0%
+  Ph750: 17 polities | Top3: Sayshell(13), Fum al Samakah(2), Kalgan(1) | Leader=43.3%
+  Ph1000: 21 polities | Top3: Sayshell(8), Ifni(2), Rigel(2) | Leader=26.7%
+  Ph1500: 20 polities | Top3: Sayshell(11), Askone(1), Siwenna(1) | Leader=36.7%
+  Ph2000: 22 polities | Top3: Sayshell(8), Skat(2), Wencory(1) | Leader=26.7%
+
+Seed 12345 stars=200 cluster...
+Phase 1: 636 pairs checked, 86 formed. Total alliances: 86
+Phase 21: 123 pairs checked, 0 formed. Total alliances: 65
+Phase 41: 103 pairs checked, 0 formed. Total alliances: 59
+Phase 61: 107 pairs checked, 0 formed. Total alliances: 59
+Phase 81: 112 pairs checked, 0 formed. Total alliances: 51
+Phase 101: 112 pairs checked, 1 formed. Total alliances: 55
+Phase 121: 129 pairs checked, 1 formed. Total alliances: 53
+Phase 141: 128 pairs checked, 1 formed. Total alliances: 57
+Phase 161: 284 pairs checked, 6 formed. Total alliances: 73
+Phase 181: 596 pairs checked, 14 formed. Total alliances: 101
+Phase 201: 662 pairs checked, 3 formed. Total alliances: 114
+Phase 221: 761 pairs checked, 7 formed. Total alliances: 119
+Phase 241: 786 pairs checked, 17 formed. Total alliances: 132
+Phase 261: 614 pairs checked, 7 formed. Total alliances: 123
+Phase 281: 612 pairs checked, 4 formed. Total alliances: 129
+Phase 301: 952 pairs checked, 16 formed. Total alliances: 142
+Phase 321: 651 pairs checked, 6 formed. Total alliances: 129
+Phase 341: 647 pairs checked, 3 formed. Total alliances: 128
+Phase 361: 694 pairs checked, 15 formed. Total alliances: 112
+Phase 381: 842 pairs checked, 12 formed. Total alliances: 110
+Phase 401: 820 pairs checked, 7 formed. Total alliances: 109
+Phase 421: 739 pairs checked, 3 formed. Total alliances: 109
+Phase 441: 866 pairs checked, 3 formed. Total alliances: 120
+Phase 461: 379 pairs checked, 3 formed. Total alliances: 78
+Phase 481: 274 pairs checked, 6 formed. Total alliances: 69
+Phase 501: 460 pairs checked, 3 formed. Total alliances: 106
+Phase 521: 469 pairs checked, 4 formed. Total alliances: 101
+Phase 541: 587 pairs checked, 16 formed. Total alliances: 128
+Phase 561: 481 pairs checked, 2 formed. Total alliances: 99
+Phase 581: 334 pairs checked, 2 formed. Total alliances: 89
+Phase 601: 490 pairs checked, 2 formed. Total alliances: 84
+Phase 621: 542 pairs checked, 5 formed. Total alliances: 101
+Phase 641: 168 pairs checked, 0 formed. Total alliances: 65
+Phase 661: 170 pairs checked, 3 formed. Total alliances: 69
+Phase 681: 137 pairs checked, 4 formed. Total alliances: 49
+Phase 701: 75 pairs checked, 2 formed. Total alliances: 27
+Phase 721: 147 pairs checked, 4 formed. Total alliances: 45
+Phase 741: 141 pairs checked, 0 formed. Total alliances: 52
+Phase 761: 129 pairs checked, 3 formed. Total alliances: 54
+Phase 781: 204 pairs checked, 1 formed. Total alliances: 51
+Phase 801: 231 pairs checked, 3 formed. Total alliances: 59
+Phase 821: 189 pairs checked, 0 formed. Total alliances: 52
+Phase 841: 184 pairs checked, 4 formed. Total alliances: 51
+Phase 861: 170 pairs checked, 2 formed. Total alliances: 48
+Phase 881: 111 pairs checked, 5 formed. Total alliances: 21
+Phase 901: 104 pairs checked, 2 formed. Total alliances: 28
+Phase 921: 145 pairs checked, 2 formed. Total alliances: 38
+Phase 941: 163 pairs checked, 2 formed. Total alliances: 58
+Phase 961: 71 pairs checked, 1 formed. Total alliances: 21
+Phase 981: 104 pairs checked, 0 formed. Total alliances: 37
+Phase 1001: 86 pairs checked, 4 formed. Total alliances: 35
+Phase 1021: 98 pairs checked, 1 formed. Total alliances: 34
+Phase 1041: 100 pairs checked, 1 formed. Total alliances: 38
+Phase 1061: 105 pairs checked, 1 formed. Total alliances: 44
+Phase 1081: 182 pairs checked, 0 formed. Total alliances: 33
+Phase 1101: 244 pairs checked, 1 formed. Total alliances: 55
+Phase 1121: 303 pairs checked, 1 formed. Total alliances: 59
+Phase 1141: 351 pairs checked, 1 formed. Total alliances: 71
+Phase 1161: 310 pairs checked, 3 formed. Total alliances: 66
+Phase 1181: 199 pairs checked, 3 formed. Total alliances: 38
+Phase 1201: 403 pairs checked, 3 formed. Total alliances: 54
+Phase 1221: 799 pairs checked, 6 formed. Total alliances: 74
+Phase 1241: 924 pairs checked, 11 formed. Total alliances: 64
+Phase 1261: 937 pairs checked, 15 formed. Total alliances: 78
+Phase 1281: 517 pairs checked, 0 formed. Total alliances: 66
+Phase 1301: 482 pairs checked, 4 formed. Total alliances: 71
+Phase 1321: 235 pairs checked, 21 formed. Total alliances: 57
+Phase 1341: 93 pairs checked, 1 formed. Total alliances: 39
+Phase 1361: 513 pairs checked, 3 formed. Total alliances: 84
+Phase 1381: 438 pairs checked, 6 formed. Total alliances: 83
+Phase 1401: 124 pairs checked, 4 formed. Total alliances: 46
+Phase 1421: 356 pairs checked, 3 formed. Total alliances: 72
+Phase 1441: 59 pairs checked, 4 formed. Total alliances: 19
+Phase 1461: 95 pairs checked, 3 formed. Total alliances: 30
+Phase 1481: 205 pairs checked, 4 formed. Total alliances: 49
+Phase 1501: 136 pairs checked, 1 formed. Total alliances: 48
+Phase 1521: 58 pairs checked, 4 formed. Total alliances: 19
+Phase 1541: 106 pairs checked, 4 formed. Total alliances: 37
+Phase 1561: 108 pairs checked, 0 formed. Total alliances: 36
+Phase 1581: 76 pairs checked, 6 formed. Total alliances: 30
+Phase 1601: 157 pairs checked, 3 formed. Total alliances: 52
+Phase 1621: 116 pairs checked, 5 formed. Total alliances: 42
+Phase 1641: 105 pairs checked, 2 formed. Total alliances: 37
+Phase 1661: 116 pairs checked, 3 formed. Total alliances: 45
+Phase 1681: 129 pairs checked, 2 formed. Total alliances: 47
+Phase 1701: 109 pairs checked, 0 formed. Total alliances: 39
+Phase 1721: 103 pairs checked, 1 formed. Total alliances: 39
+Phase 1741: 153 pairs checked, 3 formed. Total alliances: 40
+Phase 1761: 305 pairs checked, 5 formed. Total alliances: 33
+Phase 1781: 471 pairs checked, 0 formed. Total alliances: 39
+Phase 1801: 573 pairs checked, 3 formed. Total alliances: 68
+Phase 1821: 451 pairs checked, 4 formed. Total alliances: 85
+Phase 1841: 211 pairs checked, 2 formed. Total alliances: 49
+Phase 1861: 279 pairs checked, 2 formed. Total alliances: 67
+Phase 1881: 561 pairs checked, 3 formed. Total alliances: 106
+Phase 1901: 370 pairs checked, 3 formed. Total alliances: 89
+Phase 1921: 432 pairs checked, 3 formed. Total alliances: 89
+Phase 1941: 373 pairs checked, 7 formed. Total alliances: 86
+Phase 1961: 371 pairs checked, 5 formed. Total alliances: 76
+Phase 1981: 411 pairs checked, 2 formed. Total alliances: 92
+  Peak: 64.0% at Ph983 by Radole
+  Longest >=50% run: 40 phases
+  Longest >=40% run: 140 phases
+  Longest >=30% run: 339 phases
+  Ph50: 29 polities | Top3: Iss(7), Canopus(7), Radole(4) | Leader=14.0%
+  Ph100: 24 polities | Top3: Florina(9), Peacock(7), Iss(6) | Leader=18.0%
+  Ph200: 43 polities | Top3: Florina(4), Alula Australis(3), Radole(2) | Leader=8.0%
+  Ph300: 48 polities | Top3: Iss(3), Trantor(1), Radole(1) | Leader=6.0%
+  Ph400: 44 polities | Top3: Iss(4), Radole(3), Florina(2) | Leader=8.0%
+  Ph500: 44 polities | Top3: Iss(6), Dubhe(2), Trantor(1) | Leader=12.0%
+  Ph750: 28 polities | Top3: Iss(17), Radole(5), Rigel(2) | Leader=34.0%
+  Ph1000: 18 polities | Top3: Radole(30), Iss(4), Kalgan(1) | Leader=60.0%
+  Ph1500: 22 polities | Top3: Radole(26), Iss(4), Mnemon(1) | Leader=52.0%
+  Ph2000: 36 polities | Top3: Radole(12), Antares(2), Kaus Meridionalis(2) | Leader=24.0%
+
+Seed 7777 stars=200 cluster...
+Phase 1: 835 pairs checked, 99 formed. Total alliances: 99
+Phase 21: 80 pairs checked, 0 formed. Total alliances: 48
+Phase 41: 60 pairs checked, 0 formed. Total alliances: 42
+Phase 61: 228 pairs checked, 2 formed. Total alliances: 68
+Phase 81: 316 pairs checked, 12 formed. Total alliances: 75
+Phase 101: 489 pairs checked, 6 formed. Total alliances: 94
+Phase 121: 527 pairs checked, 1 formed. Total alliances: 85
+Phase 141: 471 pairs checked, 16 formed. Total alliances: 93
+Phase 161: 193 pairs checked, 3 formed. Total alliances: 52
+Phase 181: 780 pairs checked, 19 formed. Total alliances: 110
+Phase 201: 923 pairs checked, 22 formed. Total alliances: 135
+Phase 221: 847 pairs checked, 10 formed. Total alliances: 127
+Phase 241: 1126 pairs checked, 21 formed. Total alliances: 144
+Phase 261: 1552 pairs checked, 25 formed. Total alliances: 186
+Phase 281: 1543 pairs checked, 22 formed. Total alliances: 187
+Phase 301: 1512 pairs checked, 9 formed. Total alliances: 176
+Phase 321: 841 pairs checked, 20 formed. Total alliances: 130
+Phase 341: 298 pairs checked, 4 formed. Total alliances: 65
+Phase 361: 804 pairs checked, 3 formed. Total alliances: 98
+Phase 381: 1089 pairs checked, 16 formed. Total alliances: 125
+Phase 401: 1019 pairs checked, 19 formed. Total alliances: 142
+Phase 421: 885 pairs checked, 3 formed. Total alliances: 122
+Phase 441: 846 pairs checked, 19 formed. Total alliances: 112
+Phase 461: 828 pairs checked, 11 formed. Total alliances: 119
+Phase 481: 849 pairs checked, 10 formed. Total alliances: 112
+Phase 501: 585 pairs checked, 15 formed. Total alliances: 95
+Phase 521: 820 pairs checked, 6 formed. Total alliances: 125
+Phase 541: 774 pairs checked, 8 formed. Total alliances: 129
+Phase 561: 360 pairs checked, 5 formed. Total alliances: 81
+Phase 581: 474 pairs checked, 8 formed. Total alliances: 89
+Phase 601: 595 pairs checked, 7 formed. Total alliances: 105
+Phase 621: 320 pairs checked, 8 formed. Total alliances: 78
+Phase 641: 140 pairs checked, 2 formed. Total alliances: 53
+Phase 661: 225 pairs checked, 3 formed. Total alliances: 56
+Phase 681: 315 pairs checked, 1 formed. Total alliances: 76
+Phase 701: 632 pairs checked, 7 formed. Total alliances: 91
+Phase 721: 472 pairs checked, 2 formed. Total alliances: 88
+Phase 741: 567 pairs checked, 12 formed. Total alliances: 83
+Phase 761: 445 pairs checked, 0 formed. Total alliances: 89
+Phase 781: 741 pairs checked, 5 formed. Total alliances: 82
+Phase 801: 934 pairs checked, 7 formed. Total alliances: 107
+Phase 821: 671 pairs checked, 1 formed. Total alliances: 103
+Phase 841: 707 pairs checked, 6 formed. Total alliances: 105
+Phase 861: 586 pairs checked, 3 formed. Total alliances: 90
+Phase 881: 482 pairs checked, 7 formed. Total alliances: 78
+Phase 901: 536 pairs checked, 4 formed. Total alliances: 103
+Phase 921: 264 pairs checked, 15 formed. Total alliances: 61
+Phase 941: 273 pairs checked, 7 formed. Total alliances: 76
+Phase 961: 369 pairs checked, 2 formed. Total alliances: 78
+Phase 981: 286 pairs checked, 1 formed. Total alliances: 68
+Phase 1001: 221 pairs checked, 3 formed. Total alliances: 72
+Phase 1021: 243 pairs checked, 2 formed. Total alliances: 72
+Phase 1041: 299 pairs checked, 2 formed. Total alliances: 84
+Phase 1061: 268 pairs checked, 7 formed. Total alliances: 70
+Phase 1081: 167 pairs checked, 5 formed. Total alliances: 52
+Phase 1101: 237 pairs checked, 9 formed. Total alliances: 69
+Phase 1121: 152 pairs checked, 5 formed. Total alliances: 58
+Phase 1141: 208 pairs checked, 4 formed. Total alliances: 57
+Phase 1161: 553 pairs checked, 1 formed. Total alliances: 94
+Phase 1181: 270 pairs checked, 3 formed. Total alliances: 61
+Phase 1201: 201 pairs checked, 4 formed. Total alliances: 53
+Phase 1221: 375 pairs checked, 5 formed. Total alliances: 74
+Phase 1241: 472 pairs checked, 3 formed. Total alliances: 81
+Phase 1261: 405 pairs checked, 1 formed. Total alliances: 77
+Phase 1281: 336 pairs checked, 3 formed. Total alliances: 62
+Phase 1301: 466 pairs checked, 4 formed. Total alliances: 81
+Phase 1321: 327 pairs checked, 1 formed. Total alliances: 74
+Phase 1341: 344 pairs checked, 8 formed. Total alliances: 74
+Phase 1361: 316 pairs checked, 8 formed. Total alliances: 73
+Phase 1381: 179 pairs checked, 4 formed. Total alliances: 59
+Phase 1401: 202 pairs checked, 2 formed. Total alliances: 65
+Phase 1421: 232 pairs checked, 3 formed. Total alliances: 69
+Phase 1441: 170 pairs checked, 0 formed. Total alliances: 61
+Phase 1461: 145 pairs checked, 1 formed. Total alliances: 60
+Phase 1481: 122 pairs checked, 1 formed. Total alliances: 49
+Phase 1501: 77 pairs checked, 1 formed. Total alliances: 44
+Phase 1521: 106 pairs checked, 1 formed. Total alliances: 43
+Phase 1541: 180 pairs checked, 4 formed. Total alliances: 61
+Phase 1561: 215 pairs checked, 5 formed. Total alliances: 46
+Phase 1581: 312 pairs checked, 4 formed. Total alliances: 41
+Phase 1601: 553 pairs checked, 9 formed. Total alliances: 63
+Phase 1621: 381 pairs checked, 4 formed. Total alliances: 70
+Phase 1641: 247 pairs checked, 3 formed. Total alliances: 46
+Phase 1661: 422 pairs checked, 3 formed. Total alliances: 71
+Phase 1681: 201 pairs checked, 0 formed. Total alliances: 51
+Phase 1701: 135 pairs checked, 0 formed. Total alliances: 36
+Phase 1721: 261 pairs checked, 0 formed. Total alliances: 62
+Phase 1741: 108 pairs checked, 0 formed. Total alliances: 36
+Phase 1761: 98 pairs checked, 1 formed. Total alliances: 36
+Phase 1781: 333 pairs checked, 5 formed. Total alliances: 66
+Phase 1801: 538 pairs checked, 3 formed. Total alliances: 69
+Phase 1821: 418 pairs checked, 0 formed. Total alliances: 57
+Phase 1841: 216 pairs checked, 0 formed. Total alliances: 57
+Phase 1861: 341 pairs checked, 6 formed. Total alliances: 74
+Phase 1881: 453 pairs checked, 6 formed. Total alliances: 73
+Phase 1901: 361 pairs checked, 8 formed. Total alliances: 65
+Phase 1921: 205 pairs checked, 0 formed. Total alliances: 54
+Phase 1941: 473 pairs checked, 5 formed. Total alliances: 82
+Phase 1961: 278 pairs checked, 1 formed. Total alliances: 68
+Phase 1981: 139 pairs checked, 7 formed. Total alliances: 47
+  Peak: 58.0% at Ph648 by Alcyone
+  Longest >=50% run: 20 phases
+  Longest >=40% run: 51 phases
+  Longest >=30% run: 110 phases
+  Ph50: 19 polities | Top3: Tyrann(14), Gaia(12), Solaria(5) | Leader=28.0%
+  Ph100: 37 polities | Top3: Alpherg(5), Peacock(4), Cebalrai(4) | Leader=10.0%
+  Ph200: 47 polities | Top3: Izar(3), Diphda(2), Iss(1) | Leader=6.0%
+  Ph300: 45 polities | Top3: Alcyone(3), Peacock(2), Sabik(2) | Leader=6.0%
+  Ph400: 43 polities | Top3: Rhodia(5), Alcyone(4), Smyrno(1) | Leader=10.0%
+  Ph500: 38 polities | Top3: Alcyone(7), Rhodia(6), Peacock(2) | Leader=14.0%
+  Ph750: 38 polities | Top3: Rhodia(13), Anacreon(1), Synnax(1) | Leader=26.0%
+  Ph1000: 35 polities | Top3: Rhodia(15), Tabit(2), Santanni(1) | Leader=30.0%
+  Ph1500: 22 polities | Top3: Rhodia(24), Synnax(4), Alcyone(3) | Leader=48.0%
+  Ph2000: 31 polities | Top3: Alcyone(19), Rhodia(2), Synnax(1) | Leader=38.0%
+
+Seed 999 stars=200 random...
+Phase 1: 566 pairs checked, 75 formed. Total alliances: 75
+Phase 21: 381 pairs checked, 8 formed. Total alliances: 152
+Phase 41: 317 pairs checked, 1 formed. Total alliances: 154
+Phase 61: 263 pairs checked, 3 formed. Total alliances: 137
+Phase 81: 227 pairs checked, 2 formed. Total alliances: 125
+Phase 101: 203 pairs checked, 1 formed. Total alliances: 118
+Phase 121: 164 pairs checked, 0 formed. Total alliances: 106
+Phase 141: 118 pairs checked, 0 formed. Total alliances: 87
+Phase 161: 110 pairs checked, 0 formed. Total alliances: 84
+Phase 181: 81 pairs checked, 1 formed. Total alliances: 68
+Phase 201: 125 pairs checked, 5 formed. Total alliances: 73
+Phase 221: 193 pairs checked, 2 formed. Total alliances: 90
+Phase 241: 325 pairs checked, 4 formed. Total alliances: 120
+Phase 261: 365 pairs checked, 7 formed. Total alliances: 137
+Phase 281: 377 pairs checked, 10 formed. Total alliances: 136
+Phase 301: 369 pairs checked, 4 formed. Total alliances: 150
+Phase 321: 386 pairs checked, 4 formed. Total alliances: 153
+Phase 341: 445 pairs checked, 14 formed. Total alliances: 154
+Phase 361: 379 pairs checked, 10 formed. Total alliances: 167
+Phase 381: 356 pairs checked, 11 formed. Total alliances: 149
+Phase 401: 438 pairs checked, 14 formed. Total alliances: 173
+Phase 421: 482 pairs checked, 15 formed. Total alliances: 195
+Phase 441: 529 pairs checked, 10 formed. Total alliances: 199
+Phase 461: 525 pairs checked, 10 formed. Total alliances: 197
+Phase 481: 365 pairs checked, 10 formed. Total alliances: 149
+Phase 501: 365 pairs checked, 7 formed. Total alliances: 146
+Phase 521: 433 pairs checked, 5 formed. Total alliances: 170
+Phase 541: 493 pairs checked, 9 formed. Total alliances: 174
+Phase 561: 508 pairs checked, 11 formed. Total alliances: 194
+Phase 581: 506 pairs checked, 4 formed. Total alliances: 198
+Phase 601: 450 pairs checked, 21 formed. Total alliances: 189
+Phase 621: 488 pairs checked, 14 formed. Total alliances: 179
+Phase 641: 539 pairs checked, 9 formed. Total alliances: 199
+Phase 661: 463 pairs checked, 5 formed. Total alliances: 190
+Phase 681: 448 pairs checked, 5 formed. Total alliances: 201
+Phase 701: 457 pairs checked, 4 formed. Total alliances: 194
+Phase 721: 581 pairs checked, 8 formed. Total alliances: 201
+Phase 741: 537 pairs checked, 7 formed. Total alliances: 193
+Phase 761: 521 pairs checked, 17 formed. Total alliances: 211
+Phase 781: 569 pairs checked, 14 formed. Total alliances: 216
+Phase 801: 576 pairs checked, 11 formed. Total alliances: 228
+Phase 821: 599 pairs checked, 12 formed. Total alliances: 232
+Phase 841: 425 pairs checked, 7 formed. Total alliances: 220
+Phase 861: 400 pairs checked, 3 formed. Total alliances: 206
+Phase 881: 403 pairs checked, 9 formed. Total alliances: 204
+Phase 901: 446 pairs checked, 7 formed. Total alliances: 193
+Phase 921: 422 pairs checked, 12 formed. Total alliances: 185
+Phase 941: 470 pairs checked, 10 formed. Total alliances: 189
+Phase 961: 483 pairs checked, 10 formed. Total alliances: 208
+Phase 981: 506 pairs checked, 11 formed. Total alliances: 193
+Phase 1001: 539 pairs checked, 6 formed. Total alliances: 208
+Phase 1021: 572 pairs checked, 12 formed. Total alliances: 219
+Phase 1041: 521 pairs checked, 10 formed. Total alliances: 204
+Phase 1061: 491 pairs checked, 5 formed. Total alliances: 208
+Phase 1081: 489 pairs checked, 10 formed. Total alliances: 200
+Phase 1101: 524 pairs checked, 8 formed. Total alliances: 199
+Phase 1121: 448 pairs checked, 4 formed. Total alliances: 165
+Phase 1141: 405 pairs checked, 8 formed. Total alliances: 172
+Phase 1161: 477 pairs checked, 14 formed. Total alliances: 178
+Phase 1181: 474 pairs checked, 8 formed. Total alliances: 181
+Phase 1201: 589 pairs checked, 7 formed. Total alliances: 198
+Phase 1221: 457 pairs checked, 9 formed. Total alliances: 201
+Phase 1241: 468 pairs checked, 12 formed. Total alliances: 196
+Phase 1261: 542 pairs checked, 18 formed. Total alliances: 180
+Phase 1281: 502 pairs checked, 9 formed. Total alliances: 189
+Phase 1301: 449 pairs checked, 6 formed. Total alliances: 184
+Phase 1321: 483 pairs checked, 11 formed. Total alliances: 200
+Phase 1341: 497 pairs checked, 19 formed. Total alliances: 180
+Phase 1361: 490 pairs checked, 5 formed. Total alliances: 179
+Phase 1381: 461 pairs checked, 13 formed. Total alliances: 196
+Phase 1401: 442 pairs checked, 10 formed. Total alliances: 171
+Phase 1421: 455 pairs checked, 8 formed. Total alliances: 181
+Phase 1441: 510 pairs checked, 8 formed. Total alliances: 193
+Phase 1461: 594 pairs checked, 24 formed. Total alliances: 217
+Phase 1481: 589 pairs checked, 6 formed. Total alliances: 225
+  Peak: 16.0% at Ph158 by Rhodia
+  Longest >=50% run: 0 phases
+  Longest >=40% run: 0 phases
+  Longest >=30% run: 0 phases
+  Ph50: 48 polities | Top3: Rhodia(3), Kalgan(1), Tazenda(1) | Leader=6.0%
+  Ph100: 48 polities | Top3: Kochab(2), Nashira(2), Kalgan(1) | Leader=4.0%
+  Ph200: 32 polities | Top3: Adhara(6), Tazenda(5), Phecda(5) | Leader=12.0%
+  Ph300: 48 polities | Top3: Alsuhail(3), Kalgan(1), Smyrno(1) | Leader=6.0%
+  Ph400: 49 polities | Top3: Han(2), Kalgan(1), Tazenda(1) | Leader=4.0%
+  Ph500: 50 polities | Top3: Trantor(1), Anacreon(1), Tazenda(1) | Leader=2.0%
+  Ph750: 49 polities | Top3: Alcyone(2), Kalgan(1), Anacreon(1) | Leader=4.0%
+  Ph1000: 49 polities | Top3: Nexon(2), Terminus(1), Anacreon(1) | Leader=4.0%
+  Ph1500: 48 polities | Top3: Eltanin(2), Han(2), Sarip(1) | Leader=4.0%
+

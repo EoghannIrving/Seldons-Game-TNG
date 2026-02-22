@@ -1,0 +1,187 @@
+{
+  "seed": 404,
+  "phase": 120,
+  "generatedAt": "2026-02-20T10:31:43.114Z",
+  "rows": [
+    {
+      "role": "high_history_capital",
+      "starId": "star_13",
+      "starName": "Siwenna",
+      "phase": 120,
+      "tab": "abstract",
+      "hash": "d1591f6a",
+      "commandCount": 28812,
+      "eventCount": 191
+    },
+    {
+      "role": "high_history_capital",
+      "starId": "star_13",
+      "starName": "Siwenna",
+      "phase": 120,
+      "tab": "entry",
+      "hash": "0336c3b0",
+      "commandCount": 2548,
+      "eventCount": 191
+    },
+    {
+      "role": "high_history_capital",
+      "starId": "star_13",
+      "starName": "Siwenna",
+      "phase": 120,
+      "tab": "events",
+      "hash": "3ad12af8",
+      "commandCount": 2484,
+      "eventCount": 191
+    },
+    {
+      "role": "high_history_capital",
+      "starId": "star_13",
+      "starName": "Siwenna",
+      "phase": 120,
+      "tab": "lineage",
+      "hash": "6c510a10",
+      "commandCount": 2232,
+      "eventCount": 191
+    },
+    {
+      "role": "high_history_capital",
+      "starId": "star_13",
+      "starName": "Siwenna",
+      "phase": 120,
+      "tab": "narrative",
+      "hash": "b187cfd3",
+      "commandCount": 2372,
+      "eventCount": 191
+    },
+    {
+      "role": "high_history_capital",
+      "starId": "star_13",
+      "starName": "Siwenna",
+      "phase": 120,
+      "tab": "relations",
+      "hash": "4390787e",
+      "commandCount": 2375,
+      "eventCount": 191
+    },
+    {
+      "role": "low_history",
+      "starId": "star_158",
+      "starName": "Propus",
+      "phase": 120,
+      "tab": "abstract",
+      "hash": "dd153591",
+      "commandCount": 5941,
+      "eventCount": 12
+    },
+    {
+      "role": "low_history",
+      "starId": "star_158",
+      "starName": "Propus",
+      "phase": 120,
+      "tab": "entry",
+      "hash": "d09036df",
+      "commandCount": 2490,
+      "eventCount": 12
+    },
+    {
+      "role": "low_history",
+      "starId": "star_158",
+      "starName": "Propus",
+      "phase": 120,
+      "tab": "events",
+      "hash": "ea794177",
+      "commandCount": 2369,
+      "eventCount": 12
+    },
+    {
+      "role": "low_history",
+      "starId": "star_158",
+      "starName": "Propus",
+      "phase": 120,
+      "tab": "lineage",
+      "hash": "7bf6392e",
+      "commandCount": 2123,
+      "eventCount": 12
+    },
+    {
+      "role": "low_history",
+      "starId": "star_158",
+      "starName": "Propus",
+      "phase": 120,
+      "tab": "narrative",
+      "hash": "63ecb3ed",
+      "commandCount": 2187,
+      "eventCount": 12
+    },
+    {
+      "role": "low_history",
+      "starId": "star_158",
+      "starName": "Propus",
+      "phase": 120,
+      "tab": "relations",
+      "hash": "ba978d8a",
+      "commandCount": 2280,
+      "eventCount": 12
+    },
+    {
+      "role": "sparse_lineage_subject",
+      "starId": "star_1",
+      "starName": "Terminus",
+      "phase": 120,
+      "tab": "abstract",
+      "hash": "f6f5d9cd",
+      "commandCount": 15741,
+      "eventCount": 17
+    },
+    {
+      "role": "sparse_lineage_subject",
+      "starId": "star_1",
+      "starName": "Terminus",
+      "phase": 120,
+      "tab": "entry",
+      "hash": "bcdcbba3",
+      "commandCount": 2503,
+      "eventCount": 17
+    },
+    {
+      "role": "sparse_lineage_subject",
+      "starId": "star_1",
+      "starName": "Terminus",
+      "phase": 120,
+      "tab": "events",
+      "hash": "b8ea3d4c",
+      "commandCount": 2369,
+      "eventCount": 17
+    },
+    {
+      "role": "sparse_lineage_subject",
+      "starId": "star_1",
+      "starName": "Terminus",
+      "phase": 120,
+      "tab": "lineage",
+      "hash": "5e76212e",
+      "commandCount": 2123,
+      "eventCount": 17
+    },
+    {
+      "role": "sparse_lineage_subject",
+      "starId": "star_1",
+      "starName": "Terminus",
+      "phase": 120,
+      "tab": "narrative",
+      "hash": "bc95f1d6",
+      "commandCount": 2233,
+      "eventCount": 17
+    },
+    {
+      "role": "sparse_lineage_subject",
+      "starId": "star_1",
+      "starName": "Terminus",
+      "phase": 120,
+      "tab": "relations",
+      "hash": "a90c3889",
+      "commandCount": 2283,
+      "eventCount": 17
+    }
+  ]
+}

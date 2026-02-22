@@ -3,7 +3,9 @@
  * Phase 0: LocalStorage implementation
  */
 
-import { GalaxyState } from '../core/types';
+import { DemographicSeries, GalaxyState } from '../core/types';
+import { normalizeDemographicsData } from '../core/demographics-series';
+import { assignGovernmentType, deriveInitialIdeology } from '../core/government';
 
 export interface SaveDataV1 {
   version: string;
@@ -23,12 +25,17 @@ export interface SerializedGalaxyState {
   activeCrises: any[];
   regions?: any[]; // Phase 6
   events?: any[];  // Phase 7
-  demographics?: any[]; // Phase 8
+  demographics?: DemographicSeries | any[]; // Phase 8 (series preferred, legacy row array supported)
   // Phase 9/7A: Dynasty family tree backbone
   dynasties?: Array<[string, any]>;
   dynasts?: Array<[string, any]>;
   dynasticRelationships?: any[];
   dynastySuccessionRecords?: any[];
+  dynastySuccessionArchiveByStar?: Record<string, any[]>;
+  dynastySuccessionArchiveVersion?: number;
+  phaseConquestLog?: any[];
+  // Phase 10: Government history
+  governmentHistory?: Array<[string, any[]]>;
 }
 
 /**
@@ -44,11 +51,15 @@ export function serializeGalaxyState(state: GalaxyState): SerializedGalaxyState 
     activeCrises: state.activeCrises || [],
     regions: state.regions || [],
     events: state.events || [],
-    demographics: state.demographics || [],
+    demographics: normalizeDemographicsData(state.demographics),
     dynasties: Array.from(state.dynasties?.entries() || []),
     dynasts: Array.from(state.dynasts?.entries() || []),
     dynasticRelationships: state.dynasticRelationships || [],
     dynastySuccessionRecords: state.dynastySuccessionRecords || [],
+    dynastySuccessionArchiveByStar: state.dynastySuccessionArchiveByStar || {},
+    dynastySuccessionArchiveVersion: state.dynastySuccessionArchiveVersion || 1,
+    phaseConquestLog: state.phaseConquestLog || [],
+    governmentHistory: Array.from(state.governmentHistory?.entries() || []),
   };
 }
 
@@ -63,6 +74,21 @@ export function deserializeSerializedGalaxyState(data: SerializedGalaxyState): G
     width: (data.config as any).width || 1000,
     height: (data.config as any).height || 1000,
   } as any;
+
+  // Phase 10: Migrate old epoch field → ideology + governmentType
+  const migrateLegacyEpoch = (rawStar: any): any => {
+    if (!rawStar || typeof rawStar !== 'object') return rawStar;
+    // Already migrated
+    if (rawStar.governmentType !== undefined && rawStar.ideology !== undefined) return rawStar;
+
+    const traits: string[] = Array.isArray(rawStar.traits) ? rawStar.traits : [];
+    const governmentType = assignGovernmentType(traits as any);
+    const ideology = deriveInitialIdeology(traits as any);
+
+    // Remove old epoch field, add new fields
+    const { epoch, ...rest } = rawStar;
+    return { ...rest, ideology, governmentType };
+  };
 
   const migrateLegacyPopulation = (rawStar: any): any => {
     if (!rawStar || typeof rawStar !== 'object') return rawStar;
@@ -80,17 +106,21 @@ export function deserializeSerializedGalaxyState(data: SerializedGalaxyState): G
     };
   };
 
-  const migratedStars = (data.stars || []).map(([id, star]) => [id, migrateLegacyPopulation(star)] as [string, any]);
+  const migratedStars = (data.stars || []).map(([id, star]) => [id, migrateLegacyPopulation(migrateLegacyEpoch(star))] as [string, any]);
 
-  const migrateLegacyAverageTechSnapshots = (rawDemographics: any[], stars: Array<[string, any]>): any[] => {
-    if (!Array.isArray(rawDemographics) || rawDemographics.length === 0) return rawDemographics || [];
+  const migrateLegacyAverageTechSeries = (
+    rawDemographics: DemographicSeries | any[] | undefined,
+    stars: Array<[string, any]>
+  ): DemographicSeries => {
+    const series = normalizeDemographicsData(rawDemographics);
+    if (series.phase.length === 0) return series;
 
-    const allIntegerAverages = rawDemographics.every((snap) =>
-      typeof snap?.averageTech === 'number'
-      && Number.isFinite(snap.averageTech)
-      && Math.abs(snap.averageTech - Math.round(snap.averageTech)) < 1e-9
+    const allIntegerAverages = series.averageTech.every((averageTech) =>
+      typeof averageTech === 'number'
+      && Number.isFinite(averageTech)
+      && Math.abs(averageTech - Math.round(averageTech)) < 1e-9
     );
-    if (!allIntegerAverages) return rawDemographics;
+    if (!allIntegerAverages) return series;
 
     const starValues = stars.map(([, star]) => star).filter((star) => star && typeof star === 'object');
     let maxHistoryLen = 0;
@@ -105,10 +135,19 @@ export function deserializeSerializedGalaxyState(data: SerializedGalaxyState): G
         );
       }
     }
-    if (!hasFractionalHistory || maxHistoryLen === 0) return rawDemographics;
+    if (!hasFractionalHistory || maxHistoryLen === 0) return series;
 
-    const migrated = rawDemographics.map((snap) => ({ ...snap }));
-    for (let i = 0; i < migrated.length; i++) {
+    const migrated: DemographicSeries = {
+      schemaVersion: 1,
+      phase: [...series.phase],
+      totalPopulation: [...series.totalPopulation],
+      averageTech: [...series.averageTech],
+      maxPower: [...series.maxPower],
+      activeWars: [...series.activeWars],
+      activeCrises: [...series.activeCrises],
+      imperialPower: [...series.imperialPower],
+    };
+    for (let i = 0; i < migrated.averageTech.length; i++) {
       let sum = 0;
       let count = 0;
       for (const star of starValues) {
@@ -118,12 +157,37 @@ export function deserializeSerializedGalaxyState(data: SerializedGalaxyState): G
           count++;
         }
       }
-      if (count > 0) migrated[i].averageTech = sum / count;
+      if (count > 0) migrated.averageTech[i] = sum / count;
     }
     return migrated;
   };
 
-  const migratedDemographics = migrateLegacyAverageTechSnapshots(data.demographics || [], migratedStars);
+  const migratedDemographics = migrateLegacyAverageTechSeries(data.demographics, migratedStars);
+  const legacySuccessionRecords = Array.isArray(data.dynastySuccessionRecords) ? data.dynastySuccessionRecords : [];
+  const seededArchive = (data.dynastySuccessionArchiveByStar && typeof data.dynastySuccessionArchiveByStar === 'object')
+    ? data.dynastySuccessionArchiveByStar
+    : {};
+  const successionArchiveByStar: Record<string, any[]> = {};
+
+  for (const [starId, records] of Object.entries(seededArchive)) {
+    successionArchiveByStar[starId] = Array.isArray(records) ? [...records] : [];
+  }
+
+  // Legacy migration: if archive is missing or sparse, seed it from the historical
+  // global succession stream so lineage UI can browse deeper history after load.
+  for (const record of legacySuccessionRecords) {
+    if (!record || typeof record !== 'object' || typeof record.starId !== 'string') continue;
+    const bucket = successionArchiveByStar[record.starId] || (successionArchiveByStar[record.starId] = []);
+    const duplicate = bucket.some((existing) =>
+      existing &&
+      existing.phase === record.phase &&
+      existing.fromDynastId === record.fromDynastId &&
+      existing.toDynastId === record.toDynastId &&
+      existing.reason === record.reason &&
+      existing.contested === record.contested
+    );
+    if (!duplicate) bucket.push(record);
+  }
 
   return {
     config,
@@ -137,13 +201,17 @@ export function deserializeSerializedGalaxyState(data: SerializedGalaxyState): G
     dynasties: new Map(data.dynasties || []),
     dynasts: new Map(data.dynasts || []),
     dynasticRelationships: data.dynasticRelationships || [],
-    dynastySuccessionRecords: data.dynastySuccessionRecords || [],
+    dynastySuccessionRecords: legacySuccessionRecords,
+    dynastySuccessionArchiveByStar: successionArchiveByStar,
+    dynastySuccessionArchiveVersion: data.dynastySuccessionArchiveVersion || 1,
+    phaseConquestLog: data.phaseConquestLog || [],
+    governmentHistory: new Map(data.governmentHistory || []),
   };
 }
 
 export class StorageManager {
   private readonly STORAGE_KEY = 'seldons-game-save';
-  private readonly VERSION = '0.7.0'; // Phase 8: Demographics
+  private readonly VERSION = '0.8.0'; // Compact demographics storage
 
   /**
    * Save galaxy state to localStorage

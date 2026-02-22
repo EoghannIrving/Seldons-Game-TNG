@@ -1,0 +1,87 @@
+
+=== Detailed collapse analysis starting at Ph1200 ===
+
+Ph1201: Shaula controls 8 major systems
+  Ruler: vitality=0.61, decadence=0.29, darkAge=true, severeDarkAge=true
+  AdminLoad: 0.500
+  Radole: loyalty=0.124, tenure=285ph, norm=0.043, net=-0.0571/ph, revThresh=-0.25, canRevolt=no
+  Lagash: loyalty=-0.098, tenure=63ph, norm=0.109, net=-0.0730/ph, revThresh=-0.15, canRevolt=no
+  Aldebaran: loyalty=-0.137, tenure=214ph, norm=0.065, net=-0.0598/ph, revThresh=-0.25, canRevolt=no
+  Pollux: loyalty=0.365, tenure=557ph, norm=0.080, net=-0.0546/ph, revThresh=-0.40, canRevolt=no
+  Adhara: loyalty=-0.151, tenure=190ph, norm=0.082, net=-0.0618/ph, revThresh=-0.25, canRevolt=no
+  Rastaban: loyalty=0.002, tenure=60ph, norm=0.108, net=-0.0730/ph, revThresh=-0.15, canRevolt=no
+  Mebsuta: loyalty=-0.300, tenure=190ph, norm=0.112, net=-0.0654/ph, revThresh=-0.25, canRevolt=YES
+
+Ph1202: Shaula controls 8 major systems
+  Ruler: vitality=0.61, decadence=0.29, darkAge=true, severeDarkAge=true
+  AdminLoad: 0.500
+  Radole: loyalty=0.093, tenure=286ph, norm=0.043, net=-0.0571/ph, revThresh=-0.25, canRevolt=no
+  Lagash: loyalty=-0.150, tenure=64ph, norm=0.109, net=-0.0730/ph, revThresh=-0.15, canRevolt=YES
+  Aldebaran: loyalty=-0.171, tenure=215ph, norm=0.065, net=-0.0598/ph, revThresh=-0.25, canRevolt=no
+  Pollux: loyalty=0.327, tenure=558ph, norm=0.080, net=-0.0546/ph, revThresh=-0.40, canRevolt=no
+  Adhara: loyalty=-0.186, tenure=191ph, norm=0.082, net=-0.0618/ph, revThresh=-0.25, canRevolt=no
+  Rastaban: loyalty=-0.044, tenure=61ph, norm=0.108, net=-0.0730/ph, revThresh=-0.15, canRevolt=no
+  Mebsuta: loyalty=-0.339, tenure=191ph, norm=0.112, net=-0.0654/ph, revThresh=-0.25, canRevolt=YES
+
+Ph1203: Shaula controls 8 major systems
+  Ruler: vitality=0.61, decadence=0.29, darkAge=true, severeDarkAge=true
+  AdminLoad: 0.500
+  Radole: loyalty=0.052, tenure=287ph, norm=0.043, net=-0.0571/ph, revThresh=-0.25, canRevolt=no
+  Lagash: loyalty=-0.212, tenure=65ph, norm=0.109, net=-0.0730/ph, revThresh=-0.15, canRevolt=YES
+  Aldebaran: loyalty=-0.214, tenure=216ph, norm=0.065, net=-0.0598/ph, revThresh=-0.25, canRevolt=no
+  Pollux: loyalty=0.280, tenure=559ph, norm=0.080, net=-0.0546/ph, revThresh=-0.40, canRevolt=no
+  Adhara: loyalty=-0.232, tenure=192ph, norm=0.082, net=-0.0618/ph, revThresh=-0.25, canRevolt=no
+  Rastaban: loyalty=-0.101, tenure=62ph, norm=0.108, net=-0.0730/ph, revThresh=-0.15, canRevolt=no
+  Mebsuta: loyalty=-0.388, tenure=192ph, norm=0.112, net=-0.0654/ph, revThresh=-0.25, canRevolt=YES
+
+Ph1204: Shaula controls 8 major systems
+  Ruler: vitality=0.62, decadence=0.29, darkAge=true, severeDarkAge=true
+  AdminLoad: 0.500
+  Radole: loyalty=0.019, tenure=288ph, norm=0.043, net=-0.0571/ph, revThresh=-0.25, canRevolt=no
+  Lagash: loyalty=-0.266, tenure=66ph, norm=0.109, net=-0.0730/ph, revThresh=-0.15, canRevolt=YES
+  Aldebaran: loyalty=-0.250, tenure=217ph, norm=0.065, net=-0.0598/ph, revThresh=-0.25, canRevolt=YES
+  Pollux: loyalty=0.240, tenure=560ph, norm=0.080, net=-0.0546/ph, revThresh=-0.40, canRevolt=no
+  Adhara: loyalty=-0.270, tenure=193ph, norm=0.082, net=-0.0618/ph, revThresh=-0.25, canRevolt=YES
+  Rastaban: loyalty=-0.150, tenure=63ph, norm=0.108, net=-0.0730/ph, revThresh=-0.15, canRevolt=no
+  Mebsuta: loyalty=-0.430, tenure=193ph, norm=0.112, net=-0.0654/ph, revThresh=-0.25, canRevolt=YES
+
+Ph1277: Shaula controls 12 major systems
+  Ruler: vitality=0.76, decadence=0.25, darkAge=false, severeDarkAge=false
+  AdminLoad: 0.500
+  Nephelos: loyalty=0.013, tenure=1ph, norm=0.125, net=-0.0150/ph, revThresh=-0.45, canRevolt=no
+  Gammer: loyalty=0.010, tenure=1ph, norm=0.147, net=-0.0176/ph, revThresh=-0.45, canRevolt=no
+  Rigel: loyalty=-0.014, tenure=1ph, norm=0.172, net=-0.0207/ph, revThresh=-0.45, canRevolt=no
+  Adhara: loyalty=0.010, tenure=1ph, norm=0.082, net=-0.0098/ph, revThresh=-0.45, canRevolt=no
+  Alphecca: loyalty=-0.007, tenure=1ph, norm=0.118, net=-0.0141/ph, revThresh=-0.45, canRevolt=no
+  Alpherg: loyalty=-0.006, tenure=1ph, norm=0.106, net=-0.0127/ph, revThresh=-0.45, canRevolt=no
+  Rana: loyalty=-0.012, tenure=1ph, norm=0.158, net=-0.0189/ph, revThresh=-0.45, canRevolt=no
+  Rigel: loyalty=0.003, tenure=1ph, norm=0.135, net=-0.0162/ph, revThresh=-0.45, canRevolt=no
+  Suhail: loyalty=-0.012, tenure=1ph, norm=0.155, net=-0.0186/ph, revThresh=-0.45, canRevolt=no
+  Alzirr: loyalty=-0.015, tenure=1ph, norm=0.178, net=-0.0214/ph, revThresh=-0.45, canRevolt=no
+  Atik: loyalty=0.011, tenure=1ph, norm=0.079, net=-0.0095/ph, revThresh=-0.45, canRevolt=no
+
+Ph1278: Shaula controls 8 major systems
+  Ruler: vitality=0.76, decadence=0.25, darkAge=false, severeDarkAge=false
+  AdminLoad: 0.500
+  Nephelos: loyalty=0.022, tenure=2ph, norm=0.125, net=-0.0150/ph, revThresh=-0.45, canRevolt=no
+  Gammer: loyalty=0.017, tenure=2ph, norm=0.147, net=-0.0176/ph, revThresh=-0.45, canRevolt=no
+  Adhara: loyalty=0.016, tenure=2ph, norm=0.082, net=-0.0098/ph, revThresh=-0.45, canRevolt=no
+  Alphecca: loyalty=-0.018, tenure=2ph, norm=0.118, net=-0.0141/ph, revThresh=-0.45, canRevolt=no
+  Alpherg: loyalty=-0.015, tenure=2ph, norm=0.106, net=-0.0127/ph, revThresh=-0.45, canRevolt=no
+  Rigel: loyalty=0.003, tenure=2ph, norm=0.135, net=-0.0162/ph, revThresh=-0.45, canRevolt=no
+  Atik: loyalty=0.019, tenure=2ph, norm=0.079, net=-0.0095/ph, revThresh=-0.45, canRevolt=no
+
+Ph1279: Shaula controls 11 major systems
+  Ruler: vitality=0.77, decadence=0.24, darkAge=false, severeDarkAge=false
+  AdminLoad: 0.500
+  Terminus: loyalty=-0.018, tenure=1ph, norm=0.211, net=-0.0253/ph, revThresh=-0.45, canRevolt=no
+  Nephelos: loyalty=0.037, tenure=3ph, norm=0.125, net=-0.0150/ph, revThresh=-0.45, canRevolt=no
+  Gammer: loyalty=0.029, tenure=3ph, norm=0.147, net=-0.0176/ph, revThresh=-0.45, canRevolt=no
+  Adhara: loyalty=0.027, tenure=3ph, norm=0.082, net=-0.0098/ph, revThresh=-0.45, canRevolt=no
+  Alphecca: loyalty=-0.024, tenure=3ph, norm=0.118, net=-0.0141/ph, revThresh=-0.45, canRevolt=no
+  Alpherg: loyalty=-0.021, tenure=3ph, norm=0.106, net=-0.0127/ph, revThresh=-0.45, canRevolt=no
+  Rana: loyalty=-0.012, tenure=1ph, norm=0.158, net=-0.0189/ph, revThresh=-0.45, canRevolt=no
+  Rigel: loyalty=0.008, tenure=3ph, norm=0.135, net=-0.0162/ph, revThresh=-0.45, canRevolt=no
+  Suhail: loyalty=-0.011, tenure=1ph, norm=0.155, net=-0.0186/ph, revThresh=-0.45, canRevolt=no
+  Atik: loyalty=0.032, tenure=3ph, norm=0.079, net=-0.0095/ph, revThresh=-0.45, canRevolt=no
+

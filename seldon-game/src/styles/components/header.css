@@ -15,7 +15,9 @@
   margin: 0;
   color: var(--accent);
   text-shadow: 0 0 10px var(--shadow-color);
-  letter-spacing: 2px;
+  letter-spacing: 1px;
+  font-family: var(--font-reading);
+  font-weight: 700;
 }
 
 .header-controls {
