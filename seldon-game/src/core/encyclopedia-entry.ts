@@ -564,8 +564,10 @@ export function buildDynastyFamilyTreeSection(
             .map((r) => {
               const from = r.fromDynastId ? galaxyState.dynasts.get(r.fromDynastId) : null;
               const to = r.toDynastId ? galaxyState.dynasts.get(r.toDynastId) : null;
-              const source = r.source ?? 'unknown';
-              const sourceDetail = r.sourceDetail ?? (source === 'government_succession' ? 'internal' : 'unknown');
+              const source = (r.source ?? 'unknown') as 'government_succession' | 'ruler_change' | 'unknown';
+              const sourceDetail = (
+                r.sourceDetail ?? (source === 'government_succession' ? 'internal' : 'unknown')
+              ) as 'internal' | 'conquest' | 'revolt' | 'challenger' | 'unknown';
               return {
                 phase: r.phase,
                 fromRulerName: from?.name || 'Unknown',
@@ -584,8 +586,13 @@ export function buildDynastyFamilyTreeSection(
             .map((r) => {
               const from = r.fromDynastId ? galaxyState.dynasts.get(r.fromDynastId) : null;
               const to = r.toDynastId ? galaxyState.dynasts.get(r.toDynastId) : null;
-              const source = r.source ?? 'unknown';
-              const sourceDetail = r.sourceDetail ?? 'unknown';
+              const source = (r.source ?? 'unknown') as 'government_succession' | 'ruler_change' | 'unknown';
+              const sourceDetail = (r.sourceDetail ?? 'unknown') as
+                | 'internal'
+                | 'conquest'
+                | 'revolt'
+                | 'challenger'
+                | 'unknown';
               return {
                 phase: r.phase,
                 fromRulerName: from?.name || 'Unknown',

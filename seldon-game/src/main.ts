@@ -8,13 +8,11 @@ import { GalaxyRenderer } from './rendering/galaxy-renderer';
 import { EventType, GalaxyShape, Star } from './core/types';
 import { clearHistoricalTracking } from './core/event-tracking';
 import { feedbackSystem } from './core/feedback';
-import { DemographicSnapshot } from './core/types';
 import { NarrativeGenerator } from './core/narrative';
 import {
   NarrativeArcType,
   NarrativeRelevanceProfile,
   NarrativeSummaryLine,
-  NarrativeSupportDisplayItem,
   NarrativeSupportRole,
   arcLabel,
   assignSummaryLineRoles,
@@ -25,13 +23,48 @@ import {
 } from './core/narrative-support';
 import { createDefaultSaveRepository, DEFAULT_GAME_ID } from './utils/save-repository-v2';
 import { ArchiveWorkerClient } from './utils/archive-worker-client';
-import { Encyclopedia, EncyclopediaEntry } from './core/encyclopedia';
+import { EncyclopediaEntry } from './core/encyclopedia';
 import { SaveIntegrityReport } from './utils/storage-v2';
 import { updateNewsFeed, updateStats, formatLargeNumber } from './ui/updates';
 import { showNotification } from './ui/notifications';
 import { showModal } from './ui/modals';
 import { showTooltip, hideTooltip, showInfoTooltip, updateTooltipPosition } from './components/tooltip';
 import { useStore } from './store';
+import { EncyclopediaEventCache } from './ui/encyclopedia/encyclopedia-event-cache';
+import { eventMatchesCategory, mapEventTypeToEncyclopediaCategory } from './ui/encyclopedia/encyclopedia-event-categories';
+import { buildEncyclopediaEventsPaneHtml } from './ui/encyclopedia/encyclopedia-events-pane';
+import { prepareEncyclopediaRenderData } from './ui/encyclopedia/encyclopedia-render-data';
+import {
+  captureSimulationNavigationContextSnapshot,
+  restoreSimulationNavigationContextSnapshot,
+} from './ui/encyclopedia/encyclopedia-navigation-context';
+import { buildSelectedChapterSupportData } from './ui/encyclopedia/encyclopedia-narrative-support-selection';
+import { NarrativeSupportSelectionCacheStore } from './ui/encyclopedia/encyclopedia-support-selection';
+import { escapeHtml, linkifyEncyclopediaText } from './ui/encyclopedia/encyclopedia-text-search';
+import { buildNavigatorGroups } from './ui/encyclopedia/encyclopedia-timeline-navigator';
+import type {
+  DemographicMetricKey,
+  EncyclopediaEventCategory,
+  EncyclopediaViewState,
+  SimulationNavigationContext,
+} from './ui/encyclopedia/encyclopedia-types';
+import { bindEncyclopediaDemographicsChartInteractions } from './ui/encyclopedia/encyclopedia-demographics-interactions';
+import { buildEncyclopediaDemographicsPaneHtml } from './ui/encyclopedia/encyclopedia-demographics-pane';
+import { buildTopEmpireRows, renderEmpireRankingCard } from './ui/encyclopedia/encyclopedia-empire-rankings';
+import { buildEncyclopediaFilmstripHtml, buildEncyclopediaNavigatorHtml } from './ui/encyclopedia/encyclopedia-filmstrip-navigator-pane';
+import { bindEncyclopediaCoreInteractions } from './ui/encyclopedia/encyclopedia-core-interactions';
+import { computeMiniMapPoints } from './ui/encyclopedia/encyclopedia-mini-map';
+import { buildEncyclopediaNarrativeChapterSummaryHtml, buildEncyclopediaNarrativeRailHtml } from './ui/encyclopedia/encyclopedia-narrative-pane';
+import { buildEncyclopediaControlPanelHtml, buildEncyclopediaWorkspaceShellHtml } from './ui/encyclopedia/encyclopedia-shell-markup';
+import { getOrCreateEncyclopediaWorkspace, renderEncyclopediaLoadingStateUI } from './ui/encyclopedia/encyclopedia-workspace';
+import {
+  hasSeenPulse,
+  markPulseSeen,
+  readCollapsedPreference,
+  readExposureCount,
+  writeCollapsedPreference,
+  writeExposureCount,
+} from './ui/search-panel-preferences';
 import './styles/main.css';
 
 const saveRepository = createDefaultSaveRepository();
@@ -102,14 +135,7 @@ const GALAXY_SIZE_DIMENSIONS: Record<GalaxySizePreset, { width: number; height: 
 };
 
 function getEncyclopediaWorkspace(): HTMLDivElement | null {
-  if (!gameContainer) return null;
-  let workspace = gameContainer.querySelector('#encyclopediaWorkspace') as HTMLDivElement | null;
-  if (!workspace) {
-    workspace = document.createElement('div');
-    workspace.id = 'encyclopediaWorkspace';
-    gameContainer.appendChild(workspace);
-  }
-  return workspace;
+  return getOrCreateEncyclopediaWorkspace(gameContainer, document);
 }
 
 // --- Simulation View Elements ---
@@ -173,32 +199,7 @@ const detailDebateSplitEnabled = readDetailFlag(DETAIL_DEBATE_SPLIT_FLAG_KEY, tr
 const detailClaimEvidenceEnabled = readDetailFlag(DETAIL_CLAIM_EVIDENCE_FLAG_KEY, true);
 const detailCrossrefGraphEnabled = readDetailFlag(DETAIL_CROSSREF_GRAPH_FLAG_KEY, true);
 
-type EncyclopediaEventCategory = 'all' | 'war' | 'crisis' | 'rebellion' | 'plague' | 'leader' | 'succession';
-type DemographicMetricKey = 'totalPopulation' | 'averageTech' | 'maxPower' | 'imperialPower' | 'activeWars' | 'activeCrises';
-
-interface EncyclopediaViewState {
-  searchText: string;
-  eventCategory: EncyclopediaEventCategory;
-  phaseFilter: number | null;
-  timelineClusterId: string | null;
-  starFilters: string[];
-  visibleCount: number;
-  displayMode: 'atlas' | 'split';
-  activeTab: 'events' | 'narrative' | 'demographics' | 'navigator';
-  eventsViewMode: 'list' | 'timeline';
-  demographicsMetric: DemographicMetricKey;
-  navigatorExpandedGroupIds: string[];
-  selectedStarId: string | null;
-  selectedPhase: number | null;
-  selectedChapterId: string | null;
-}
-
 type AppViewMode = 'simulation' | 'encyclopedia';
-interface SimulationNavigationContext {
-  selectedStarId: string | null;
-  phase: number;
-  eventCategory: EncyclopediaEventCategory;
-}
 
 interface DidYouKnowFactoid {
   id: string;
@@ -235,101 +236,62 @@ let simulationNavigationContext: SimulationNavigationContext = {
   phase: 0,
   eventCategory: 'all',
 };
-let encyclopediaCachedPhase = -1;
-let encyclopediaCachedStateRef: typeof galaxy.state | null = null;
-let encyclopediaCachedEvents: EncyclopediaEntry[] = [];
+const encyclopediaEventCache = new EncyclopediaEventCache();
 let encyclopediaRenderToken = 0;
 let simulationFactoids: DidYouKnowFactoid[] = [];
 let simulationFactoidIndex = 0;
 let didYouKnowRotationTimer: number | null = null;
-const narrativeSupportSelectionCache = new Map<string, NarrativeSupportDisplayItem[]>();
 const NARRATIVE_SUPPORT_SELECTION_CACHE_LIMIT = 40;
-
-function getCachedEncyclopediaEvents(): EncyclopediaEntry[] {
-  if (encyclopediaCachedStateRef === galaxy.state && encyclopediaCachedPhase === galaxy.state.phase) {
-    return encyclopediaCachedEvents;
-  }
-  encyclopediaCachedEvents = Encyclopedia.getAllEvents(galaxy.state);
-  encyclopediaCachedPhase = galaxy.state.phase;
-  encyclopediaCachedStateRef = galaxy.state;
-  return encyclopediaCachedEvents;
-}
+const narrativeSupportSelectionCache = new NarrativeSupportSelectionCacheStore(NARRATIVE_SUPPORT_SELECTION_CACHE_LIMIT);
 
 function renderEncyclopediaLoadingState(): void {
-  if (!contextualNav) return;
-  contextualNav.innerHTML = `
-    <div class="panel">
-      <h3>ENCYCLOPEDIA CONTROLS</h3>
-      <div class="encyclopedia-content">
-        <p>Preparing filters...</p>
-      </div>
-    </div>
-  `;
-
-  const workspace = getEncyclopediaWorkspace();
-  if (workspace) {
-    workspace.innerHTML = `
-      <div class="encyclopedia-workspace-loading">
-        <h2>Encyclopedia Workspace</h2>
-        <p>Loading archive...</p>
-      </div>
-    `;
-  }
+  renderEncyclopediaLoadingStateUI({
+    contextualNav,
+    workspace: getEncyclopediaWorkspace(),
+  });
 }
 
 function captureSimulationNavigationContext(eventCategory: EncyclopediaEventCategory = 'all'): void {
-  simulationNavigationContext = {
+  simulationNavigationContext = captureSimulationNavigationContextSnapshot({
     selectedStarId: renderer.getSelectedStar(),
     phase: galaxy.state.phase,
     eventCategory,
-  };
+  }) as SimulationNavigationContext;
 }
 
 function restoreSimulationNavigationContext(): void {
-  if (galaxy.state.phase !== simulationNavigationContext.phase) {
-    goToPhase(simulationNavigationContext.phase);
-  }
-
-  renderer.setSelectedStar(simulationNavigationContext.selectedStarId);
-  if (simulationNavigationContext.selectedStarId) {
-    const star = galaxy.getStar(simulationNavigationContext.selectedStarId);
-    if (star) {
-      renderer.panToStar(star);
-    }
-  }
+  restoreSimulationNavigationContextSnapshot({
+    currentPhase: galaxy.state.phase,
+    context: simulationNavigationContext,
+    goToPhase,
+    setSelectedStar: (starId) => renderer.setSelectedStar(starId),
+    resolveStar: (starId) => galaxy.getStar(starId) ?? null,
+    panToStar: (star) => renderer.panToStar(star),
+  });
 }
 
 function readSearchPanelExposureCount(): number {
-  const raw = localStorage.getItem(SEARCH_PANEL_EXPOSURE_COUNT_KEY);
-  const parsed = raw ? Number.parseInt(raw, 10) : 0;
-  if (Number.isNaN(parsed) || parsed < 0) {
-    return 0;
-  }
-  return parsed;
+  return readExposureCount(SEARCH_PANEL_EXPOSURE_COUNT_KEY, localStorage);
 }
 
 function writeSearchPanelExposureCount(count: number): void {
-  const normalized = Math.max(0, Math.floor(count));
-  localStorage.setItem(SEARCH_PANEL_EXPOSURE_COUNT_KEY, normalized.toString());
+  writeExposureCount(SEARCH_PANEL_EXPOSURE_COUNT_KEY, count, localStorage);
 }
 
 function readSearchPanelPreference(): boolean | null {
-  const raw = localStorage.getItem(SEARCH_PANEL_PREF_COLLAPSED_KEY);
-  if (raw === 'true') return true;
-  if (raw === 'false') return false;
-  return null;
+  return readCollapsedPreference(SEARCH_PANEL_PREF_COLLAPSED_KEY, localStorage);
 }
 
 function writeSearchPanelPreference(collapsed: boolean): void {
-  localStorage.setItem(SEARCH_PANEL_PREF_COLLAPSED_KEY, collapsed ? 'true' : 'false');
+  writeCollapsedPreference(SEARCH_PANEL_PREF_COLLAPSED_KEY, collapsed, localStorage);
 }
 
 function hasShownSearchPanelPulse(): boolean {
-  return localStorage.getItem(SEARCH_PANEL_PULSE_SEEN_KEY) === 'true';
+  return hasSeenPulse(SEARCH_PANEL_PULSE_SEEN_KEY, localStorage);
 }
 
 function markSearchPanelPulseShown(): void {
-  localStorage.setItem(SEARCH_PANEL_PULSE_SEEN_KEY, 'true');
+  markPulseSeen(SEARCH_PANEL_PULSE_SEEN_KEY, localStorage);
 }
 
 function compareStarsByMetricDesc(a: Star, b: Star, metric: (star: Star) => number): number {
@@ -976,9 +938,7 @@ async function recreateGalaxy(mode: GalaxyRecreateMode): Promise<void> {
       phase: 0,
       eventCategory: 'all',
     };
-    encyclopediaCachedPhase = -1;
-    encyclopediaCachedStateRef = null;
-    encyclopediaCachedEvents = [];
+    encyclopediaEventCache.clear();
     narrativeSupportSelectionCache.clear();
 
     applyTheme(selectedTheme);
@@ -1624,17 +1584,6 @@ function renderSimulationView() {
     ensureDidYouKnowRotation();
 }
 
-function mapEventTypeToEncyclopediaCategory(eventTypeRaw: string): EncyclopediaEventCategory {
-  const eventType = eventTypeRaw.toLowerCase();
-  if (eventType.includes('war') || eventType.includes('conquest') || eventType.includes('peace')) return 'war';
-  if (eventType.includes('crisis') || eventType.includes('anarchy') || eventType.includes('mule') || eventType.includes('external')) return 'crisis';
-  if (eventType.includes('rebellion') || eventType.includes('revolution') || eventType.includes('liberation') || eventType.includes('collapse')) return 'rebellion';
-  if (eventType.includes('plague')) return 'plague';
-  if (eventType.includes('leader') || eventType.includes('great-person') || eventType.includes('dynasty')) return 'leader';
-  if (eventType.includes('succession')) return 'succession';
-  return 'all';
-}
-
 function resolveStarIdAtCurrentPhase(candidateStarIds: string[], candidateStarNames: string[] = []): string | null {
   for (const starId of candidateStarIds) {
     if (galaxy.getStar(starId)) return starId;
@@ -1651,11 +1600,6 @@ function resolveStarIdAtCurrentPhase(candidateStarIds: string[], candidateStarNa
   const stars = galaxy.getAllStars();
   const byName = stars.find((star) => normalizedNameSet.has(star.name.trim().toLowerCase()));
   return byName?.id ?? null;
-}
-
-function eventMatchesCategory(eventTypeRaw: string, category: EncyclopediaEventCategory): boolean {
-  if (category === 'all') return true;
-  return mapEventTypeToEncyclopediaCategory(eventTypeRaw) === category;
 }
 
 function openEncyclopedia(overrides?: Partial<EncyclopediaViewState>) {
@@ -2200,31 +2144,6 @@ interface NarrativeChapter {
   arcRationale: string[];
 }
 
-function buildNarrativeSupportCacheKey(
-  chapter: NarrativeChapter,
-  filteredEvents: EncyclopediaEntry[]
-): string {
-  const first = filteredEvents[0];
-  const last = filteredEvents[filteredEvents.length - 1];
-  const firstId = first ? deriveSupportEventId(first) : 'none';
-  const lastId = last ? deriveSupportEventId(last) : 'none';
-  return [
-    galaxy.state.phase,
-    chapter.id,
-    encyclopediaViewState.eventCategory,
-    encyclopediaViewState.phaseFilter ?? 'all',
-    encyclopediaViewState.timelineClusterId ?? 'all',
-    encyclopediaViewState.starFilters.join(','),
-    encyclopediaViewState.searchText.trim().toLowerCase(),
-    NARRATIVE_SUPPORT_RELEVANCE_V2_ENABLED ? 'r1' : 'r0',
-    NARRATIVE_SUPPORT_CLUSTERS_V2_ENABLED ? 'c1' : 'c0',
-    NARRATIVE_RELEVANCE_PROFILE,
-    filteredEvents.length,
-    firstId,
-    lastId,
-  ].join('|');
-}
-
 function buildNarrativeChapters(events: EncyclopediaEntry[]): NarrativeChapter[] {
   const chapters: NarrativeChapter[] = [];
   const maxPhase = events.reduce((max, event) => Math.max(max, event.phase), galaxy.state.phase);
@@ -2299,612 +2218,35 @@ function buildNarrativeChapters(events: EncyclopediaEntry[]): NarrativeChapter[]
   return chapters.sort((a, b) => b.endPhase - a.endPhase);
 }
 
-interface MiniMapPoint {
-  starId: string;
-  x: number;
-  y: number;
-}
-
-interface TimelineCluster {
-  id: string;
-  startPhase: number;
-  endPhase: number;
-  eventCount: number;
-  dominantCategory: EncyclopediaEventCategory;
-  starIds: string[];
-}
-
 const FILMSTRIP_CLUSTER_SPAN = 10;
-
-function buildTimelineClusters(events: EncyclopediaEntry[]): TimelineCluster[] {
-  if (events.length === 0) return [];
-  const byBucket = new Map<string, EncyclopediaEntry[]>();
-
-  for (const event of events) {
-    const startPhase = Math.floor(event.phase / FILMSTRIP_CLUSTER_SPAN) * FILMSTRIP_CLUSTER_SPAN;
-    const endPhase = startPhase + FILMSTRIP_CLUSTER_SPAN - 1;
-    const key = `${startPhase}-${endPhase}`;
-    const bucket = byBucket.get(key) ?? [];
-    bucket.push(event);
-    byBucket.set(key, bucket);
-  }
-
-  return Array.from(byBucket.entries())
-    .map(([id, clusterEvents]) => {
-      const [startRaw, endRaw] = id.split('-');
-      const startPhase = Number.parseInt(startRaw ?? '0', 10);
-      const endPhase = Number.parseInt(endRaw ?? '0', 10);
-      const categoryCounts = new Map<EncyclopediaEventCategory, number>();
-      for (const event of clusterEvents) {
-        const category = mapEventTypeToEncyclopediaCategory(event.type);
-        categoryCounts.set(category, (categoryCounts.get(category) ?? 0) + 1);
-      }
-
-      let dominantCategory: EncyclopediaEventCategory = 'all';
-      let best = 0;
-      for (const [category, count] of categoryCounts.entries()) {
-        if (count > best) {
-          best = count;
-          dominantCategory = category;
-        }
-      }
-
-      const starIds = Array.from(new Set(clusterEvents.map((event) => event.starId)));
-      return {
-        id,
-        startPhase,
-        endPhase,
-        eventCount: clusterEvents.length,
-        dominantCategory,
-        starIds,
-      };
-    })
-    .sort((a, b) => b.endPhase - a.endPhase);
-}
-
-interface NavigatorGroup {
-  id: string;
-  label: string;
-  starIds: string[];
-  rulerId: string;
-  isIndependentBlock: boolean;
-}
-
-function buildNavigatorGroups(): NavigatorGroup[] {
-  const stars = galaxy.getAllStars();
-  const byRuler = new Map<string, Star[]>();
-
-  for (const star of stars) {
-    const rulerId = star.ruler ?? star.id;
-    const bucket = byRuler.get(rulerId) ?? [];
-    bucket.push(star);
-    byRuler.set(rulerId, bucket);
-  }
-
-  const groups: NavigatorGroup[] = [];
-  for (const [rulerId, groupStars] of byRuler.entries()) {
-    const ruler = galaxy.getStar(rulerId);
-    const independent = ruler ? ruler.ruler === ruler.id : false;
-    const groupId = independent ? `independent:${rulerId}` : `empire:${rulerId}`;
-    const label = independent
-      ? `${ruler?.name ?? rulerId} (Independent)`
-      : `${ruler?.name ?? rulerId} Domain`;
-    groups.push({
-      id: groupId,
-      label,
-      starIds: groupStars.map((star) => star.id).sort((a, b) => {
-        const starA = galaxy.getStar(a);
-        const starB = galaxy.getStar(b);
-        return (starA?.name ?? a).localeCompare(starB?.name ?? b);
-      }),
-      rulerId,
-      isIndependentBlock: independent,
-    });
-  }
-
-  groups.sort((a, b) => b.starIds.length - a.starIds.length);
-  return groups;
-}
-
-function escapeHtml(input: string): string {
-  return input
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-function linkifyEncyclopediaText(text: string, starNames: Array<{ id: string; name: string }>): string {
-  const raw = text ?? '';
-  if (raw.length === 0) return '';
-  const lower = raw.toLowerCase();
-  const matches: Array<{ start: number; end: number; kind: 'phase' | 'star'; value: string }> = [];
-
-  const phaseRegex = /phase\s+(\d+)/gi;
-  let phaseMatch = phaseRegex.exec(raw);
-  while (phaseMatch) {
-    const fullMatch = phaseMatch[0];
-    const phaseNumber = phaseMatch[1];
-    if (phaseNumber) {
-      matches.push({
-        start: phaseMatch.index,
-        end: phaseMatch.index + fullMatch.length,
-        kind: 'phase',
-        value: phaseNumber,
-      });
-    }
-    phaseMatch = phaseRegex.exec(raw);
-  }
-
-  const namesSorted = [...starNames].sort((a, b) => b.name.length - a.name.length);
-  for (const star of namesSorted) {
-    const needle = star.name.toLowerCase();
-    if (needle.length < 3) continue;
-    let startAt = 0;
-    while (startAt < lower.length) {
-      const idx = lower.indexOf(needle, startAt);
-      if (idx < 0) break;
-      const left = idx === 0 ? '' : lower[idx - 1] ?? '';
-      const right = idx + needle.length >= lower.length ? '' : lower[idx + needle.length] ?? '';
-      const leftBoundary = left.length === 0 || !/[a-z0-9]/.test(left);
-      const rightBoundary = right.length === 0 || !/[a-z0-9]/.test(right);
-      if (leftBoundary && rightBoundary) {
-        matches.push({
-          start: idx,
-          end: idx + needle.length,
-          kind: 'star',
-          value: star.id,
-        });
-      }
-      startAt = idx + needle.length;
-    }
-  }
-
-  matches.sort((a, b) => {
-    if (a.start !== b.start) return a.start - b.start;
-    return (b.end - b.start) - (a.end - a.start);
-  });
-
-  const accepted: typeof matches = [];
-  for (const match of matches) {
-    const overlaps = accepted.some((existing) => !(match.end <= existing.start || match.start >= existing.end));
-    if (!overlaps) accepted.push(match);
-  }
-
-  if (accepted.length === 0) return escapeHtml(raw);
-
-  let cursor = 0;
-  let html = '';
-  for (const match of accepted) {
-    if (match.start > cursor) {
-      html += escapeHtml(raw.slice(cursor, match.start));
-    }
-    const tokenText = raw.slice(match.start, match.end);
-    if (match.kind === 'phase') {
-      html += `<button type="button" class="encyclopedia-inline-link" data-link-phase="${match.value}">${escapeHtml(tokenText)}</button>`;
-    } else {
-      html += `<button type="button" class="encyclopedia-inline-link" data-link-star-id="${match.value}">${escapeHtml(tokenText)}</button>`;
-    }
-    cursor = match.end;
-  }
-  if (cursor < raw.length) {
-    html += escapeHtml(raw.slice(cursor));
-  }
-  return html;
-}
-
-interface EncyclopediaSearchSuggestion {
-  value: string;
-  label: string;
-  type: 'star' | 'type' | 'event';
-}
-
-function buildEncyclopediaSearchSuggestions(query: string, events: EncyclopediaEntry[]): EncyclopediaSearchSuggestion[] {
-  const normalized = query.trim().toLowerCase();
-  if (normalized.length < 2) return [];
-
-  const suggestions: EncyclopediaSearchSuggestion[] = [];
-  const seen = new Set<string>();
-  const pushUnique = (item: EncyclopediaSearchSuggestion) => {
-    const key = `${item.type}:${item.value.toLowerCase()}`;
-    if (seen.has(key)) return;
-    seen.add(key);
-    suggestions.push(item);
-  };
-
-  for (const starName of Array.from(new Set(events.map((event) => event.starName)))) {
-    if (starName.toLowerCase().includes(normalized)) {
-      pushUnique({ value: starName, label: `${starName} (star)`, type: 'star' });
-    }
-    if (suggestions.length >= 4) break;
-  }
-
-  const eventTypes = Array.from(new Set(events.map((event) => event.type)));
-  for (const eventType of eventTypes) {
-    if (eventType.toLowerCase().includes(normalized)) {
-      pushUnique({ value: eventType, label: `${eventType} (type)`, type: 'type' });
-    }
-    if (suggestions.length >= 6) break;
-  }
-
-  for (const event of events) {
-    if (event.description.toLowerCase().includes(normalized)) {
-      pushUnique({
-        value: event.description,
-        label: `${event.description.slice(0, 64)}${event.description.length > 64 ? '...' : ''} (event)`,
-        type: 'event',
-      });
-    }
-    if (suggestions.length >= 8) break;
-  }
-
-  return suggestions.slice(0, 8);
-}
-
-function getDemographicMetricValue(snapshot: DemographicSnapshot, metric: DemographicMetricKey): number {
-  const value = snapshot[metric];
-  return typeof value === 'number' ? value : 0;
-}
-
-interface DemographicChartPoint {
-  sourceIndex: number;
-  phase: number;
-  value: number;
-}
-
-function buildDemographicChartPoints(data: DemographicSnapshot[], metric: DemographicMetricKey, graphWidth: number): DemographicChartPoint[] {
-  if (data.length === 0) return [];
-
-  const bucketCount = Math.max(2, Math.floor(graphWidth));
-  if (data.length <= bucketCount * 2) {
-    return data.map((snap, sourceIndex) => ({
-      sourceIndex,
-      phase: snap.phase,
-      value: getDemographicMetricValue(snap, metric),
-    }));
-  }
-
-  const points: DemographicChartPoint[] = [];
-  for (let bucket = 0; bucket < bucketCount; bucket++) {
-    const start = Math.floor((bucket / bucketCount) * data.length);
-    const endExclusive = Math.min(data.length, Math.floor(((bucket + 1) / bucketCount) * data.length));
-    if (endExclusive <= start) continue;
-
-    let minIndex = start;
-    let maxIndex = start;
-    let minValue = getDemographicMetricValue(data[start]!, metric);
-    let maxValue = minValue;
-
-    for (let i = start + 1; i < endExclusive; i++) {
-      const value = getDemographicMetricValue(data[i]!, metric);
-      if (value < minValue) {
-        minValue = value;
-        minIndex = i;
-      }
-      if (value > maxValue) {
-        maxValue = value;
-        maxIndex = i;
-      }
-    }
-
-    const ordered = minIndex <= maxIndex ? [minIndex, maxIndex] : [maxIndex, minIndex];
-    for (const sourceIndex of ordered) {
-      const previous = points[points.length - 1];
-      if (previous && previous.sourceIndex === sourceIndex) continue;
-      const snap = data[sourceIndex];
-      if (!snap) continue;
-      points.push({
-        sourceIndex,
-        phase: snap.phase,
-        value: getDemographicMetricValue(snap, metric),
-      });
-    }
-  }
-
-  const first = data[0];
-  if (first && (points.length === 0 || points[0]?.sourceIndex !== 0)) {
-    points.unshift({
-      sourceIndex: 0,
-      phase: first.phase,
-      value: getDemographicMetricValue(first, metric),
-    });
-  }
-  const lastIndex = data.length - 1;
-  const last = data[lastIndex];
-  if (last && (points.length === 0 || points[points.length - 1]?.sourceIndex !== lastIndex)) {
-    points.push({
-      sourceIndex: lastIndex,
-      phase: last.phase,
-      value: getDemographicMetricValue(last, metric),
-    });
-  }
-
-  return points;
-}
-
-function renderEncyclopediaDemographicsChart(
-  canvas: HTMLCanvasElement,
-  data: DemographicSnapshot[],
-  metric: DemographicMetricKey,
-  selectedPhase: number | null,
-  events: EncyclopediaEntry[]
-): void {
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return;
-
-  const rect = canvas.getBoundingClientRect();
-  const dpr = window.devicePixelRatio || 1;
-  canvas.width = Math.max(1, Math.floor(rect.width * dpr));
-  canvas.height = Math.max(1, Math.floor(rect.height * dpr));
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  const width = rect.width;
-  const height = rect.height;
-
-  ctx.clearRect(0, 0, width, height);
-  if (data.length < 2) {
-    ctx.fillStyle = '#88bbdd';
-    ctx.font = '12px "Courier New", monospace';
-    ctx.fillText('Not enough demographic data yet.', 12, 20);
-    return;
-  }
-
-  const padding = 32;
-  const graphW = width - padding * 2;
-  const graphH = height - padding * 2;
-  const chartPoints = buildDemographicChartPoints(data, metric, graphW);
-  const values = chartPoints.map((point) => point.value);
-  const maxVal = Math.max(1, ...values);
-  const minVal = Math.min(0, ...values);
-
-  ctx.strokeStyle = 'rgba(120, 160, 190, 0.35)';
-  ctx.lineWidth = 1;
-  for (let i = 0; i <= 4; i++) {
-    const y = padding + (i / 4) * graphH;
-    ctx.beginPath();
-    ctx.moveTo(padding, y);
-    ctx.lineTo(width - padding, y);
-    ctx.stroke();
-  }
-
-  ctx.beginPath();
-  ctx.strokeStyle = '#66bbff';
-  ctx.lineWidth = 2;
-  chartPoints.forEach((point, index) => {
-    const x = padding + (point.sourceIndex / Math.max(1, data.length - 1)) * graphW;
-    const value = point.value;
-    const normalized = (value - minVal) / Math.max(1e-6, (maxVal - minVal));
-    const y = height - padding - normalized * graphH;
-    if (index === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  });
-  ctx.stroke();
-
-  const crisisPhases = Array.from(
-    new Set(
-      events
-        .filter((event) => mapEventTypeToEncyclopediaCategory(event.type) === 'crisis')
-        .map((event) => event.phase)
-    )
-  );
-  ctx.strokeStyle = 'rgba(255, 110, 110, 0.45)';
-  for (const phase of crisisPhases) {
-    const idx = data.findIndex((snap) => snap.phase === phase);
-    if (idx < 0) continue;
-    const x = padding + (idx / Math.max(1, data.length - 1)) * graphW;
-    ctx.beginPath();
-    ctx.moveTo(x, padding);
-    ctx.lineTo(x, height - padding);
-    ctx.stroke();
-  }
-
-  if (selectedPhase !== null) {
-    const idx = data.findIndex((snap) => snap.phase === selectedPhase);
-    if (idx >= 0) {
-      const x = padding + (idx / Math.max(1, data.length - 1)) * graphW;
-      ctx.strokeStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.moveTo(x, padding);
-      ctx.lineTo(x, height - padding);
-      ctx.stroke();
-    }
-  }
-
-  ctx.fillStyle = '#88bbdd';
-  ctx.font = '10px "Courier New", monospace';
-  ctx.fillText(`Phase ${data[0]?.phase ?? 0}`, padding, height - 10);
-  ctx.fillText(`Phase ${data[data.length - 1]?.phase ?? 0}`, width - padding - 56, height - 10);
-}
-
-interface EmpireRankingRow {
-  starId: string;
-  starName: string;
-  value: number;
-  valueLabel: string;
-}
-
-interface EmpireRankings {
-  byDuration: EmpireRankingRow[];
-  bySubjects: EmpireRankingRow[];
-  byPopulation: EmpireRankingRow[];
-}
 
 const EMPIRE_RANKING_MIN_SUBJECTS = 5;
 
-function resolveEmpireRulerId(star: Star, starsById: Map<string, Star>): string | null {
-  const visited = new Set<string>();
-  let current: Star | undefined = star;
-  while (current) {
-    if (!current.ruler) return null;
-    if (current.ruler === current.id) return current.id;
-    if (visited.has(current.id)) return null;
-    visited.add(current.id);
-    current = starsById.get(current.ruler);
-  }
-  return null;
-}
-
-function buildTopEmpireRows(stars: Star[]): EmpireRankings {
-  const starsById = new Map<string, Star>();
-  for (const star of stars) starsById.set(star.id, star);
-  const rulers = stars.filter((star) => star.ruler === star.id && star.subjects.length >= EMPIRE_RANKING_MIN_SUBJECTS);
-
-  const populationByRuler = new Map<string, number>();
-  for (const star of stars) {
-    const rulerId = resolveEmpireRulerId(star, starsById);
-    if (!rulerId) continue;
-    populationByRuler.set(rulerId, (populationByRuler.get(rulerId) ?? 0) + Math.max(0, star.population || 0));
-  }
-
-  const sortByValue = (a: EmpireRankingRow, b: EmpireRankingRow): number => {
-    const valueDelta = b.value - a.value;
-    if (valueDelta !== 0) return valueDelta;
-    return a.starName.localeCompare(b.starName);
-  };
-
-  const byDuration = rulers
-    .map((star) => ({
-      starId: star.id,
-      starName: star.name,
-      value: Math.max(0, star.dynastyAge || 0),
-      valueLabel: `${Math.max(0, Math.floor(star.dynastyAge || 0))} phases`,
-    }))
-    .sort(sortByValue)
-    .slice(0, 10);
-
-  const bySubjects = rulers
-    .map((star) => ({
-      starId: star.id,
-      starName: star.name,
-      value: Math.max(0, star.subjects.length || 0),
-      valueLabel: `${Math.max(0, star.subjects.length || 0)} subjects`,
-    }))
-    .sort(sortByValue)
-    .slice(0, 10);
-
-  const byPopulation = rulers
-    .map((star) => {
-      const population = Math.max(0, Math.floor(populationByRuler.get(star.id) ?? star.population ?? 0));
-      return {
-        starId: star.id,
-        starName: star.name,
-        value: population,
-        valueLabel: formatLargeNumber(population),
-      };
-    })
-    .sort(sortByValue)
-    .slice(0, 10);
-
-  return {
-    byDuration,
-    bySubjects,
-    byPopulation,
-  };
-}
-
-function renderEmpireRankingCard(title: string, rows: EmpireRankingRow[]): string {
-  if (rows.length === 0) {
-    return `
-      <section class="encyclopedia-empire-chart">
-        <h4>${escapeHtml(title)}</h4>
-        <p class="encyclopedia-empty-copy">No empires available yet.</p>
-      </section>
-    `;
-  }
-
-  const maxValue = Math.max(1, ...rows.map((row) => row.value));
-  return `
-    <section class="encyclopedia-empire-chart">
-      <h4>${escapeHtml(title)}</h4>
-      <ol class="encyclopedia-empire-ranking-list">
-        ${rows.map((row, index) => {
-          const width = Math.max(4, Math.round((row.value / maxValue) * 100));
-          return `
-            <li class="encyclopedia-empire-ranking-item">
-              <div class="encyclopedia-empire-ranking-head">
-                <button type="button" class="encyclopedia-inline-link" data-link-star-id="${row.starId}">${index + 1}. ${escapeHtml(row.starName)}</button>
-                <span class="encyclopedia-empire-ranking-value">${escapeHtml(row.valueLabel)}</span>
-              </div>
-              <div class="encyclopedia-empire-ranking-bar-track">
-                <span class="encyclopedia-empire-ranking-bar-fill" style="width: ${width}%;"></span>
-              </div>
-            </li>
-          `;
-        }).join('')}
-      </ol>
-    </section>
-  `;
-}
-
-function computeMiniMapPoints(stars: Star[], width = 218, height = 126, padding = 10): MiniMapPoint[] {
-  if (stars.length === 0) return [];
-  const minX = Math.min(...stars.map((star) => star.position.x));
-  const maxX = Math.max(...stars.map((star) => star.position.x));
-  const minY = Math.min(...stars.map((star) => star.position.y));
-  const maxY = Math.max(...stars.map((star) => star.position.y));
-  const xRange = Math.max(1e-6, maxX - minX);
-  const yRange = Math.max(1e-6, maxY - minY);
-  const innerWidth = Math.max(1, width - padding * 2);
-  const innerHeight = Math.max(1, height - padding * 2);
-
-  return stars.map((star) => ({
-    starId: star.id,
-    x: padding + ((star.position.x - minX) / xRange) * innerWidth,
-    y: padding + ((star.position.y - minY) / yRange) * innerHeight,
-  }));
-}
-
 function renderEncyclopedia() {
     if (!contextualNav) return;
-    const events = getCachedEncyclopediaEvents();
-    const search = encyclopediaViewState.searchText.trim().toLowerCase();
-
-    const baseFilteredEvents = events.filter((event) => {
-        if (!eventMatchesCategory(event.type, encyclopediaViewState.eventCategory)) return false;
-
-        if (encyclopediaViewState.starFilters.length > 0) {
-          const related = [event.starId, ...event.relatedStars];
-          const intersects = encyclopediaViewState.starFilters.some((starId) => related.includes(starId));
-          if (!intersects) return false;
-        }
-
-        if (search.length === 0) return true;
-        return (
-          event.description.toLowerCase().includes(search) ||
-          event.starName.toLowerCase().includes(search) ||
-          event.type.toLowerCase().includes(search)
-        );
+    const events = encyclopediaEventCache.get(galaxy.state);
+    const {
+      filteredEvents,
+      displayedEvents,
+      hasMoreEvents,
+      narrativeChapters,
+      searchSuggestions,
+      timelineClusters,
+      selectedCluster,
+      timelineEvents,
+      starFilterLabel,
+      selectedChapter,
+      selectedPhase,
+      selectedStarId,
+    } = prepareEncyclopediaRenderData({
+      events,
+      viewState: encyclopediaViewState,
+      clusterSpan: FILMSTRIP_CLUSTER_SPAN,
+      eventMatchesCategory,
+      mapEventTypeToCategory: mapEventTypeToEncyclopediaCategory,
+      buildNarrativeChapters,
+      resolveStarName: (starId) => galaxy.getStar(starId)?.name ?? null,
     });
-
-    const timelineClusters = buildTimelineClusters(baseFilteredEvents);
-    const selectedCluster = timelineClusters.find((cluster) => cluster.id === encyclopediaViewState.timelineClusterId) ?? null;
-
-    const filteredEvents = baseFilteredEvents.filter((event) => {
-      if (encyclopediaViewState.phaseFilter !== null && event.phase !== encyclopediaViewState.phaseFilter) return false;
-      if (selectedCluster && (event.phase < selectedCluster.startPhase || event.phase > selectedCluster.endPhase)) return false;
-      return true;
-    });
-
-    const displayedEvents = filteredEvents.slice(0, encyclopediaViewState.visibleCount);
-    const hasMoreEvents = displayedEvents.length < filteredEvents.length;
-    const narrativeChapters = buildNarrativeChapters(filteredEvents);
-    const searchSuggestions = buildEncyclopediaSearchSuggestions(encyclopediaViewState.searchText, baseFilteredEvents);
-    const timelineEventsByPhase = new Map<number, EncyclopediaEntry>();
-    for (const event of filteredEvents) {
-      if (!timelineEventsByPhase.has(event.phase)) {
-        timelineEventsByPhase.set(event.phase, event);
-      }
-      if (timelineEventsByPhase.size >= 90) break;
-    }
-    const timelineEvents = Array.from(timelineEventsByPhase.values()).sort((a, b) => a.phase - b.phase);
-
-    const starFilterLabel = encyclopediaViewState.starFilters
-      .map((starId) => galaxy.getStar(starId)?.name || starId)
-      .join(', ');
-
-    const selectedChapter = narrativeChapters.find((chapter) => chapter.id === encyclopediaViewState.selectedChapterId) ?? narrativeChapters[0];
-    const selectedPhase = encyclopediaViewState.selectedPhase;
-    const selectedStarId = encyclopediaViewState.selectedStarId ?? encyclopediaViewState.starFilters[0] ?? selectedChapter?.anchorStarId ?? null;
     const starNameLinkData = galaxy.getAllStars().map((star) => ({ id: star.id, name: star.name }));
     const miniMapHighlightStars = new Set<string>();
     if (selectedStarId) miniMapHighlightStars.add(selectedStarId);
@@ -2927,75 +2269,17 @@ function renderEncyclopedia() {
       const label = star?.name ?? point.starId;
       return `<circle class="${className}" data-mini-star-id="${point.starId}" cx="${point.x.toFixed(2)}" cy="${point.y.toFixed(2)}" r="${isSelected ? '3.2' : '2.1'}"><title>${label}</title></circle>`;
     }).join('');
-
-    const eventsHtml = displayedEvents.map(event => `
-        <div class="encyclopedia-item ${selectedPhase === event.phase && selectedStarId === event.starId ? 'selected' : ''}" data-event-phase="${event.phase}" data-event-star-id="${event.starId}">
-            <div class="encyclopedia-item-head">
-              <span class="encyclopedia-item-type">${event.type}</span>
-              <span class="encyclopedia-item-phase">Phase ${event.phase}</span>
-            </div>
-            <p class="encyclopedia-item-description">${linkifyEncyclopediaText(event.description, starNameLinkData)}</p>
-            <p class="encyclopedia-item-meta"><button type="button" class="encyclopedia-inline-link" data-link-star-id="${event.starId}">${escapeHtml(event.starName)}</button></p>
-            <div class="encyclopedia-related-actions">
-              <button type="button" class="encyclopedia-related-btn" data-related-star-id="${event.starId}" data-related-star-name="${encodeURIComponent(event.starName)}" data-related-stars="${event.relatedStars.join(',')}" data-related-phase="${event.phase}">Star Detail →</button>
-              <button type="button" class="encyclopedia-related-btn" data-related-type="${event.type}">Similar Events →</button>
-            </div>
-        </div>
-    `).join('');
-
-    const timelineMinPhase = timelineEvents[0]?.phase ?? 0;
-    const timelineMaxPhase = timelineEvents[timelineEvents.length - 1]?.phase ?? 1;
-    const timelineRange = Math.max(1, timelineMaxPhase - timelineMinPhase);
-    const timelineNodesHtml = timelineEvents.map((event, index) => {
-      const left = ((event.phase - timelineMinPhase) / timelineRange) * 100;
-      const nodeClass = selectedPhase === event.phase ? 'encyclopedia-timeline-node selected' : 'encyclopedia-timeline-node';
-      return `
-        <button
-          type="button"
-          class="${nodeClass}"
-          data-timeline-event-index="${index}"
-          style="left:${left.toFixed(2)}%;"
-          title="Phase ${event.phase}: ${event.type}"
-        >
-          <span>${event.phase}</span>
-        </button>
-      `;
-    }).join('');
-
-    const selectedTimelineEvent = timelineEvents.find((event) => event.phase === selectedPhase) ?? timelineEvents[timelineEvents.length - 1] ?? null;
-    const eventsPaneHtml = encyclopediaViewState.eventsViewMode === 'timeline'
-      ? `
-        <div class="encyclopedia-events-timeline-wrap">
-          <div class="encyclopedia-events-timeline">
-            <div class="encyclopedia-events-timeline-line"></div>
-            ${timelineNodesHtml || '<p class="encyclopedia-empty-copy">No timeline points available.</p>'}
-          </div>
-          ${
-            selectedTimelineEvent
-              ? `
-              <article class="encyclopedia-timeline-detail">
-                <h4>Phase ${selectedTimelineEvent.phase}</h4>
-                <p>${linkifyEncyclopediaText(selectedTimelineEvent.description, starNameLinkData)}</p>
-                <div class="encyclopedia-filter-summary">
-                  <span>${selectedTimelineEvent.type}</span>
-                  <span>${selectedTimelineEvent.starName}</span>
-                </div>
-                <div class="encyclopedia-related-actions">
-                  <button type="button" class="encyclopedia-related-btn" data-related-star-id="${selectedTimelineEvent.starId}" data-related-star-name="${encodeURIComponent(selectedTimelineEvent.starName)}" data-related-stars="${selectedTimelineEvent.relatedStars.join(',')}" data-related-phase="${selectedTimelineEvent.phase}">Star Detail →</button>
-                  <button type="button" class="encyclopedia-related-btn" data-related-type="${selectedTimelineEvent.type}">Similar Events →</button>
-                </div>
-              </article>
-            `
-              : '<p class="encyclopedia-empty-copy">Select a timeline point to inspect the event.</p>'
-          }
-        </div>
-      `
-      : `
-        <div class="encyclopedia-content encyclopedia-workspace-content">
-          ${eventsHtml.length > 0 ? eventsHtml : '<p>No significant events have occurred yet.</p>'}
-        </div>
-        ${hasMoreEvents ? `<div class="encyclopedia-load-more-wrap"><button id="encyclopediaLoadMoreBtn" class="encyclopedia-clear-btn" type="button">Load More</button></div>` : ''}
-      `;
+    const eventsPaneHtml = buildEncyclopediaEventsPaneHtml({
+      displayedEvents,
+      timelineEvents,
+      selectedPhase,
+      selectedStarId,
+      hasMoreEvents,
+      eventsViewMode: encyclopediaViewState.eventsViewMode,
+      starNameLinkData,
+      linkifyEncyclopediaText,
+      escapeHtml,
+    });
 
     const demographicMetricLabels: Record<DemographicMetricKey, string> = {
       totalPopulation: 'Total Population',
@@ -3005,194 +2289,79 @@ function renderEncyclopedia() {
       activeWars: 'Active Wars',
       activeCrises: 'Active Crises',
     };
-    const topEmpireRankings = buildTopEmpireRows(galaxy.getAllStars());
+    const topEmpireRankings = buildTopEmpireRows({
+      stars: galaxy.getAllStars(),
+      minSubjects: EMPIRE_RANKING_MIN_SUBJECTS,
+      formatLargeNumber,
+    });
 
-    const demographicsPaneHtml = `
-      <div class="encyclopedia-demographics-wrap">
-        <div class="encyclopedia-demographics-controls">
-          <label for="encyclopediaDemographicMetric" class="color-dim font-size-11">Metric</label>
-          <select id="encyclopediaDemographicMetric" class="encyclopedia-type-select" aria-label="Select demographic metric">
-            ${Object.entries(demographicMetricLabels)
-              .map(([value, label]) => `<option value="${value}" ${encyclopediaViewState.demographicsMetric === value ? 'selected' : ''}>${label}</option>`)
-              .join('')}
-          </select>
-        </div>
-        <canvas id="encyclopediaDemographicsCanvas" class="encyclopedia-demographics-canvas" aria-label="Interactive demographics chart"></canvas>
-        <p class="encyclopedia-mini-map-help">Click chart to jump to phase. Crisis markers are shown as red guide lines.</p>
-        <div class="encyclopedia-empire-rankings-wrap">
-          ${renderEmpireRankingCard('Top 10 Empires by Length of Time (phases)', topEmpireRankings.byDuration)}
-          ${renderEmpireRankingCard('Top 10 Empires by Number of Subjects', topEmpireRankings.bySubjects)}
-          ${renderEmpireRankingCard('Top 10 Empires by Population', topEmpireRankings.byPopulation)}
-        </div>
-      </div>
-    `;
+    const demographicsPaneHtml = buildEncyclopediaDemographicsPaneHtml({
+      metricLabels: demographicMetricLabels,
+      selectedMetric: encyclopediaViewState.demographicsMetric,
+      topEmpireRankings,
+      renderEmpireRankingCard,
+    });
 
-    const chaptersHtml = narrativeChapters.map((chapter) => `
-      <button type="button" class="encyclopedia-chapter-btn ${selectedChapter?.id === chapter.id ? 'selected' : ''}" data-chapter-id="${chapter.id}">
-        <span class="encyclopedia-chapter-title">Phases ${chapter.startPhase}-${chapter.endPhase}</span>
-        <span class="encyclopedia-chapter-meta">${chapter.eventCount} events</span>
-      </button>
-    `).join('');
+    const narrativeRailHtml = buildEncyclopediaNarrativeRailHtml({
+      chapters: narrativeChapters,
+      selectedChapterId: selectedChapter?.id,
+    });
 
-    const narrativeRailHtml = `
-      <div class="encyclopedia-narrative-rail">
-        <h4>Chapter Rails</h4>
-        <div class="encyclopedia-chapter-list">
-          ${chaptersHtml || '<p class="encyclopedia-empty-copy">No chapters generated yet.</p>'}
-        </div>
-      </div>
-    `;
-
-    const selectedChapterSupportEvents = (() => {
-      if (!selectedChapter) return [] as NarrativeSupportDisplayItem[];
-      const chapterEvents = filteredEvents
-        .filter((event) => event.phase >= selectedChapter.startPhase && event.phase <= selectedChapter.endPhase);
-
-      if (chapterEvents.length === 0) return [];
-      const cacheKey = buildNarrativeSupportCacheKey(selectedChapter, filteredEvents);
-      const cached = narrativeSupportSelectionCache.get(cacheKey);
-      if (cached) return cached;
-
-      const computed = selectNarrativeSupportEvents(selectedChapter, chapterEvents, {
+    const { selectedChapterSupportEvents, selectedChapterEvidenceCountByLineId } = buildSelectedChapterSupportData({
+      selectedChapter,
+      filteredEvents,
+      currentPhase: galaxy.state.phase,
+      viewState: {
+        eventCategory: encyclopediaViewState.eventCategory,
+        phaseFilter: encyclopediaViewState.phaseFilter,
+        timelineClusterId: encyclopediaViewState.timelineClusterId,
+        starFilters: encyclopediaViewState.starFilters,
+        searchText: encyclopediaViewState.searchText,
+      },
+      cache: narrativeSupportSelectionCache,
+      cacheConfig: {
+        relevanceEnabled: NARRATIVE_SUPPORT_RELEVANCE_V2_ENABLED,
+        clustersEnabled: NARRATIVE_SUPPORT_CLUSTERS_V2_ENABLED,
+        relevanceProfile: NARRATIVE_RELEVANCE_PROFILE,
+      },
+      deriveEventId: deriveSupportEventId,
+      selectNarrativeSupportEvents,
+      selectionConfig: {
         targetCount: NARRATIVE_SUPPORT_TARGET_COUNT,
         minCount: NARRATIVE_SUPPORT_MIN_COUNT,
         maxCount: NARRATIVE_SUPPORT_MAX_COUNT,
-        relevanceEnabled: NARRATIVE_SUPPORT_RELEVANCE_V2_ENABLED,
-        clustersEnabled: NARRATIVE_SUPPORT_CLUSTERS_V2_ENABLED,
-        profile: NARRATIVE_RELEVANCE_PROFILE,
-        mapEventTypeToCategory: mapEventTypeToEncyclopediaCategory,
-        resolveStarName: (starId: string) => galaxy.getStar(starId)?.name ?? null,
-      });
+      },
+      mapEventTypeToCategory: mapEventTypeToEncyclopediaCategory,
+      resolveStarName: (starId) => galaxy.getStar(starId)?.name ?? null,
+    });
+    const selectedChapterSummary = buildEncyclopediaNarrativeChapterSummaryHtml({
+      selectedChapter,
+      selectedChapterSupportEvents,
+      selectedChapterEvidenceCountByLineId,
+      starNameLinkData,
+      relevanceProfile: NARRATIVE_RELEVANCE_PROFILE,
+      linkifyEncyclopediaText,
+      escapeHtml,
+      roleLabel,
+      arcLabel,
+      resolveStarName: (starId) => galaxy.getStar(starId)?.name || starId,
+    });
 
-      narrativeSupportSelectionCache.set(cacheKey, computed);
-      if (narrativeSupportSelectionCache.size > NARRATIVE_SUPPORT_SELECTION_CACHE_LIMIT) {
-        const oldestKey = narrativeSupportSelectionCache.keys().next().value as string | undefined;
-        if (oldestKey) narrativeSupportSelectionCache.delete(oldestKey);
-      }
-      return computed;
-    })();
-    const selectedChapterEvidenceCountByLineId = new Map<string, number>();
-    for (const support of selectedChapterSupportEvents) {
-      const evidenceWeight = Math.max(1, support.eventCount);
-      for (const lineId of support.relatedSummaryLineIds) {
-        selectedChapterEvidenceCountByLineId.set(lineId, (selectedChapterEvidenceCountByLineId.get(lineId) ?? 0) + evidenceWeight);
-      }
-    }
-    const selectedChapterSummaryLinesHtml = selectedChapter
-      ? selectedChapter.summaryLines.map((line) => {
-          const evidenceCount = selectedChapterEvidenceCountByLineId.get(line.id) ?? 0;
-          return `
-            <p><strong>${roleLabel(line.role)} (Phase ${line.phase})</strong>: ${linkifyEncyclopediaText(line.text, starNameLinkData)} <span class="color-dim">[Evidence: ${evidenceCount}]</span></p>
-          `;
-        }).join('')
-      : '';
-    const selectedChapterArcRationaleHtml = selectedChapter && selectedChapter.arcRationale.length > 0
-      ? `<div class="encyclopedia-filter-summary">${selectedChapter.arcRationale.map((item) => `<span>${escapeHtml(item)}</span>`).join('')}</div>`
-      : '';
+    const filmstripHtml = buildEncyclopediaFilmstripHtml({
+      timelineClusters,
+      selectedClusterId: selectedCluster?.id,
+    });
 
-    const selectedChapterSummary = selectedChapter
-      ? `
-        <article class="encyclopedia-narrative-chapter" data-chapter-id="${selectedChapter.id}">
-          <h4>Phase Arc ${selectedChapter.startPhase}-${selectedChapter.endPhase}</h4>
-          ${selectedChapterSummaryLinesHtml || `<p>${linkifyEncyclopediaText(selectedChapter.summary, starNameLinkData)}</p>`}
-          <div class="encyclopedia-filter-summary">
-            <span>Anchor Phase ${selectedChapter.anchorPhase}</span>
-            <span>${selectedChapter.eventCount} Events</span>
-            <span>Arc ${arcLabel(selectedChapter.arcType)}</span>
-            <span>Confidence ${(selectedChapter.arcConfidence * 100).toFixed(0)}%</span>
-            <span>Profile ${escapeHtml(NARRATIVE_RELEVANCE_PROFILE)}</span>
-            ${selectedChapter.anchorStarId ? `<span>${galaxy.getStar(selectedChapter.anchorStarId)?.name || selectedChapter.anchorStarId}</span>` : ''}
-          </div>
-          ${selectedChapterArcRationaleHtml}
-          <details class="encyclopedia-narrative-disclosure">
-            <summary>Supporting events (${selectedChapterSupportEvents.length})</summary>
-            <div class="encyclopedia-narrative-support-list">
-              ${
-                selectedChapterSupportEvents.length > 0
-                  ? selectedChapterSupportEvents.map((support) => {
-                      const supportText = support.eventCount > 1
-                        ? `${support.description} (${support.eventCount} events)`
-                        : support.description;
-                      const rolePrefix = `[${roleLabel(support.role)}] `;
-                      const rationaleSuffix = support.rationale.length > 0
-                        ? ` <span class="color-dim">(${escapeHtml(support.rationale.join(' | '))})</span>`
-                        : '';
-                      return `<p><strong>Phase ${support.phase}:</strong> ${rolePrefix}${linkifyEncyclopediaText(supportText, starNameLinkData)}${rationaleSuffix}</p>`;
-                    }).join('')
-                  : '<p class="encyclopedia-empty-copy">No supporting events available.</p>'
-              }
-            </div>
-          </details>
-        </article>
-      `
-      : '<p class="encyclopedia-empty-copy">No narrative chapter selected.</p>';
-
-    const clusterLabelMap: Record<EncyclopediaEventCategory, string> = {
-      all: 'Mixed',
-      war: 'War',
-      crisis: 'Crisis',
-      rebellion: 'Rebellion',
-      plague: 'Plague',
-      leader: 'Leader',
-      succession: 'Succession',
-    };
-
-    const filmstripHtml = `
-      <div class="encyclopedia-filmstrip-wrap">
-        <div class="encyclopedia-filmstrip-header">
-          <h4>Timeline Filmstrip</h4>
-          <button id="encyclopediaClearFilmstripBtn" class="encyclopedia-clear-btn" type="button">All Eras</button>
-        </div>
-        <div class="encyclopedia-filmstrip">
-          ${timelineClusters.map((cluster) => `
-            <button
-              type="button"
-              class="encyclopedia-cluster-chip ${selectedCluster?.id === cluster.id ? 'selected' : ''}"
-              data-timeline-cluster-id="${cluster.id}"
-            >
-              <span class="cluster-chip-range">${cluster.startPhase}-${cluster.endPhase}</span>
-              <span class="cluster-chip-meta">${cluster.eventCount} ${clusterLabelMap[cluster.dominantCategory]}</span>
-            </button>
-          `).join('') || '<p class="encyclopedia-empty-copy">No timeline clusters for current filters.</p>'}
-        </div>
-      </div>
-    `;
-
-    const navigatorGroups = buildNavigatorGroups();
-    const navigatorHtml = `
-      <div class="encyclopedia-navigator-wrap">
-        <div class="encyclopedia-navigator-header">
-          <h4>Galaxy Navigator</h4>
-          <span>${navigatorGroups.length} blocs</span>
-        </div>
-        <div class="encyclopedia-navigator-list">
-          ${navigatorGroups.map((group) => {
-            const expanded = encyclopediaViewState.navigatorExpandedGroupIds.includes(group.id);
-            const sampleStars = expanded ? group.starIds : group.starIds.slice(0, 4);
-            return `
-              <section class="encyclopedia-navigator-group">
-                <button type="button" class="encyclopedia-navigator-group-btn" data-navigator-group-id="${group.id}">
-                  <span>${escapeHtml(group.label)}</span>
-                  <span>${group.starIds.length} stars</span>
-                </button>
-                <div class="encyclopedia-navigator-stars">
-                  ${sampleStars.map((starId) => {
-                    const star = galaxy.getStar(starId);
-                    const label = star?.name ?? starId;
-                    return `<button type="button" class="encyclopedia-navigator-star-btn" data-navigator-star-id="${starId}">${escapeHtml(label)}</button>`;
-                  }).join('')}
-                  ${
-                    !expanded && group.starIds.length > 4
-                      ? `<button type="button" class="encyclopedia-navigator-more-btn" data-navigator-group-id="${group.id}">+${group.starIds.length - 4} more</button>`
-                      : ''
-                  }
-                </div>
-              </section>
-            `;
-          }).join('')}
-        </div>
-      </div>
-    `;
+    const navigatorGroups = buildNavigatorGroups({
+      stars: galaxy.getAllStars(),
+      resolveStarById: (id) => galaxy.getStar(id) ?? null,
+    });
+    const navigatorHtml = buildEncyclopediaNavigatorHtml({
+      navigatorGroups,
+      expandedGroupIds: encyclopediaViewState.navigatorExpandedGroupIds,
+      escapeHtml,
+      resolveStarName: (starId) => galaxy.getStar(starId)?.name ?? starId,
+    });
 
     const workspace = getEncyclopediaWorkspace();
     if (!workspace) return;
@@ -3203,508 +2372,75 @@ function renderEncyclopedia() {
     }
     resizeCanvas();
 
-    contextualNav.innerHTML = `
-      <div class="panel encyclopedia-control-panel">
-        <h3>ENCYCLOPEDIA CONTROLS</h3>
-        <div class="encyclopedia-mode-toggle">
-          <button id="encyclopediaAtlasModeBtn" class="encyclopedia-tab-btn ${encyclopediaViewState.displayMode === 'atlas' ? 'active' : ''}" type="button">Atlas</button>
-          <button id="encyclopediaSplitModeBtn" class="encyclopedia-tab-btn ${encyclopediaViewState.displayMode === 'split' ? 'active' : ''}" type="button">Split Reality</button>
-        </div>
-        <div class="encyclopedia-focus-header">
-          <button id="backToSimulationBtn" class="encyclopedia-back-btn" type="button">Back to Simulation</button>
-          <div class="encyclopedia-focus-context">
-            <span>Phase ${simulationNavigationContext.phase}</span>
-            ${simulationNavigationContext.selectedStarId ? `<span>${galaxy.getStar(simulationNavigationContext.selectedStarId)?.name || simulationNavigationContext.selectedStarId}</span>` : ''}
-            <span>${simulationNavigationContext.eventCategory}</span>
-          </div>
-        </div>
-        <div class="encyclopedia-mini-map-card">
-          <div class="encyclopedia-mini-map-header">
-            <h4>Mini Galaxy Context</h4>
-            <button id="encyclopediaJumpToMapBtn" class="encyclopedia-clear-btn" type="button">Jump to Map Context</button>
-          </div>
-          <svg id="encyclopediaMiniMap" class="encyclopedia-mini-map-svg" viewBox="0 0 218 126" role="img" aria-label="Mini galaxy context map">
-            <rect x="0.5" y="0.5" width="217" height="125" rx="6" ry="6" class="mini-map-frame"></rect>
-            ${miniMapDotsHtml}
-          </svg>
-          <div class="encyclopedia-mini-map-help">Click a star to filter archive context.</div>
-        </div>
-        <div class="encyclopedia-filters">
-          <div class="search-container">
-            <input
-              id="encyclopediaSearchInput"
-              class="encyclopedia-search-input"
-              type="text"
-              placeholder="Search events, stars, or types..."
-              value="${encyclopediaViewState.searchText}"
-              aria-label="Search encyclopedia events"
-            />
-            <div id="encyclopediaSearchSuggestions" class="search-suggestions ${searchSuggestions.length > 0 ? 'active' : ''}">
-              ${searchSuggestions.map((item, index) => `<div class="search-suggestion" data-encyclopedia-suggestion="${encodeURIComponent(item.value)}" data-encyclopedia-suggestion-index="${index}">${item.label}</div>`).join('')}
-            </div>
-          </div>
-          <select id="encyclopediaTypeSelect" class="encyclopedia-type-select" aria-label="Filter encyclopedia by event category">
-            <option value="all" ${encyclopediaViewState.eventCategory === 'all' ? 'selected' : ''}>All</option>
-            <option value="war" ${encyclopediaViewState.eventCategory === 'war' ? 'selected' : ''}>Wars</option>
-            <option value="crisis" ${encyclopediaViewState.eventCategory === 'crisis' ? 'selected' : ''}>Crises</option>
-            <option value="rebellion" ${encyclopediaViewState.eventCategory === 'rebellion' ? 'selected' : ''}>Rebellions</option>
-            <option value="plague" ${encyclopediaViewState.eventCategory === 'plague' ? 'selected' : ''}>Plagues</option>
-            <option value="leader" ${encyclopediaViewState.eventCategory === 'leader' ? 'selected' : ''}>Leaders</option>
-            <option value="succession" ${encyclopediaViewState.eventCategory === 'succession' ? 'selected' : ''}>Succession</option>
-          </select>
-          <button id="encyclopediaClearFiltersBtn" class="encyclopedia-clear-btn" type="button">Clear Filters</button>
-        </div>
-      </div>
-    `;
-
-    workspace.innerHTML = `
-      <section class="encyclopedia-workspace-shell">
-        <div class="encyclopedia-workspace-header">
-          <h2>Encyclopedia Workspace</h2>
-          <div class="encyclopedia-focus-tabs">
-            <button id="encyclopediaEventsTabBtn" class="encyclopedia-tab-btn ${encyclopediaViewState.activeTab === 'events' ? 'active' : ''}" type="button">Events</button>
-            <button id="encyclopediaNarrativeTabBtn" class="encyclopedia-tab-btn ${encyclopediaViewState.activeTab === 'narrative' ? 'active' : ''}" type="button">Narrative</button>
-            <button id="encyclopediaDemographicsTabBtn" class="encyclopedia-tab-btn ${encyclopediaViewState.activeTab === 'demographics' ? 'active' : ''}" type="button">Demographics</button>
-            <button id="encyclopediaNavigatorTabBtn" class="encyclopedia-tab-btn ${encyclopediaViewState.activeTab === 'navigator' ? 'active' : ''}" type="button">Navigator</button>
-          </div>
-        </div>
-        ${
-          encyclopediaViewState.activeTab === 'events'
-            ? `
-              <div class="encyclopedia-view-toggle">
-                <button id="encyclopediaEventsListModeBtn" class="encyclopedia-tab-btn ${encyclopediaViewState.eventsViewMode === 'list' ? 'active' : ''}" type="button">List View</button>
-                <button id="encyclopediaEventsTimelineModeBtn" class="encyclopedia-tab-btn ${encyclopediaViewState.eventsViewMode === 'timeline' ? 'active' : ''}" type="button">Timeline View</button>
-              </div>
-            `
-            : ''
-        }
-        <div class="encyclopedia-filter-summary">
-          ${encyclopediaViewState.phaseFilter !== null ? `<span>Phase ${encyclopediaViewState.phaseFilter}</span>` : ''}
-          ${selectedCluster ? `<span>Era ${selectedCluster.startPhase}-${selectedCluster.endPhase}</span>` : ''}
-          ${starFilterLabel ? `<span>${starFilterLabel}</span>` : ''}
-          <span>${displayedEvents.length} of ${filteredEvents.length} events</span>
-        </div>
-        ${encyclopediaViewState.activeTab === 'events'
-          ? eventsPaneHtml
-          : `
-            ${
-              encyclopediaViewState.activeTab === 'narrative'
-                ? `
-                  <div class="encyclopedia-narrative-layout encyclopedia-workspace-content">
-                    ${narrativeRailHtml}
-                    <div class="encyclopedia-content encyclopedia-narrative-content">
-                      ${selectedChapterSummary}
-                    </div>
-                  </div>
-                `
-                : `
-                  <div class="encyclopedia-workspace-content">
-                    ${encyclopediaViewState.activeTab === 'demographics' ? demographicsPaneHtml : navigatorHtml}
-                  </div>
-                `
-            }
-          `
-        }
-        ${
-          encyclopediaViewState.activeTab === 'events'
-            ? filmstripHtml
-            : ''
-        }
-      </section>
-    `;
-
-    const searchInput = contextualNav.querySelector('#encyclopediaSearchInput') as HTMLInputElement | null;
-    const searchSuggestionItems = contextualNav.querySelectorAll<HTMLElement>('[data-encyclopedia-suggestion]');
-    const typeSelect = contextualNav.querySelector('#encyclopediaTypeSelect') as HTMLSelectElement | null;
-    const clearFiltersBtn = contextualNav.querySelector('#encyclopediaClearFiltersBtn') as HTMLButtonElement | null;
-    const backBtn = contextualNav.querySelector('#backToSimulationBtn') as HTMLButtonElement | null;
-    const jumpToMapBtn = contextualNav.querySelector('#encyclopediaJumpToMapBtn') as HTMLButtonElement | null;
-    const atlasModeBtn = contextualNav.querySelector('#encyclopediaAtlasModeBtn') as HTMLButtonElement | null;
-    const splitModeBtn = contextualNav.querySelector('#encyclopediaSplitModeBtn') as HTMLButtonElement | null;
-    const loadMoreBtn = workspace.querySelector('#encyclopediaLoadMoreBtn') as HTMLButtonElement | null;
-    const eventsTabBtn = workspace.querySelector('#encyclopediaEventsTabBtn') as HTMLButtonElement | null;
-    const narrativeTabBtn = workspace.querySelector('#encyclopediaNarrativeTabBtn') as HTMLButtonElement | null;
-    const demographicsTabBtn = workspace.querySelector('#encyclopediaDemographicsTabBtn') as HTMLButtonElement | null;
-    const navigatorTabBtn = workspace.querySelector('#encyclopediaNavigatorTabBtn') as HTMLButtonElement | null;
-    const eventsListModeBtn = workspace.querySelector('#encyclopediaEventsListModeBtn') as HTMLButtonElement | null;
-    const eventsTimelineModeBtn = workspace.querySelector('#encyclopediaEventsTimelineModeBtn') as HTMLButtonElement | null;
-    const demographicMetricSelect = workspace.querySelector('#encyclopediaDemographicMetric') as HTMLSelectElement | null;
-    const demographicsCanvas = workspace.querySelector('#encyclopediaDemographicsCanvas') as HTMLCanvasElement | null;
-    const clearFilmstripBtn = workspace.querySelector('#encyclopediaClearFilmstripBtn') as HTMLButtonElement | null;
-
-    backBtn?.addEventListener('click', () => {
-      returnToSimulationFromEncyclopedia();
+    contextualNav.innerHTML = buildEncyclopediaControlPanelHtml({
+      displayMode: encyclopediaViewState.displayMode,
+      simulationContext: simulationNavigationContext,
+      simulationContextStarName: simulationNavigationContext.selectedStarId
+        ? galaxy.getStar(simulationNavigationContext.selectedStarId)?.name || simulationNavigationContext.selectedStarId
+        : null,
+      miniMapDotsHtml,
+      searchText: encyclopediaViewState.searchText,
+      searchSuggestions,
+      eventCategory: encyclopediaViewState.eventCategory,
     });
 
-    eventsTabBtn?.addEventListener('click', () => {
-      encyclopediaViewState = {
-        ...encyclopediaViewState,
-        activeTab: 'events',
-      };
-      renderEncyclopedia();
+    workspace.innerHTML = buildEncyclopediaWorkspaceShellHtml({
+      activeTab: encyclopediaViewState.activeTab,
+      eventsViewMode: encyclopediaViewState.eventsViewMode,
+      phaseFilter: encyclopediaViewState.phaseFilter,
+      selectedCluster,
+      starFilterLabel,
+      displayedEventsCount: displayedEvents.length,
+      filteredEventsCount: filteredEvents.length,
+      eventsPaneHtml,
+      narrativeRailHtml,
+      selectedChapterSummary,
+      demographicsPaneHtml,
+      navigatorHtml,
+      filmstripHtml,
     });
 
-    narrativeTabBtn?.addEventListener('click', () => {
-      encyclopediaViewState = {
-        ...encyclopediaViewState,
-        activeTab: 'narrative',
-        selectedChapterId: selectedChapter?.id ?? narrativeChapters[0]?.id ?? null,
-      };
-      renderEncyclopedia();
+    const { demographicsCanvas } = bindEncyclopediaCoreInteractions({
+      contextualNav,
+      workspace,
+      searchSuggestions,
+      selectedChapter: selectedChapter ?? null,
+      narrativeChapters,
+      filteredEvents,
+      timelineClusters,
+      timelineEvents,
+      simulationNavigationContext,
+      defaultVisibleCount: DEFAULT_ENCYCLOPEDIA_VIEW_STATE.visibleCount,
+      getViewState: () => encyclopediaViewState,
+      setViewState: (updater) => {
+        encyclopediaViewState = updater(encyclopediaViewState);
+      },
+      renderEncyclopedia,
+      openEncyclopedia,
+      returnToSimulationFromEncyclopedia,
     });
 
-    demographicsTabBtn?.addEventListener('click', () => {
-      encyclopediaViewState = {
-        ...encyclopediaViewState,
-        activeTab: 'demographics',
-      };
-      renderEncyclopedia();
-    });
-
-    navigatorTabBtn?.addEventListener('click', () => {
-      encyclopediaViewState = {
-        ...encyclopediaViewState,
-        activeTab: 'navigator',
-      };
-      renderEncyclopedia();
-    });
-
-    eventsListModeBtn?.addEventListener('click', () => {
-      encyclopediaViewState = {
-        ...encyclopediaViewState,
-        eventsViewMode: 'list',
-      };
-      renderEncyclopedia();
-    });
-
-    eventsTimelineModeBtn?.addEventListener('click', () => {
-      encyclopediaViewState = {
-        ...encyclopediaViewState,
-        eventsViewMode: 'timeline',
-      };
-      renderEncyclopedia();
-    });
-
-    jumpToMapBtn?.addEventListener('click', () => {
-      const fallbackEvent = filteredEvents[0] ?? null;
-      const targetPhase = encyclopediaViewState.selectedPhase ?? selectedChapter?.anchorPhase ?? fallbackEvent?.phase ?? simulationNavigationContext.phase;
-      const targetStar = encyclopediaViewState.selectedStarId ?? selectedChapter?.anchorStarId ?? fallbackEvent?.starId ?? simulationNavigationContext.selectedStarId;
-      returnToSimulationFromEncyclopedia({
-        phase: targetPhase,
-        starId: targetStar,
-        detailTab: 'entry',
-      });
-    });
-
-    atlasModeBtn?.addEventListener('click', () => {
-      encyclopediaViewState = {
-        ...encyclopediaViewState,
-        displayMode: 'atlas',
-      };
-      renderEncyclopedia();
-    });
-
-    splitModeBtn?.addEventListener('click', () => {
-      encyclopediaViewState = {
-        ...encyclopediaViewState,
-        displayMode: 'split',
-      };
-      renderEncyclopedia();
-    });
-
-    contextualNav.querySelectorAll<SVGCircleElement>('[data-mini-star-id]').forEach((dot) => {
-      dot.addEventListener('click', () => {
-        const miniStarId = dot.dataset.miniStarId;
-        if (!miniStarId) return;
-        encyclopediaViewState = {
-          ...encyclopediaViewState,
-          selectedStarId: miniStarId,
-          starFilters: [miniStarId],
-          phaseFilter: null,
-          timelineClusterId: null,
-          selectedPhase: null,
-          selectedChapterId: null,
-          visibleCount: DEFAULT_ENCYCLOPEDIA_VIEW_STATE.visibleCount,
-        };
-        renderEncyclopedia();
-      });
-    });
-
-    workspace.querySelectorAll<HTMLButtonElement>('.encyclopedia-chapter-btn[data-chapter-id]').forEach((chapterBtn) => {
-      chapterBtn.addEventListener('click', () => {
-        const chapterId = chapterBtn.dataset.chapterId;
-        if (!chapterId) return;
-        const chapter = narrativeChapters.find((candidate) => candidate.id === chapterId);
-        encyclopediaViewState = {
-          ...encyclopediaViewState,
-          activeTab: 'narrative',
-          selectedChapterId: chapterId,
-          selectedPhase: chapter?.anchorPhase ?? encyclopediaViewState.selectedPhase,
-          selectedStarId: chapter?.anchorStarId ?? encyclopediaViewState.selectedStarId,
-        };
-        renderEncyclopedia();
-      });
-    });
-
-    workspace.querySelectorAll<HTMLElement>('.encyclopedia-item[data-event-phase][data-event-star-id]').forEach((eventItem) => {
-      eventItem.addEventListener('click', (event) => {
-        const clickTarget = event.target as HTMLElement | null;
-        if (clickTarget?.closest('.encyclopedia-related-actions')) return;
-        const eventPhaseRaw = eventItem.dataset.eventPhase;
-        const eventStarId = eventItem.dataset.eventStarId;
-        const eventPhase = eventPhaseRaw ? Number.parseInt(eventPhaseRaw, 10) : Number.NaN;
-        if (!eventStarId || Number.isNaN(eventPhase)) return;
-        encyclopediaViewState = {
-          ...encyclopediaViewState,
-          selectedStarId: eventStarId,
-          selectedPhase: eventPhase,
-        };
-        renderEncyclopedia();
-      });
-    });
-
-    searchInput?.addEventListener('input', () => {
-      encyclopediaViewState = {
-        ...encyclopediaViewState,
-        searchText: searchInput.value,
-        timelineClusterId: null,
-        visibleCount: DEFAULT_ENCYCLOPEDIA_VIEW_STATE.visibleCount,
-      };
-      renderEncyclopedia();
-    });
-
-    searchInput?.addEventListener('keydown', (event) => {
-      if (event.key !== 'Enter') return;
-      const first = searchSuggestions[0];
-      if (!first) return;
-      event.preventDefault();
-      encyclopediaViewState = {
-        ...encyclopediaViewState,
-        searchText: first.value,
-        timelineClusterId: null,
-        visibleCount: DEFAULT_ENCYCLOPEDIA_VIEW_STATE.visibleCount,
-      };
-      renderEncyclopedia();
-    });
-
-    searchSuggestionItems.forEach((item) => {
-      item.addEventListener('click', () => {
-        const suggestion = item.dataset.encyclopediaSuggestion;
-        if (!suggestion) return;
-        let decoded = suggestion;
-        try {
-          decoded = decodeURIComponent(suggestion);
-        } catch {
-          decoded = suggestion;
-        }
-        encyclopediaViewState = {
-          ...encyclopediaViewState,
-          searchText: decoded,
-          timelineClusterId: null,
-          visibleCount: DEFAULT_ENCYCLOPEDIA_VIEW_STATE.visibleCount,
-        };
-        renderEncyclopedia();
-      });
-    });
-
-    typeSelect?.addEventListener('change', () => {
-      encyclopediaViewState = {
-        ...encyclopediaViewState,
-        eventCategory: typeSelect.value as EncyclopediaEventCategory,
-        timelineClusterId: null,
-        selectedChapterId: null,
-        visibleCount: DEFAULT_ENCYCLOPEDIA_VIEW_STATE.visibleCount,
-      };
-      renderEncyclopedia();
-    });
-
-    demographicMetricSelect?.addEventListener('change', () => {
-      encyclopediaViewState = {
-        ...encyclopediaViewState,
-        demographicsMetric: demographicMetricSelect.value as DemographicMetricKey,
-      };
-      renderEncyclopedia();
-    });
-
-    clearFiltersBtn?.addEventListener('click', () => {
-      openEncyclopedia({
-        displayMode: encyclopediaViewState.displayMode,
-        activeTab: encyclopediaViewState.activeTab,
-      });
-    });
-
-    loadMoreBtn?.addEventListener('click', () => {
-      encyclopediaViewState = {
-        ...encyclopediaViewState,
-        visibleCount: encyclopediaViewState.visibleCount + DEFAULT_ENCYCLOPEDIA_VIEW_STATE.visibleCount,
-      };
-      renderEncyclopedia();
-    });
-
-    workspace.querySelectorAll<HTMLButtonElement>('[data-timeline-cluster-id]').forEach((clusterBtn) => {
-      clusterBtn.addEventListener('click', () => {
-        const clusterId = clusterBtn.dataset.timelineClusterId;
-        if (!clusterId) return;
-        const cluster = timelineClusters.find((candidate) => candidate.id === clusterId);
-        encyclopediaViewState = {
-          ...encyclopediaViewState,
-          timelineClusterId: encyclopediaViewState.timelineClusterId === clusterId ? null : clusterId,
-          phaseFilter: null,
-          selectedPhase: cluster?.endPhase ?? encyclopediaViewState.selectedPhase,
-          selectedStarId: cluster?.starIds[0] ?? encyclopediaViewState.selectedStarId,
-          visibleCount: DEFAULT_ENCYCLOPEDIA_VIEW_STATE.visibleCount,
-        };
-        renderEncyclopedia();
-      });
-    });
-
-    clearFilmstripBtn?.addEventListener('click', () => {
-      encyclopediaViewState = {
-        ...encyclopediaViewState,
-        timelineClusterId: null,
-        visibleCount: DEFAULT_ENCYCLOPEDIA_VIEW_STATE.visibleCount,
-      };
-      renderEncyclopedia();
-    });
-
-    workspace.querySelectorAll<HTMLButtonElement>('[data-timeline-event-index]').forEach((timelineBtn) => {
-      timelineBtn.addEventListener('click', () => {
-        const idxRaw = timelineBtn.dataset.timelineEventIndex;
-        const idx = idxRaw ? Number.parseInt(idxRaw, 10) : Number.NaN;
-        if (Number.isNaN(idx)) return;
-        const event = timelineEvents[idx];
-        if (!event) return;
-        encyclopediaViewState = {
-          ...encyclopediaViewState,
-          selectedPhase: event.phase,
-          selectedStarId: event.starId,
-        };
-        renderEncyclopedia();
-      });
-    });
-
-    workspace.querySelectorAll<HTMLButtonElement>('[data-navigator-group-id]').forEach((groupBtn) => {
-      groupBtn.addEventListener('click', () => {
-        const groupId = groupBtn.dataset.navigatorGroupId;
-        if (!groupId) return;
-        const currentlyExpanded = encyclopediaViewState.navigatorExpandedGroupIds.includes(groupId);
-        encyclopediaViewState = {
-          ...encyclopediaViewState,
-          navigatorExpandedGroupIds: currentlyExpanded
-            ? encyclopediaViewState.navigatorExpandedGroupIds.filter((id) => id !== groupId)
-            : [...encyclopediaViewState.navigatorExpandedGroupIds, groupId],
-        };
-        renderEncyclopedia();
-      });
-    });
-
-    workspace.querySelectorAll<HTMLButtonElement>('[data-navigator-star-id]').forEach((starBtn) => {
-      starBtn.addEventListener('click', (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        const starId = starBtn.dataset.navigatorStarId;
-        if (!starId) return;
-        encyclopediaViewState = {
-          ...encyclopediaViewState,
-          selectedStarId: starId,
-          starFilters: [starId],
-          timelineClusterId: null,
-          phaseFilter: null,
-          activeTab: 'events',
-          visibleCount: DEFAULT_ENCYCLOPEDIA_VIEW_STATE.visibleCount,
-        };
-        renderEncyclopedia();
-      });
-    });
-
-    workspace.querySelectorAll<HTMLButtonElement>('[data-link-star-id]').forEach((linkBtn) => {
-      linkBtn.addEventListener('click', (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        const starId = linkBtn.dataset.linkStarId;
-        if (!starId) return;
-        encyclopediaViewState = {
-          ...encyclopediaViewState,
-          selectedStarId: starId,
-          starFilters: [starId],
-          timelineClusterId: null,
-          phaseFilter: null,
-          activeTab: 'events',
-          visibleCount: DEFAULT_ENCYCLOPEDIA_VIEW_STATE.visibleCount,
-        };
-        renderEncyclopedia();
-      });
-    });
-
-    workspace.querySelectorAll<HTMLButtonElement>('[data-link-phase]').forEach((linkBtn) => {
-      linkBtn.addEventListener('click', (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        const phaseRaw = linkBtn.dataset.linkPhase;
-        const phase = phaseRaw ? Number.parseInt(phaseRaw, 10) : Number.NaN;
-        if (Number.isNaN(phase)) return;
+    const demographicData = galaxy.getDemographicWindow(0, galaxy.state.phase);
+    bindEncyclopediaDemographicsChartInteractions({
+      canvas: demographicsCanvas,
+      isDemographicsTabActive: encyclopediaViewState.activeTab === 'demographics',
+      data: demographicData,
+      metric: encyclopediaViewState.demographicsMetric,
+      metricLabel: demographicMetricLabels[encyclopediaViewState.demographicsMetric],
+      selectedPhase: encyclopediaViewState.selectedPhase,
+      events,
+      mapEventTypeToCategory: mapEventTypeToEncyclopediaCategory,
+      showInfoTooltip,
+      hideTooltip,
+      goToPhase,
+      setSelectedPhase: (phase) => {
         encyclopediaViewState = {
           ...encyclopediaViewState,
           selectedPhase: phase,
-          phaseFilter: phase,
-          timelineClusterId: null,
-          visibleCount: DEFAULT_ENCYCLOPEDIA_VIEW_STATE.visibleCount,
         };
-        renderEncyclopedia();
-      });
+      },
+      rerender: renderEncyclopedia,
     });
-
-    if (demographicsCanvas && encyclopediaViewState.activeTab === 'demographics') {
-      const demographicData = galaxy.getDemographicWindow(0, galaxy.state.phase);
-      renderEncyclopediaDemographicsChart(
-        demographicsCanvas,
-        demographicData,
-        encyclopediaViewState.demographicsMetric,
-        encyclopediaViewState.selectedPhase,
-        events
-      );
-
-      const onMouseMove = (mouseEvent: MouseEvent) => {
-        const data = demographicData;
-        if (data.length < 2) return;
-        const rect = demographicsCanvas.getBoundingClientRect();
-        const x = mouseEvent.clientX - rect.left;
-        const padding = 32;
-        const graphW = rect.width - padding * 2;
-        const ratio = Math.max(0, Math.min(1, (x - padding) / Math.max(1, graphW)));
-        const idx = Math.round(ratio * Math.max(0, data.length - 1));
-        const snap = data[idx];
-        if (!snap) return;
-        const value = getDemographicMetricValue(snap, encyclopediaViewState.demographicsMetric);
-        showInfoTooltip(
-          demographicMetricLabels[encyclopediaViewState.demographicsMetric],
-          [`Phase ${snap.phase}`, `Value: ${Math.round(value * 100) / 100}`],
-          mouseEvent.clientX,
-          mouseEvent.clientY
-        );
-      };
-
-      demographicsCanvas.addEventListener('mousemove', onMouseMove);
-      demographicsCanvas.addEventListener('mouseleave', () => hideTooltip());
-      demographicsCanvas.addEventListener('click', (mouseEvent) => {
-        const data = demographicData;
-        if (data.length < 2) return;
-        const rect = demographicsCanvas.getBoundingClientRect();
-        const x = mouseEvent.clientX - rect.left;
-        const padding = 32;
-        const graphW = rect.width - padding * 2;
-        const ratio = Math.max(0, Math.min(1, (x - padding) / Math.max(1, graphW)));
-        const idx = Math.round(ratio * Math.max(0, data.length - 1));
-        const snap = data[idx];
-        if (!snap) return;
-        goToPhase(snap.phase);
-        encyclopediaViewState = {
-          ...encyclopediaViewState,
-          selectedPhase: snap.phase,
-        };
-        renderEncyclopedia();
-      });
-    }
 
 }
 ''

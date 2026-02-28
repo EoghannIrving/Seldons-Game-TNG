@@ -13,6 +13,12 @@ import { NarrativeGenerator } from '../core/narrative';
 import { ArchiveQueryEngine } from '../core/archive-query';
 import { StarSystemRenderer } from './star-system-renderer';
 import { Theme, THEME_FOUNDATION, THEME_ZX } from './theme';
+import { renderNarrativeRecentSections } from './detail-view/narrative-recent-sections';
+import { renderNarrativeLongArchiveLines } from './detail-view/narrative-long-archive-lines';
+import { renderEventsMajorPanel, renderEventsFullFeedViewport } from './detail-view/events-tab-sections';
+import { renderRelationsRegisterViewport } from './detail-view/relations-tab-sections';
+import { renderDemographicsTrendViewport } from './detail-view/demographics-tab-sections';
+import { renderLineageFamilyTreeContent, renderLineageHistorySections } from './detail-view/lineage-tab-sections';
 
 // --- THEME DEFINITIONS MOVED TO theme.ts ---
 
@@ -4217,6 +4223,9 @@ export class GalaxyRenderer {
         phaseWindow: 5,
         maxLinesPerPhase: 3,
       });
+      const canonicalLines = NarrativeGenerator.renderRecentCanonicalReportLines(galaxy.state, star.id, {
+        phaseWindow: 5,
+      });
       const longDoc = NarrativeGenerator.generateStarLongNarrative(galaxy.state, star.id, {
         maxEntries: 80,
         significanceThreshold: 'medium',
@@ -4270,29 +4279,24 @@ export class GalaxyRenderer {
       }
       drawY += phaseHeaderH;
 
-      for (const entry of recentDoc.entries) {
-        // Phase label
-        if (inViewport(drawY, phaseHeaderH)) {
-          this.ctx.fillStyle = theme.colors.ui.info;
-          this.ctx.font = 'bold ' + (narLblSize + 1) + 'px ' + theme.effects.font;
-          this.ctx.fillText(formatPhaseLabel(entry.phase, entry.phaseEnd), narColX, drawY);
-        }
-        drawY += phaseHeaderH;
-
-        // Body lines indented
-        this.ctx.fillStyle = theme.colors.text;
-        this.ctx.font = narLblSize + 'px ' + theme.effects.font;
-        for (const line of entry.lines) {
-          const wrapped = wrapLine(line, narColW - narIndent - 8);
-          for (const segment of wrapped) {
-            if (inViewport(drawY, bodyLineH)) {
-              this.ctx.fillText(segment, narColX + narIndent, drawY);
-            }
-            drawY += bodyLineH;
-          }
-        }
-        drawY += interPhaseGap;
-      }
+      drawY = renderNarrativeRecentSections({
+        ctx: this.ctx,
+        theme,
+        recentDoc,
+        canonicalLines,
+        narLblSize,
+        narColX,
+        narColW,
+        narIndent,
+        drawY,
+        phaseHeaderH,
+        phaseLabelH,
+        bodyLineH,
+        interPhaseGap,
+        inViewport,
+        wrapLine,
+        formatPhaseLabel,
+      });
 
       drawY += interSectionGap;
 
@@ -4314,47 +4318,26 @@ export class GalaxyRenderer {
         drawY += bodyLineH;
       }
 
-      const crossrefEnabled = this.isDetailCrossrefGraphEnabled();
-      for (const line of longDoc.lines) {
-        const phaseLabel = line.phaseEnd !== undefined && line.phaseEnd !== line.phase
-          ? `Phases ${line.phaseEnd}–${line.phase}`
-          : `Phase ${line.phase}`;
-
-        // Phase label (dim, smaller)
-        if (inViewport(drawY, phaseLabelH)) {
-          this.ctx.fillStyle = theme.colors.dimText;
-          this.ctx.font = (narLblSize - 1) + 'px ' + theme.effects.font;
-          this.ctx.fillText(phaseLabel, narColX, drawY);
-        }
-        drawY += phaseLabelH;
-
-        // Body text indented
-        this.ctx.fillStyle = theme.colors.text;
-        this.ctx.font = narLblSize + 'px ' + theme.effects.font;
-        const wrapped = wrapLine(line.text, narColW - narIndent - 8);
-        for (const segment of wrapped) {
-          if (inViewport(drawY, bodyLineH)) {
-            this.ctx.fillText(segment, narColX + narIndent, drawY);
-          }
-          drawY += bodyLineH;
-        }
-
-        // Inline crossref chips — compact deep links to related tabs
-        if (crossrefEnabled) {
-          drawY = this.renderInlineCrossrefPivots(
-            narColX + narIndent, drawY, narColW - narIndent - 8, theme,
-            `${phaseLabel} narrative`,
-            [
-              { tab: 'events', label: 'events' },
-              { tab: 'relations', label: 'relations' },
-              { tab: 'lineage', label: 'lineage' },
-            ]
-          ) + 2;
-        }
-
-        drawY += interPhaseGap;
-        if (drawY > viewportY + viewportH + bodyLineH * 3) break;
-      }
+      drawY = renderNarrativeLongArchiveLines({
+        ctx: this.ctx,
+        theme,
+        longDoc,
+        narLblSize,
+        narColX,
+        narColW,
+        narIndent,
+        drawY,
+        phaseLabelH,
+        bodyLineH,
+        interPhaseGap,
+        inViewport,
+        wrapLine,
+        crossrefEnabled: this.isDetailCrossrefGraphEnabled(),
+        renderInlineCrossrefPivots: (x, y, maxW, t, title, links) =>
+          this.renderInlineCrossrefPivots(x, y, maxW, t, title, links),
+        viewportY,
+        viewportH,
+      });
 
       this.ctx.restore();
 
@@ -4427,49 +4410,19 @@ export class GalaxyRenderer {
       // Left fixed panel: recent major events
       iy = mapY + mapH + 15;
       sectionHeader(`RECENT MAJOR EVENTS (${majorEvents.length}, STAR + GALAXY)`, leftColX);
-
-      const leftBottomPad = Math.max(10, Math.floor(lblSize * 1.1));
-      const lineClipPad = Math.max(2, Math.floor(lblSize * 0.25));
-      const leftMaxY = h - footerH - leftBottomPad;
-      const canDraw = (lineHeight: number): boolean => iy + lineHeight + lineClipPad <= leftMaxY;
-      const phaseHeaderH = Math.floor(lblSize * 1.35);
-      const eventLineH = Math.floor(lblSize * 1.22);
-      if (majorEvents.length === 0) {
-        this.ctx.fillStyle = theme.colors.dimText;
-        this.ctx.font = (lblSize - 1) + 'px ' + theme.effects.font;
-        this.ctx.fillText('No major disruptions in recent archival records.', leftColX, iy);
-      } else {
-        let majorPhase = -1;
-        for (const event of majorEvents) {
-          if (event.phase !== majorPhase) {
-            if (!canDraw(phaseHeaderH + eventLineH)) break;
-          } else if (!canDraw(eventLineH)) {
-            break;
-          }
-
-          if (event.phase !== majorPhase) {
-            majorPhase = event.phase;
-            this.ctx.fillStyle = theme.colors.dimText;
-            this.ctx.font = 'bold ' + (lblSize - 1) + 'px ' + theme.effects.font;
-            this.ctx.fillText(`PHASE ${event.phase}`, leftColX, iy);
-            iy += phaseHeaderH;
-          }
-
-          this.ctx.fillStyle = getArchiveEventColor(event.type);
-          this.ctx.font = (lblSize - 1) + 'px ' + theme.effects.font;
-          const wrappedMajor = wrapLine(`${event.type.toUpperCase()}: ${event.description}`, leftColW - 12);
-          for (let i = 0; i < wrappedMajor.length && i < 2; i++) {
-            if (!canDraw(eventLineH)) break;
-            this.ctx.fillText(wrappedMajor[i]!, leftColX, iy);
-            iy += eventLineH;
-          }
-          if (wrappedMajor.length > 2 && canDraw(eventLineH)) {
-            this.ctx.fillText('...', leftColX, iy);
-            iy += eventLineH;
-          }
-          if (canDraw(3)) iy += 3;
-        }
-      }
+      iy = renderEventsMajorPanel({
+        ctx: this.ctx,
+        theme,
+        lblSize,
+        h,
+        footerH,
+        leftColX,
+        leftColW,
+        startY: iy,
+        majorEvents,
+        getArchiveEventColor,
+        wrapLine,
+      });
 
       // Right scrollable full feed
       iy = contentY + 16;
@@ -4487,84 +4440,31 @@ export class GalaxyRenderer {
       this.ctx.rect(viewportX, viewportY, viewportW, viewportH);
       this.ctx.clip();
 
-      const eventsTopPad = Math.max(8, Math.floor(lblSize * 1.05));
-      const eventsStartY = viewportY + eventsTopPad - this.detailScroll.events;
-      let drawY = eventsStartY;
-      let currentPhase = -1;
       const forensicEnabled = this.isDetailClaimEvidenceEnabled();
-      for (const event of events) {
-        if (event.phase !== currentPhase) {
-          currentPhase = event.phase;
-          this.ctx.fillStyle = theme.colors.dimText;
-          this.ctx.font = 'bold ' + (lblSize - 1) + 'px ' + theme.effects.font;
-          this.ctx.fillText(`PHASE ${event.phase}`, viewportX, drawY);
-          drawY += Math.floor(lblSize * 1.4);
-        }
-
-        this.ctx.fillStyle = getArchiveEventColor(event.type);
-        this.ctx.font = (lblSize - 1) + 'px ' + theme.effects.font;
-        const wrapped = wrapLine(`${event.type.toUpperCase()}: ${event.description}`, viewportW - 12);
-        for (let i = 0; i < wrapped.length && i < 2; i++) {
-          if (drawY < viewportY - lblSize) {
-            drawY += Math.floor(lblSize * 1.3);
-            continue;
-          }
-          if (drawY > viewportY + viewportH + lblSize) break;
-          this.ctx.fillText(wrapped[i]!, viewportX, drawY);
-          drawY += Math.floor(lblSize * 1.3);
-        }
-        if (wrapped.length > 2) {
-          if (drawY > viewportY + viewportH + lblSize) break;
-          this.ctx.fillText('...', viewportX, drawY);
-          drawY += Math.floor(lblSize * 1.3);
-        }
-        if (forensicEnabled) {
-          const confidence = Math.round(
-            this.computeForensicConfidence(event.phase, galaxy.state.phase, event.type, event.description) * 100
-          );
-          const drawerLines = [
-            `Evidence: confidence ${confidence}% | phase ${event.phase}`,
-            `Citation: ${event.type.replace(/[-_]/g, ' ')} archive record`,
-          ];
-          if (drawY >= viewportY - (lblSize * 2) && drawY <= viewportY + viewportH + (lblSize * 2)) {
-            drawY = this.drawForensicEvidenceDrawer(
-              viewportX + 4,
-              drawY,
-              Math.max(120, viewportW - 20),
-              theme,
-              Math.max(9, lblSize - 2),
-              drawerLines
-            );
-            drawY = this.renderInlineCrossrefPivots(
-              viewportX + 4,
-              drawY + 3,
-              Math.max(120, viewportW - 20),
-              theme,
-              `Phase ${event.phase} ${event.type.replace(/[-_]/g, ' ')}`,
-              [
-                { tab: 'narrative', label: 'long arc context' },
-                { tab: 'relations', label: 'network impact' },
-                { tab: 'lineage', label: 'succession effects' },
-              ]
-            );
-          } else {
-            drawY += Math.floor(lblSize * 2.8);
-          }
-          drawY += 3;
-        }
-        drawY += 3;
-        if (drawY > viewportY + viewportH + (lblSize * 2)) break;
-      }
+      const eventsFeedResult = renderEventsFullFeedViewport({
+        ctx: this.ctx,
+        theme,
+        lblSize,
+        viewportX,
+        viewportY,
+        viewportW,
+        viewportH,
+        events,
+        galaxyPhase: galaxy.state.phase,
+        forensicEnabled,
+        getArchiveEventColor,
+        wrapLine,
+        computeForensicConfidence: (eventPhase, currentPhase, type, description) =>
+          this.computeForensicConfidence(eventPhase, currentPhase, type, description),
+        drawForensicEvidenceDrawer: (x, y, width, t, fontSize, lines) =>
+          this.drawForensicEvidenceDrawer(x, y, width, t, fontSize, lines),
+        renderInlineCrossrefPivots: (x, y, maxW, t, title, links) =>
+          this.renderInlineCrossrefPivots(x, y, maxW, t, title, links),
+        scrollY: this.detailScroll.events,
+      });
 
       this.ctx.restore();
-
-      if (events.length === 0) {
-        this.ctx.fillStyle = theme.colors.dimText;
-        this.ctx.font = (lblSize - 1) + 'px ' + theme.effects.font;
-        this.ctx.fillText('No archival events recorded for this star.', viewportX, viewportY + lblSize);
-      }
-
-      this.detailContentMetrics.events.contentH = Math.max(1, drawY - eventsStartY + eventsTopPad);
+      this.detailContentMetrics.events.contentH = eventsFeedResult.contentH;
       this.clampDetailScroll('events');
       this.drawDetailScrollbar('events', viewportX, viewportY, viewportW, viewportH);
     } else if (this.detailViewTab === 'relations') {
@@ -4613,101 +4513,33 @@ export class GalaxyRenderer {
       this.ctx.rect(viewportX, viewportY, viewportW, viewportH);
       this.ctx.clip();
 
-      const relationsTopPad = Math.max(8, Math.floor(lblSize * 1.05));
-      const relationsStartY = viewportY + relationsTopPad - this.detailScroll.relations;
-      let drawY = relationsStartY;
-      const sectionGapY = 6;
-      const lineH = Math.floor(lblSize * 1.3);
       const forensicEnabled = this.isDetailClaimEvidenceEnabled();
-
-      const drawListSection = (title: string, items: string[], color: string, emptyText: string) => {
-        this.ctx.fillStyle = theme.colors.dimText;
-        this.ctx.font = 'bold ' + (lblSize - 1) + 'px ' + theme.effects.font;
-        this.ctx.fillText(title, viewportX, drawY);
-        drawY += Math.floor(lblSize * 1.4);
-
-        this.ctx.fillStyle = color;
-        this.ctx.font = (lblSize - 1) + 'px ' + theme.effects.font;
-        if (items.length === 0) {
-          this.ctx.fillStyle = theme.colors.dimText;
-          this.ctx.fillText(emptyText, viewportX, drawY);
-          drawY += lineH;
-        } else {
-          for (const item of items) {
-            const wrapped = wrapLine(`- ${item}`, viewportW - 12);
-            for (const segment of wrapped) {
-              this.ctx.fillText(segment, viewportX, drawY);
-              drawY += lineH;
-            }
-          }
-        }
-
-        drawY += sectionGapY;
-      };
-
-      if (forensicEnabled) {
-        const relationClaims = [
-          {
-            text: `Current posture is ${warNames.length > 0 ? 'contested' : (subjectNames.length > 0 ? 'imperial' : (allyNames.length + tradeNames.length > 0 ? 'connected' : 'isolated'))}.`,
-            source: 'alliance/trade/war balance',
-          },
-          {
-            text: `Network load is ${allyNames.length + tradeNames.length + subjectNames.length} active structural ties.`,
-            source: 'relation register counts',
-          },
-          {
-            text: `Conflict pressure is ${warNames.length > 0 ? 'active' : 'dormant'} with ${warNames.length} open war fronts.`,
-            source: 'active wars register',
-          },
-        ];
-        this.ctx.fillStyle = theme.colors.ui.info;
-        this.ctx.font = 'bold ' + (lblSize - 1) + 'px ' + theme.effects.font;
-        this.ctx.fillText('FORENSIC FINDINGS', viewportX, drawY);
-        drawY += Math.floor(lblSize * 1.45);
-        for (const claim of relationClaims) {
-          const confidence = Math.round(
-            this.computeForensicConfidence(galaxy.state.phase, galaxy.state.phase, 'relations', claim.text) * 100
-          );
-          this.ctx.fillStyle = theme.colors.text;
-          this.ctx.font = (lblSize - 1) + 'px ' + theme.effects.font;
-          for (const segment of wrapLine(`[${confidence}%] ${claim.text}`, viewportW - 12).slice(0, 2)) {
-            this.ctx.fillText(segment, viewportX, drawY);
-            drawY += lineH;
-          }
-          drawY = this.drawForensicEvidenceDrawer(
-            viewportX + 4,
-            drawY,
-            Math.max(120, viewportW - 20),
-            theme,
-            Math.max(9, lblSize - 2),
-            [
-              `Evidence: ${claim.source}`,
-              `Citation: relations snapshot + register`,
-            ]
-          ) + 4;
-          drawY = this.renderInlineCrossrefPivots(
-            viewportX + 4,
-            drawY,
-            Math.max(120, viewportW - 20),
-            theme,
-            claim.source,
-            [
-              { tab: 'events', label: 'recent shocks' },
-              { tab: 'narrative', label: 'historical framing' },
-              { tab: 'lineage', label: 'regime continuity' },
-            ]
-          ) + 3;
-        }
-      }
-
-      drawListSection('ALLIES', allyNames, theme.colors.ui.success, 'No active alliances.');
-      drawListSection('TRADE ROUTES', tradeNames, theme.colors.ui.warning, 'No active trade routes.');
-      drawListSection('ACTIVE WARS', warNames, theme.colors.ui.danger, 'No active wars.');
-      drawListSection('SUBJECTS', subjectNames, theme.colors.ui.info, 'No current subjects.');
+      const relationsRegisterResult = renderRelationsRegisterViewport({
+        ctx: this.ctx,
+        theme,
+        lblSize,
+        viewportX,
+        viewportY,
+        viewportW,
+        viewportH,
+        scrollY: this.detailScroll.relations,
+        galaxyPhase: galaxy.state.phase,
+        allyNames,
+        tradeNames,
+        warNames,
+        subjectNames,
+        forensicEnabled,
+        wrapLine,
+        computeForensicConfidence: (eventPhase, currentPhase, type, description) =>
+          this.computeForensicConfidence(eventPhase, currentPhase, type, description),
+        drawForensicEvidenceDrawer: (x, y, width, t, fontSize, lines) =>
+          this.drawForensicEvidenceDrawer(x, y, width, t, fontSize, lines),
+        renderInlineCrossrefPivots: (x, y, maxW, t, title, links) =>
+          this.renderInlineCrossrefPivots(x, y, maxW, t, title, links),
+      });
 
       this.ctx.restore();
-
-      this.detailContentMetrics.relations.contentH = Math.max(1, drawY - relationsStartY + relationsTopPad);
+      this.detailContentMetrics.relations.contentH = relationsRegisterResult.contentH;
       this.clampDetailScroll('relations');
       this.drawDetailScrollbar('relations', viewportX, viewportY, viewportW, viewportH);
     } else if (this.detailViewTab === 'demographics') {
@@ -4786,157 +4618,23 @@ export class GalaxyRenderer {
       this.ctx.rect(viewportX, viewportY, viewportW, viewportH);
       this.ctx.clip();
 
-      const trendTopPad = Math.max(8, Math.floor(lblSize * 1.05));
-      const trendStartY = viewportY + trendTopPad - this.detailScroll.demographics;
-      let drawY = trendStartY;
-      const seriesCardH = Math.max(90, Math.floor(lblSize * 9.2));
-      const seriesGap = 10;
-      const seriesColors: Record<'population' | 'tech' | 'strength' | 'subjects', string> = {
-        population: '#66bbff',
-        tech: '#9be089',
-        strength: '#ffbe66',
-        subjects: '#c9a3ff',
-      };
-
-      const drawSeriesCard = (
-        label: string,
-        points: Array<{ phase: number; value: number }>,
-        color: string,
-        currentValue: number,
-        delta10?: number,
-        delta50?: number
-      ): void => {
-        const cardX = viewportX + 2;
-        const cardY = drawY;
-        const cardW = Math.max(120, viewportW - 14);
-        const cardH = seriesCardH;
-        this.ctx.fillStyle = 'rgba(8, 18, 30, 0.72)';
-        this.ctx.fillRect(cardX, cardY, cardW, cardH);
-        this.ctx.strokeStyle = 'rgba(120, 170, 205, 0.35)';
-        this.ctx.lineWidth = 1;
-        this.ctx.strokeRect(cardX, cardY, cardW, cardH);
-
-        this.ctx.fillStyle = theme.colors.text;
-        this.ctx.font = 'bold ' + lblSize + 'px ' + theme.effects.font;
-        this.ctx.textAlign = 'left';
-        this.ctx.fillText(label, cardX + 8, cardY + 14);
-
-        this.ctx.fillStyle = theme.colors.dimText;
-        this.ctx.font = (lblSize - 1) + 'px ' + theme.effects.font;
-        const delta10Label = delta10 !== undefined ? `${delta10 >= 0 ? '+' : ''}${this.formatCompactNumber(delta10)}` : 'n/a';
-        const delta50Label = delta50 !== undefined ? `${delta50 >= 0 ? '+' : ''}${this.formatCompactNumber(delta50)}` : 'n/a';
-        this.ctx.fillText(
-          `Now ${this.formatCompactNumber(currentValue)} | D10 ${delta10Label} | D50 ${delta50Label}`,
-          cardX + 8,
-          cardY + 27
-        );
-
-        const chartX = cardX + 8;
-        const chartY = cardY + 34;
-        const chartW = cardW - 16;
-        const chartH = cardH - 44;
-        this.ctx.strokeStyle = 'rgba(120, 160, 190, 0.25)';
-        this.ctx.beginPath();
-        this.ctx.moveTo(chartX, chartY + chartH);
-        this.ctx.lineTo(chartX + chartW, chartY + chartH);
-        this.ctx.stroke();
-
-        if (points.length >= 2) {
-          let minValue = points[0]!.value;
-          let maxValue = points[0]!.value;
-          for (const point of points) {
-            if (point.value < minValue) minValue = point.value;
-            if (point.value > maxValue) maxValue = point.value;
-          }
-          const range = Math.max(1e-6, maxValue - minValue);
-          this.ctx.strokeStyle = color;
-          this.ctx.lineWidth = 2;
-          this.ctx.beginPath();
-          for (let i = 0; i < points.length; i++) {
-            const point = points[i]!;
-            const x = chartX + (i / Math.max(1, points.length - 1)) * chartW;
-            const y = chartY + chartH - (((point.value - minValue) / range) * chartH);
-            if (i === 0) this.ctx.moveTo(x, y);
-            else this.ctx.lineTo(x, y);
-          }
-          this.ctx.stroke();
-        } else if (points.length === 1) {
-          this.ctx.fillStyle = color;
-          this.ctx.fillRect(chartX, chartY + (chartH / 2), chartW, 2);
-        }
-
-        drawY += cardH + seriesGap;
-      };
-
-      if (!demographics) {
-        this.ctx.fillStyle = theme.colors.dimText;
-        this.ctx.font = (lblSize - 1) + 'px ' + theme.effects.font;
-        this.ctx.fillText('No demographics trends available for this star.', viewportX, drawY);
-        drawY += Math.floor(lblSize * 2);
-      } else {
-        for (const series of demographics.series) {
-          drawSeriesCard(
-            series.label.toUpperCase(),
-            series.points,
-            seriesColors[series.key],
-            series.currentValue,
-            series.delta10,
-            series.delta50
-          );
-        }
-
-        this.ctx.fillStyle = theme.colors.ui.info;
-        this.ctx.font = 'bold ' + (lblSize - 1) + 'px ' + theme.effects.font;
-        this.ctx.fillText('EMPIRE TOP-10 POSITION', viewportX + 2, drawY);
-        drawY += Math.floor(lblSize * 1.5);
-
-        this.ctx.fillStyle = theme.colors.text;
-        this.ctx.font = (lblSize - 1) + 'px ' + theme.effects.font;
-        for (const top of demographics.empireContext.top10) {
-          const chartLabel = top.chart === 'duration'
-            ? 'Longevity'
-            : (top.chart === 'subjects' ? 'Subjects' : 'Population');
-          const line = top.inTop10
-            ? `${chartLabel}: #${top.rank} (${top.valueLabel ?? '-'})`
-            : `${chartLabel}: not in top 10`;
-          this.ctx.fillText(line, viewportX + 2, drawY);
-          drawY += Math.floor(lblSize * 1.3);
-        }
-
-        drawY += Math.max(4, Math.floor(lblSize * 0.4));
-        this.ctx.fillStyle = theme.colors.ui.info;
-        this.ctx.font = 'bold ' + (lblSize - 1) + 'px ' + theme.effects.font;
-        this.ctx.fillText('RECENT PHASE MARKERS', viewportX + 2, drawY);
-        drawY += Math.floor(lblSize * 1.45);
-        this.ctx.fillStyle = theme.colors.dimText;
-        this.ctx.font = (lblSize - 1) + 'px ' + theme.effects.font;
-        if (demographics.eventMarkers.length === 0) {
-          this.ctx.fillText('No recent star-specific markers in this phase window.', viewportX + 2, drawY);
-          drawY += Math.floor(lblSize * 1.3);
-        } else {
-          for (const marker of demographics.eventMarkers) {
-            const wrapped = this.wrapDetailLineCached(
-              `Ph ${marker.phase}: ${marker.label}`,
-              viewportW - 16,
-              this.ctx.font
-            );
-            for (const segment of wrapped.slice(0, 2)) {
-              this.ctx.fillText(segment, viewportX + 2, drawY);
-              drawY += Math.floor(lblSize * 1.22);
-            }
-            if (wrapped.length > 2) {
-              this.ctx.fillText('...', viewportX + 2, drawY);
-              drawY += Math.floor(lblSize * 1.22);
-            }
-            drawY += 2;
-            if (drawY > viewportY + viewportH + (lblSize * 2)) break;
-          }
-        }
-      }
+      const demographicsTrendResult = renderDemographicsTrendViewport({
+        ctx: this.ctx,
+        theme,
+        lblSize,
+        viewportX,
+        viewportY,
+        viewportW,
+        viewportH,
+        scrollY: this.detailScroll.demographics,
+        demographics,
+        formatCompactNumber: (value) => this.formatCompactNumber(value),
+        wrapLine: (line, maxWidth) => this.wrapDetailLineCached(line, maxWidth, this.ctx.font),
+      });
 
       this.ctx.restore();
 
-      this.detailContentMetrics.demographics.contentH = Math.max(1, drawY - trendStartY + trendTopPad);
+      this.detailContentMetrics.demographics.contentH = demographicsTrendResult.contentH;
       this.clampDetailScroll('demographics');
       this.drawDetailScrollbar('demographics', viewportX, viewportY, viewportW, viewportH);
     } else if (this.detailViewTab === 'lineage') {
@@ -5070,378 +4768,36 @@ export class GalaxyRenderer {
       const lineageStartY = viewportY + lineageTopPad - this.detailScroll.lineage;
       let drawY = lineageStartY;
       const lineH = Math.floor(lblSize * 1.3);
-
-      if (!payload || !payload.tree) {
-        this.ctx.fillStyle = theme.colors.dimText;
-        this.ctx.font = (lblSize - 1) + 'px ' + theme.effects.font;
-        this.ctx.fillText('No family tree data available for current ruler.', viewportX, drawY);
-        drawY += lineH * 2;
-      } else {
-        // -----------------------------------------------------------------------
-        // Render family tree: root ruler → heirs below → ancestors above
-        // -----------------------------------------------------------------------
-
-        /**
-         * Map a dynasty trait string to a display colour.
-         * Political = warning/amber, Military = danger/red,
-         * Cultural = info/blue, Economic = success/green, Temperament = dimText.
-         */
-        const traitColor = (trait: string): string => {
-          switch (trait) {
-            // Military
-            case 'militaristic':
-            case 'volatile':
-            case 'ambitious':
-              return theme.colors.ui.danger;
-            // Political
-            case 'imperialist':
-            case 'republican':
-            case 'adaptable':
-            case 'traditionalist':
-              return theme.colors.ui.warning;
-            // Cultural / Social
-            case 'scholarly':
-            case 'spiritualist':
-            case 'cosmopolitan':
-            case 'xenophobic':
-            case 'materialist':
-              return theme.colors.ui.info;
-            // Economic
-            case 'mercantile':
-            case 'agrarian':
-            case 'industrial':
-            case 'post-scarcity':
-              return theme.colors.ui.success;
-            // Temperament
-            default:
-              return theme.colors.dimText;
-          }
-        };
-
-        /**
-         * Render trait tags for a node inline, advancing drawY if traits exist.
-         * Tags appear as "[trait]" labels, horizontally laid out, wrapping to a new
-         * line when they exceed the viewport width.
-         */
-        const renderTraitTags = (traits: string[], indentX: number): void => {
-          if (!traits || traits.length === 0) return;
-          this.ctx.font = (lblSize - 3) + 'px ' + theme.effects.font;
-          let tagX = indentX + 12;
-          let wrappedToNewLine = false;
-          for (const trait of traits) {
-            const label = `[${trait}]`;
-            const tagW = this.ctx.measureText(label).width + 4;
-            // Wrap to next line if tag would overflow the viewport
-            if (tagX + tagW > viewportX + viewportW - 6) {
-              drawY += Math.floor(lineH * 0.85);
-              tagX = indentX + 12;
-              wrappedToNewLine = true;
-            }
-            this.ctx.fillStyle = traitColor(trait);
-            this.ctx.fillText(label, tagX, drawY);
-            tagX += tagW + 4;
-          }
-          drawY += wrappedToNewLine ? Math.floor(lineH * 0.85) : lineH;
-        };
-
-        /**
-         * Render an ancestor node and recurse upward (ancestors only, no children shown).
-         * Declared first so renderNode can reference it without a TDZ issue.
-         */
-        const renderAncestor = (node: FamilyTreeNode, indent: number): void => {
-          const indentX = viewportX + (indent * 18);
-          const nameColor = node.deathPhase ? theme.colors.dimText : theme.colors.text;
-
-          this.ctx.fillStyle = nameColor;
-          this.ctx.font = (lblSize - 1) + 'px ' + theme.effects.font;
-          this.ctx.fillText(`^ ${node.name}`, indentX, drawY);
-          drawY += lineH;
-
-          this.ctx.fillStyle = theme.colors.dimText;
-          this.ctx.font = (lblSize - 2) + 'px ' + theme.effects.font;
-          const lifeSpan = node.deathPhase
-            ? `Phase ${node.birthPhase}-${node.deathPhase}`
-            : `Phase ${node.birthPhase}-present`;
-          this.ctx.fillText(lifeSpan, indentX + 12, drawY);
-          drawY += lineH;
-
-          // Trait tags for ancestor
-          renderTraitTags(node.traits, indentX);
-
-          if (node.spouse) {
-            this.ctx.fillStyle = theme.colors.ui.info;
-            this.ctx.font = (lblSize - 1) + 'px ' + theme.effects.font;
-            this.ctx.fillText(`~ ${node.spouse.name}`, indentX + 12, drawY);
-            drawY += lineH;
-          }
-
-          if (node.parents.length > 0) {
-            for (const grandparent of node.parents) {
-              renderAncestor(grandparent, indent + 1);
-            }
-          }
-
-          drawY += Math.floor(lineH * 0.3);
-        };
-
-        /**
-         * Render a single tree node (ruler or heir).
-         * direction: 'root' = the current ruler at centre
-         *            'down' = rendering heirs (children/grandchildren)
-         * descendantDepthLeft: how many more generations of children to recurse into.
-         */
-        const renderNode = (
-          node: FamilyTreeNode,
-          indent: number,
-          direction: 'root' | 'down',
-          descendantDepthLeft: number
-        ): void => {
-          const indentX = viewportX + (indent * 18);
-          const isLiving = !node.deathPhase;
-          const nameColor = isLiving ? theme.colors.text : theme.colors.dimText;
-
-          // Prefix: none for root, > for heirs
-          const prefix = direction === 'down' ? '> ' : '';
-
-          // Name line
-          this.ctx.fillStyle = nameColor;
-          this.ctx.font = (direction === 'root' ? 'bold ' : '') + (lblSize - 1) + 'px ' + theme.effects.font;
-          let nameText = prefix + node.name;
-          if (node.isBastard && !node.isLegitimized) nameText += ' (bastard)';
-          else if (node.isBastard && node.isLegitimized) nameText += ' (legit.)';
-          this.ctx.fillText(nameText, indentX, drawY);
-          drawY += lineH;
-
-          // Life span
-          this.ctx.fillStyle = theme.colors.dimText;
-          this.ctx.font = (lblSize - 2) + 'px ' + theme.effects.font;
-          const lifeSpan = node.deathPhase
-            ? `Phase ${node.birthPhase}-${node.deathPhase}`
-            : `Phase ${node.birthPhase}-present`;
-          this.ctx.fillText(lifeSpan, indentX + 12, drawY);
-          drawY += lineH;
-
-          // Trait tags (colour-coded by category)
-          renderTraitTags(node.traits, indentX);
-
-          // Spouse (shown for root and every heir node)
-          if (node.spouse) {
-            this.ctx.fillStyle = theme.colors.ui.info;
-            this.ctx.font = (lblSize - 1) + 'px ' + theme.effects.font;
-            this.ctx.fillText(`~ ${node.spouse.name}`, indentX + 12, drawY);
-            drawY += lineH;
-          }
-
-          // ---- HEIRS (children) ----
-          if (descendantDepthLeft > 0 && node.children.length > 0) {
-            drawY += Math.floor(lineH * 0.25);
-            this.ctx.fillStyle = theme.colors.dimText;
-            this.ctx.font = (lblSize - 2) + 'px ' + theme.effects.font;
-            this.ctx.fillText('Heirs:', indentX + 12, drawY);
-            drawY += lineH;
-
-            for (const child of node.children) {
-              renderNode(child, indent + 1, 'down', descendantDepthLeft - 1);
-            }
-
-            // "...and N more heirs" overflow indicator
-            if (node.childrenTotal > node.children.length) {
-              this.ctx.fillStyle = theme.colors.dimText;
-              this.ctx.font = (lblSize - 2) + 'px ' + theme.effects.font;
-              const overflow = node.childrenTotal - node.children.length;
-              this.ctx.fillText(`  ...and ${overflow} more heir${overflow === 1 ? '' : 's'}`, indentX + 12, drawY);
-              drawY += lineH;
-            }
-          }
-
-          // ---- ANCESTORS (parents) — only rendered for the root ruler ----
-          if (direction === 'root' && node.parents.length > 0) {
-            drawY += Math.floor(lineH * 0.4);
-            this.ctx.fillStyle = theme.colors.dimText;
-            this.ctx.font = (lblSize - 2) + 'px ' + theme.effects.font;
-            this.ctx.fillText('Ancestors:', indentX + 12, drawY);
-            drawY += lineH;
-
-            for (const parent of node.parents) {
-              renderAncestor(parent, indent + 1);
-            }
-          }
-
-          drawY += Math.floor(lineH * 0.4);
-        };
-
-        // ---- Resolve which tree to display ----
-        // If the user has clicked a past ruler in the succession list, re-centre on them.
-        let displayTree = payload.tree;
-        let displayingPastRuler = false;
-        let pastRulerDisplayName = '';
-
-        if (this.detailLineageSelectedDynastId && galaxy) {
-          const pastTree = buildFamilyTree(this.detailLineageSelectedDynastId, galaxy.state);
-          if (pastTree) {
-            displayTree = pastTree;
-            displayingPastRuler = true;
-            pastRulerDisplayName = pastTree.name;
-          }
-        }
-
-        // ---- Back link + "Viewing" header (only when browsing a past ruler) ----
-        if (displayingPastRuler) {
-          const backLinkY = drawY;
-          this.ctx.fillStyle = theme.colors.ui.info;
-          this.ctx.font = (lblSize - 2) + 'px ' + theme.effects.font;
-          this.ctx.fillText('\u2190 Current ruler', viewportX, drawY);
-          // Register hitbox for back link
-          this.detailLineageSuccessionHitboxes.push({
-            x: viewportX,
-            y: backLinkY - lineH + 2,
-            w: 140,
-            h: lineH + 2,
-            dynastId: '__current__',
-          });
-          drawY += lineH;
-
-          this.ctx.fillStyle = theme.colors.dimText;
-          this.ctx.font = (lblSize - 2) + 'px ' + theme.effects.font;
-          this.ctx.fillText(`Viewing: ${pastRulerDisplayName}`, viewportX, drawY);
-          drawY += Math.floor(lineH * 1.5);
-        }
-
-        // Render the ruler at centre, with 2 generations of descendants
-        if (displayTree) {
-          renderNode(displayTree, 0, 'root', 2);
-        }
-
-        // Also show succession lineage if available
-        if (payload.lineage && payload.lineage.length > 0) {
-          drawY += lineH;
-          this.ctx.fillStyle = theme.colors.dimText;
-          this.ctx.font = 'bold ' + (lblSize - 1) + 'px ' + theme.effects.font;
-          this.ctx.fillText('SUCCESSION HISTORY', viewportX, drawY);
-          drawY += Math.floor(lblSize * 1.4);
-
-          this.ctx.font = (lblSize - 1) + 'px ' + theme.effects.font;
-          const maxSuccessions = 20;
-          const displayLineage = payload.lineage.slice(0, maxSuccessions);
-
-          for (const record of displayLineage) {
-            const isClickable = !!record.fromDynastId;
-            const isSelected = isClickable && record.fromDynastId === this.detailLineageSelectedDynastId;
-            const rowStartY = drawY;
-
-            // Highlight background for selected row
-            if (isSelected) {
-              this.ctx.fillStyle = theme.colors.ui.info + '22';
-              this.ctx.fillRect(viewportX - 4, rowStartY - lineH * 0.7, viewportW, lineH * 2.8);
-            }
-
-            // Name line — info colour if clickable, slightly dimmed if selected
-            this.ctx.fillStyle = isSelected
-              ? theme.colors.ui.info
-              : isClickable
-                ? theme.colors.text
-                : theme.colors.dimText;
-            const successionText = `Phase ${record.phase}: ${record.fromRulerName} \u2192 ${record.toRulerName}`;
-            const wrapped = wrapLine(successionText, viewportW - 12);
-            for (const segment of wrapped) {
-              this.ctx.fillText(segment, viewportX, drawY);
-              drawY += lineH;
-            }
-
-            // Reason line
-            this.ctx.fillStyle = theme.colors.dimText;
-            const reasonLabel = record.reason.replace(/_/g, ' ');
-            const reasonText = `  ${reasonLabel}`;
-            const wrappedReason = wrapLine(reasonText, viewportW - 12);
-            for (const segment of wrappedReason) {
-              this.ctx.fillText(segment, viewportX, drawY);
-              drawY += lineH;
-            }
-
-            drawY += Math.floor(lineH * 0.3);
-
-            // Register hitbox for clickable rows
-            if (isClickable && record.fromDynastId) {
-              this.detailLineageSuccessionHitboxes.push({
-                x: viewportX - 4,
-                y: rowStartY - lineH * 0.7,
-                w: viewportW,
-                h: drawY - (rowStartY - lineH * 0.7),
-                dynastId: record.fromDynastId,
-              });
-            }
-          }
-
-          if (payload.lineage.length > maxSuccessions) {
-            this.ctx.fillStyle = theme.colors.dimText;
-            this.ctx.fillText(`... and ${payload.lineage.length - maxSuccessions} more succession(s)`, viewportX, drawY);
-            drawY += lineH;
-          }
-        }
-
-        if (payload.rulerChanges && payload.rulerChanges.length > 0) {
-          drawY += lineH;
-          this.ctx.fillStyle = theme.colors.dimText;
-          this.ctx.font = 'bold ' + (lblSize - 1) + 'px ' + theme.effects.font;
-          this.ctx.fillText('RULER CHANGE HISTORY', viewportX, drawY);
-          drawY += Math.floor(lblSize * 1.4);
-
-          this.ctx.font = (lblSize - 1) + 'px ' + theme.effects.font;
-          const maxRulerChanges = 20;
-          const displayRulerChanges = payload.rulerChanges.slice(0, maxRulerChanges);
-
-          for (const record of displayRulerChanges) {
-            const isClickable = !!record.fromDynastId;
-            const isSelected = isClickable && record.fromDynastId === this.detailLineageSelectedDynastId;
-            const rowStartY = drawY;
-
-            if (isSelected) {
-              this.ctx.fillStyle = theme.colors.ui.info + '22';
-              this.ctx.fillRect(viewportX - 4, rowStartY - lineH * 0.7, viewportW, lineH * 2.8);
-            }
-
-            this.ctx.fillStyle = isSelected
-              ? theme.colors.ui.info
-              : isClickable
-                ? theme.colors.text
-                : theme.colors.dimText;
-            const rowText = `Phase ${record.phase}: ${record.fromRulerName} \u2192 ${record.toRulerName}`;
-            const wrapped = wrapLine(rowText, viewportW - 12);
-            for (const segment of wrapped) {
-              this.ctx.fillText(segment, viewportX, drawY);
-              drawY += lineH;
-            }
-
-            this.ctx.fillStyle = theme.colors.dimText;
-            const sourceLabel = record.sourceDetail && record.sourceDetail !== 'unknown'
-              ? record.sourceDetail.replace(/_/g, ' ')
-              : 'ruler change';
-            const reasonLabel = `${sourceLabel} (${record.reason.replace(/_/g, ' ')})`;
-            const wrappedReason = wrapLine(`  ${reasonLabel}`, viewportW - 12);
-            for (const segment of wrappedReason) {
-              this.ctx.fillText(segment, viewportX, drawY);
-              drawY += lineH;
-            }
-
-            drawY += Math.floor(lineH * 0.3);
-
-            if (isClickable && record.fromDynastId) {
-              this.detailLineageSuccessionHitboxes.push({
-                x: viewportX - 4,
-                y: rowStartY - lineH * 0.7,
-                w: viewportW,
-                h: drawY - (rowStartY - lineH * 0.7),
-                dynastId: record.fromDynastId,
-              });
-            }
-          }
-
-          if (payload.rulerChanges.length > maxRulerChanges) {
-            this.ctx.fillStyle = theme.colors.dimText;
-            this.ctx.fillText(`... and ${payload.rulerChanges.length - maxRulerChanges} more ruler change(s)`, viewportX, drawY);
-            drawY += lineH;
-          }
-        }
+      {
+        const lineageTreeResult = renderLineageFamilyTreeContent({
+          ctx: this.ctx,
+          theme,
+          lblSize,
+          viewportX,
+          viewportW,
+          lineH,
+          drawY,
+          rootTree: payload?.tree,
+          selectedDynastId: this.detailLineageSelectedDynastId ?? undefined,
+          resolvePastTree: (dynastId) => (galaxy ? buildFamilyTree(dynastId, galaxy.state) ?? undefined : undefined),
+          pushHitbox: (hitbox) => this.detailLineageSuccessionHitboxes.push(hitbox),
+        });
+        drawY = lineageTreeResult.drawY;
+        const lineageHistoryResult = renderLineageHistorySections({
+          ctx: this.ctx,
+          theme,
+          lblSize,
+          viewportX,
+          viewportW,
+          lineH,
+          drawY,
+          selectedDynastId: this.detailLineageSelectedDynastId ?? undefined,
+          lineage: payload?.lineage,
+          rulerChanges: payload?.rulerChanges,
+          wrapLine,
+          pushHitbox: (hitbox) => this.detailLineageSuccessionHitboxes.push(hitbox),
+        });
+        drawY = lineageHistoryResult.drawY;
       }
 
       this.ctx.restore();

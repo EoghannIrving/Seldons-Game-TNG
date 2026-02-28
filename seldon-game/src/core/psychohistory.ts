@@ -1057,8 +1057,8 @@ export function applyGrowth(star: Star, galaxy?: GalaxyState): void {
   const healthProtection = clamp((0.55 * healthcareNormalized) + (0.25 * techNormalized) + (0.20 * stabilityNormalized), 0.05, 0.95);
   const plagueExposure = (1 - healthProtection) * clamp(0.85 + (0.35 * crowding), 0.70, 1.30);
   const plagueJitter = new SeededRandom(stableHash(`plague-loss|${galaxySeed}|${phase}|${star.id}`)).next();
-  const plagueRaw = currentPopulation * plagueSeverity * plagueExposure * 0.035 * (0.92 + (0.16 * plagueJitter));
-  const plagueCap = 0.12 * currentPopulation;
+  const plagueRaw = currentPopulation * plagueSeverity * plagueExposure * 0.06 * (0.92 + (0.16 * plagueJitter));
+  const plagueCap = 0.18 * currentPopulation;
   let plagueLoss = Math.min(plagueRaw, plagueCap);
 
   const totalShockCap = 0.22 * currentPopulation;
@@ -1080,7 +1080,7 @@ export function applyGrowth(star: Star, galaxy?: GalaxyState): void {
   const prevCapacityDamage = clamp(star.capacityDamage || 0, 0, 0.45);
   const recoveredDamage = Math.max(0, prevCapacityDamage - recoveryRate);
   const KdamageWar = Math.min(0.25, 0.30 * warIntensity);
-  const KdamagePlague = Math.min(0.15, 0.18 * plagueSeverity);
+  const KdamagePlague = Math.min(0.20, 0.24 * plagueSeverity);
   const capacityDamage = clamp(recoveredDamage + KdamageWar + KdamagePlague, 0, 0.45);
   // effectiveK already includes growthKFactor; apply only war/plague damage on top of it.
   const effectiveCarryingCapacity = Math.max(25_000_000, effectiveK * (1 - capacityDamage));

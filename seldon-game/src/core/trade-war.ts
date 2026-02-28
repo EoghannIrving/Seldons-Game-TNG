@@ -511,6 +511,7 @@ function declareWar(star1: Star, star2: Star, phase: number): void {
     phase,
     description: `Declared war on ${star2.name}`,
     relatedStars: [star2.id],
+    metadata: { role: 'aggressor', counterpartId: star2.id, counterpartName: star2.name },
   });
 
   star2.history.push({
@@ -518,6 +519,7 @@ function declareWar(star1: Star, star2: Star, phase: number): void {
     phase,
     description: `War declared by ${star1.name}`,
     relatedStars: [star1.id],
+    metadata: { role: 'defender', counterpartId: star1.id, counterpartName: star1.name },
   });
 }
 
@@ -537,12 +539,21 @@ function makePeace(star1: Star, star2: Star, phase: number): void {
   if (star1.tradeRouteCooldown) delete star1.tradeRouteCooldown[star2.id];
   if (star2.tradeRouteCooldown) delete star2.tradeRouteCooldown[star1.id];
 
+  // Derive resultQuality from war duration for narrative purposes
+  const warStartEvent = [...star1.history]
+    .reverse()
+    .find((e) => e.type === EventType.WarDeclared && e.relatedStars?.includes(star2.id));
+  const warDuration = warStartEvent ? phase - warStartEvent.phase : 0;
+  const resultQuality: 'decisive' | 'negotiated' | 'fragile' =
+    warDuration < 8 ? 'decisive' : warDuration > 25 ? 'fragile' : 'negotiated';
+
   // Create peace events
   star1.history.push({
     type: EventType.PeaceTreaty,
     phase,
     description: `Signed peace treaty with ${star2.name}`,
     relatedStars: [star2.id],
+    metadata: { counterpartId: star2.id, counterpartName: star2.name, resultQuality, warDuration },
   });
 
   star2.history.push({
@@ -550,6 +561,7 @@ function makePeace(star1: Star, star2: Star, phase: number): void {
     phase,
     description: `Signed peace treaty with ${star1.name}`,
     relatedStars: [star1.id],
+    metadata: { counterpartId: star1.id, counterpartName: star1.name, resultQuality, warDuration },
   });
 }
 

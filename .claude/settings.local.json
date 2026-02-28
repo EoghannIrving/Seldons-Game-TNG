@@ -37,7 +37,10 @@
       "Bash(powershell -Command \"Get-ChildItem ''C:\\\\Users\\\\eogha\\\\Downloads\\\\Seldons Game TNG\\\\seldon-game\\\\src'' | Select-Object Name\")",
       "Bash(powershell -Command \"python --version\")",
       "Bash(powershell -Command \"python3 --version\")",
-      "Bash(powershell -Command:*)"
+      "Bash(powershell -Command:*)",
+      "Bash(wc:*)",
+      "Bash(git stash:*)",
+      "Bash(npx tsx:*)"
     ]
   }
 }

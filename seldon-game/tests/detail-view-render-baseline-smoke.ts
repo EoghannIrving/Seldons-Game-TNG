@@ -64,15 +64,27 @@ function fnv1a(input: string): string {
 
 function withDeterministicMathRandom<T>(seed: number, fn: () => T): T {
   const originalRandom = Math.random;
+  const originalPerfNow = globalThis.performance?.now?.bind(globalThis.performance);
   let state = seed >>> 0;
+  let perfTicks = 0;
   Math.random = () => {
     state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
     return state / 4294967296;
   };
+  if (globalThis.performance && typeof globalThis.performance.now === 'function') {
+    globalThis.performance.now = () => {
+      perfTicks++;
+      // Deterministic monotonic time source for renderer animation state during baseline capture.
+      return perfTicks * 16.6667;
+    };
+  }
   try {
     return fn();
   } finally {
     Math.random = originalRandom;
+    if (globalThis.performance && originalPerfNow) {
+      globalThis.performance.now = originalPerfNow;
+    }
   }
 }
 

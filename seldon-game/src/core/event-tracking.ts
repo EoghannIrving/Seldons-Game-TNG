@@ -282,6 +282,7 @@ function detectRulerChangeEvent(
       phase: galaxy.phase,
       description: `Liberated from ${previousRulerName}`,
       relatedStars: previousRuler ? [previousRuler] : undefined,
+      metadata: { role: 'liberated', previousRulerId: previousRuler ?? undefined, previousRulerName },
     });
 
     if (previousRulerStar) {
@@ -290,6 +291,7 @@ function detectRulerChangeEvent(
         phase: galaxy.phase,
         description: `${star.name} gained independence`,
         relatedStars: [star.id],
+        metadata: { role: 'overlord_lost', liberatedStarId: star.id, liberatedStarName: star.name },
       });
       // Mark conflict on the former ruler as well
       previousRulerStar.recentWarOrConquestPhase = galaxy.phase;
@@ -306,6 +308,7 @@ function detectRulerChangeEvent(
       phase: galaxy.phase,
       description: `Conquered by ${newRulerName}`,
       relatedStars: currentRuler ? [currentRuler] : undefined,
+      metadata: { role: 'conquered', conquerorId: currentRuler ?? undefined, conquerorName: newRulerName },
     });
 
     if (newRulerStar) {
@@ -314,6 +317,7 @@ function detectRulerChangeEvent(
         phase: galaxy.phase,
         description: `Conquered ${star.name}`,
         relatedStars: [star.id],
+        metadata: { role: 'conqueror', targetId: star.id, targetName: star.name },
       });
       newRulerStar.recentWarOrConquestPhase = galaxy.phase;
     }

@@ -34,6 +34,32 @@ export class EventManager {
   /**
    * Select a random event type based on weights
    */
+  // Phase 6: Build optional metadata for galactic events consumed by narrative
+  private buildGalacticEventMeta(event: GalacticEvent): Record<string, unknown> | undefined {
+    const band = EventManager.mapSeverityToNarrativeBand(event.severity);
+    if (event.type === EventType.Plague) {
+      return {
+        severityBand: band,
+        impactBand: band === 'catastrophic' ? 'widespread' : band === 'severe' ? 'regional' : 'contained',
+        duration: event.duration,
+      };
+    }
+    if (event.type === EventType.TradeBoom) {
+      return { cause: 'expansion', duration: event.duration };
+    }
+    if (event.type === EventType.HyperlaneCollapse) {
+      return { impactBand: 'isolation', duration: event.duration };
+    }
+    return undefined;
+  }
+
+  private static mapSeverityToNarrativeBand(severity: string): 'mild' | 'moderate' | 'severe' | 'catastrophic' {
+    if (severity === 'critical') return 'catastrophic';
+    if (severity === 'high') return 'severe';
+    if (severity === 'medium') return 'moderate';
+    return 'mild';
+  }
+
   private selectEventType(): EventType {
     const roll = this.rng.random();
     if (roll < 0.25) return EventType.TradeBoom;
@@ -167,6 +193,7 @@ export class EventManager {
 
     // Log history if event created
     if (event) {
+        const eventMeta = this.buildGalacticEventMeta(event);
         for (const starId of event.targetStarIds) {
             const star = galaxy.stars.get(starId);
             if (star) {
@@ -174,7 +201,8 @@ export class EventManager {
                     type: event.type,
                     phase: galaxy.phase,
                     description: event.description,
-                    relatedStars: event.targetStarIds.filter(id => id !== starId)
+                    relatedStars: event.targetStarIds.filter(id => id !== starId),
+                    ...(eventMeta ? { metadata: eventMeta } : {}),
                 });
             }
         }
