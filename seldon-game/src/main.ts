@@ -54,7 +54,8 @@ import { buildTopEmpireRows, renderEmpireRankingCard } from './ui/encyclopedia/e
 import { buildEncyclopediaFilmstripHtml, buildEncyclopediaNavigatorHtml } from './ui/encyclopedia/encyclopedia-filmstrip-navigator-pane';
 import { bindEncyclopediaCoreInteractions } from './ui/encyclopedia/encyclopedia-core-interactions';
 import { computeMiniMapPoints } from './ui/encyclopedia/encyclopedia-mini-map';
-import { buildEncyclopediaNarrativeChapterSummaryHtml, buildEncyclopediaNarrativeRailHtml } from './ui/encyclopedia/encyclopedia-narrative-pane';
+import { buildEncyclopediaNarrativeChapterSummaryHtml, buildEncyclopediaNarrativeDocumentHtml, buildEncyclopediaNarrativeRailHtml } from './ui/encyclopedia/encyclopedia-narrative-pane';
+import { buildEncyclopediaNarrativeDocumentModel, selectNarrativePaneHtml } from './ui/encyclopedia/encyclopedia-narrative-document-data';
 import { buildEncyclopediaControlPanelHtml, buildEncyclopediaWorkspaceShellHtml } from './ui/encyclopedia/encyclopedia-shell-markup';
 import { getOrCreateEncyclopediaWorkspace, renderEncyclopediaLoadingStateUI } from './ui/encyclopedia/encyclopedia-workspace';
 import {
@@ -222,6 +223,8 @@ const DEFAULT_ENCYCLOPEDIA_VIEW_STATE: EncyclopediaViewState = {
   displayMode: 'atlas',
   activeTab: 'events',
   eventsViewMode: 'list',
+  narrativeViewMode: 'chapter',
+  narrativePinAnchor: false,
   demographicsMetric: 'totalPopulation',
   navigatorExpandedGroupIds: [],
   selectedStarId: null,
@@ -2128,6 +2131,7 @@ const NARRATIVE_SUPPORT_TARGET_COUNT = 8;
 const NARRATIVE_SUPPORT_MIN_COUNT = 6;
 const NARRATIVE_SUPPORT_MAX_COUNT = 10;
 const NARRATIVE_RELEVANCE_PROFILE: NarrativeRelevanceProfile = 'balanced';
+const ENCYCLOPEDIA_FORENSIC_OVERLAY_ENABLED = true;
 
 interface NarrativeChapter {
   id: string;
@@ -2269,6 +2273,10 @@ function renderEncyclopedia() {
       const label = star?.name ?? point.starId;
       return `<circle class="${className}" data-mini-star-id="${point.starId}" cx="${point.x.toFixed(2)}" cy="${point.y.toFixed(2)}" r="${isSelected ? '3.2' : '2.1'}"><title>${label}</title></circle>`;
     }).join('');
+    const resolveChapterIdForPhase = (phase: number): string | null => {
+      const chapter = narrativeChapters.find((candidate) => phase >= candidate.startPhase && phase <= candidate.endPhase);
+      return chapter?.id ?? null;
+    };
     const eventsPaneHtml = buildEncyclopediaEventsPaneHtml({
       displayedEvents,
       timelineEvents,
@@ -2277,6 +2285,9 @@ function renderEncyclopedia() {
       hasMoreEvents,
       eventsViewMode: encyclopediaViewState.eventsViewMode,
       starNameLinkData,
+      currentPhase: galaxy.state.phase,
+      resolveChapterIdForPhase,
+      forensicEnabled: ENCYCLOPEDIA_FORENSIC_OVERLAY_ENABLED,
       linkifyEncyclopediaText,
       escapeHtml,
     });
@@ -2340,12 +2351,40 @@ function renderEncyclopedia() {
       selectedChapterEvidenceCountByLineId,
       starNameLinkData,
       relevanceProfile: NARRATIVE_RELEVANCE_PROFILE,
+      currentPhase: galaxy.state.phase,
+      forensicEnabled: ENCYCLOPEDIA_FORENSIC_OVERLAY_ENABLED,
       linkifyEncyclopediaText,
       escapeHtml,
       roleLabel,
       arcLabel,
       resolveStarName: (starId) => galaxy.getStar(starId)?.name || starId,
     });
+    const narrativeDocumentModel = buildEncyclopediaNarrativeDocumentModel({
+      state: galaxy.state,
+      selectedStarId,
+      selectedChapterAnchorStarId: selectedChapter?.anchorStarId ?? null,
+      pinChapterAnchor: encyclopediaViewState.narrativePinAnchor,
+      resolveStarById: (starId) => {
+        const star = galaxy.getStar(starId);
+        return star ? { id: star.id, name: star.name } : null;
+      },
+    });
+    const narrativeDocumentHtml = narrativeDocumentModel
+      ? buildEncyclopediaNarrativeDocumentHtml({
+          starName: narrativeDocumentModel.starName,
+          recentEntries: narrativeDocumentModel.recentEntries,
+          canonicalLines: narrativeDocumentModel.canonicalLines,
+          longLines: narrativeDocumentModel.longLines,
+          starNameLinkData,
+          linkifyEncyclopediaText,
+        })
+      : '<p class="encyclopedia-empty-copy">Select a star or chapter anchor to open document view.</p>';
+    const narrativePaneHtml = selectNarrativePaneHtml({
+      narrativeViewMode: encyclopediaViewState.narrativeViewMode,
+      chapterPaneHtml: selectedChapterSummary,
+      documentPaneHtml: narrativeDocumentHtml,
+    });
+
 
     const filmstripHtml = buildEncyclopediaFilmstripHtml({
       timelineClusters,
@@ -2387,6 +2426,8 @@ function renderEncyclopedia() {
     workspace.innerHTML = buildEncyclopediaWorkspaceShellHtml({
       activeTab: encyclopediaViewState.activeTab,
       eventsViewMode: encyclopediaViewState.eventsViewMode,
+      narrativeViewMode: encyclopediaViewState.narrativeViewMode,
+      narrativePinAnchor: encyclopediaViewState.narrativePinAnchor,
       phaseFilter: encyclopediaViewState.phaseFilter,
       selectedCluster,
       starFilterLabel,
@@ -2394,7 +2435,7 @@ function renderEncyclopedia() {
       filteredEventsCount: filteredEvents.length,
       eventsPaneHtml,
       narrativeRailHtml,
-      selectedChapterSummary,
+      narrativePaneHtml,
       demographicsPaneHtml,
       navigatorHtml,
       filmstripHtml,
@@ -2443,4 +2484,7 @@ function renderEncyclopedia() {
     });
 
 }
-''
+
+
+
+

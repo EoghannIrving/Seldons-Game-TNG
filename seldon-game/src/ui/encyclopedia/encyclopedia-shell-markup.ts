@@ -3,6 +3,7 @@ import type {
   EncyclopediaDisplayMode,
   EncyclopediaEventCategory,
   EncyclopediaEventsViewMode,
+  EncyclopediaNarrativeViewMode,
   SimulationNavigationContext,
 } from './encyclopedia-types';
 
@@ -77,6 +78,8 @@ export function buildEncyclopediaControlPanelHtml(args: {
 export function buildEncyclopediaWorkspaceShellHtml(args: {
   activeTab: EncyclopediaActiveTab;
   eventsViewMode: EncyclopediaEventsViewMode;
+  narrativeViewMode: EncyclopediaNarrativeViewMode;
+  narrativePinAnchor: boolean;
   phaseFilter: number | null;
   selectedCluster: { startPhase: number; endPhase: number } | null;
   starFilterLabel: string;
@@ -84,15 +87,15 @@ export function buildEncyclopediaWorkspaceShellHtml(args: {
   filteredEventsCount: number;
   eventsPaneHtml: string;
   narrativeRailHtml: string;
-  selectedChapterSummary: string;
+  narrativePaneHtml: string;
   demographicsPaneHtml: string;
   navigatorHtml: string;
   filmstripHtml: string;
 }): string {
   const {
-    activeTab, eventsViewMode, phaseFilter, selectedCluster, starFilterLabel,
+    activeTab, eventsViewMode, narrativeViewMode, narrativePinAnchor, phaseFilter, selectedCluster, starFilterLabel,
     displayedEventsCount, filteredEventsCount, eventsPaneHtml, narrativeRailHtml,
-    selectedChapterSummary, demographicsPaneHtml, navigatorHtml, filmstripHtml,
+    narrativePaneHtml, demographicsPaneHtml, navigatorHtml, filmstripHtml,
   } = args;
   return `
       <section class="encyclopedia-workspace-shell">
@@ -115,8 +118,19 @@ export function buildEncyclopediaWorkspaceShellHtml(args: {
             `
             : ''
         }
+        ${
+          activeTab === 'narrative'
+            ? `
+              <div class="encyclopedia-view-toggle">
+                <button id="encyclopediaNarrativeChapterModeBtn" class="encyclopedia-tab-btn ${narrativeViewMode === 'chapter' ? 'active' : ''}" type="button">Chapter Arc</button>
+                <button id="encyclopediaNarrativeDocumentModeBtn" class="encyclopedia-tab-btn ${narrativeViewMode === 'document' ? 'active' : ''}" type="button">Document View</button>
+                <button id="encyclopediaNarrativePinAnchorBtn" class="encyclopedia-tab-btn ${narrativePinAnchor ? 'active' : ''}" type="button">Pin Anchor</button>
+              </div>
+            `
+            : ''
+        }
         <div class="encyclopedia-filter-summary">
-          ${phaseFilter !== null ? `<span>Phase ${phaseFilter}</span>` : ''}
+          ${phaseFilter !== null ? `<span class="encyclopedia-phase-drilldown-badge">Phase Drilldown ${phaseFilter}</span><button id="encyclopediaClearPhaseDrilldownBtn" class="encyclopedia-clear-btn" type="button">Clear Phase Drilldown</button>` : ''}
           ${selectedCluster ? `<span>Era ${selectedCluster.startPhase}-${selectedCluster.endPhase}</span>` : ''}
           ${starFilterLabel ? `<span>${starFilterLabel}</span>` : ''}
           <span>${displayedEventsCount} of ${filteredEventsCount} events</span>
@@ -130,7 +144,7 @@ export function buildEncyclopediaWorkspaceShellHtml(args: {
                   <div class="encyclopedia-narrative-layout encyclopedia-workspace-content">
                     ${narrativeRailHtml}
                     <div class="encyclopedia-content encyclopedia-narrative-content">
-                      ${selectedChapterSummary}
+                      ${narrativePaneHtml}
                     </div>
                   </div>
                 `

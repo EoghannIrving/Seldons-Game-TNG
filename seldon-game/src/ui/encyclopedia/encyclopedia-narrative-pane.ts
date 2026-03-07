@@ -1,4 +1,5 @@
 import type { NarrativeArcType, NarrativeSupportDisplayItem, NarrativeSupportRole } from '../../core/narrative-support';
+import { buildForensicEvidenceBlockHtml } from './encyclopedia-forensics';
 
 export interface EncyclopediaNarrativeChapterListItem {
   id: string;
@@ -56,6 +57,8 @@ export function buildEncyclopediaNarrativeChapterSummaryHtml(args: {
   selectedChapterEvidenceCountByLineId: Map<string, number>;
   starNameLinkData: Array<{ id: string; name: string }>;
   relevanceProfile: string;
+  currentPhase: number;
+  forensicEnabled: boolean;
   linkifyEncyclopediaText: (text: string, starNames: Array<{ id: string; name: string }>) => string;
   escapeHtml: (input: string) => string;
   roleLabel: (role: NarrativeSupportRole) => string;
@@ -64,7 +67,7 @@ export function buildEncyclopediaNarrativeChapterSummaryHtml(args: {
 }): string {
   const {
     selectedChapter, selectedChapterSupportEvents, selectedChapterEvidenceCountByLineId, starNameLinkData,
-    relevanceProfile, linkifyEncyclopediaText, escapeHtml, roleLabel, arcLabel, resolveStarName,
+    relevanceProfile, currentPhase, forensicEnabled, linkifyEncyclopediaText, escapeHtml, roleLabel, arcLabel, resolveStarName,
   } = args;
 
   if (!selectedChapter) {
@@ -73,8 +76,30 @@ export function buildEncyclopediaNarrativeChapterSummaryHtml(args: {
 
   const selectedChapterSummaryLinesHtml = selectedChapter.summaryLines.map((line) => {
     const evidenceCount = selectedChapterEvidenceCountByLineId.get(line.id) ?? 0;
+    const forensicHtml = forensicEnabled
+      ? buildForensicEvidenceBlockHtml({
+          phase: line.phase,
+          currentPhase,
+          typeSeed: `chapter-${line.role}`,
+          textSeed: line.text,
+          evidenceLines: [
+            `Evidence: chapter line mapped to ${evidenceCount} support records`,
+            `Citation: chapter synthesis for phases ${selectedChapter.startPhase}-${selectedChapter.endPhase}`,
+          ],
+          pivots: [
+            { label: 'Open Phase', dataAttrs: { 'link-phase': line.phase } },
+            { label: 'All Phase Events', dataAttrs: { 'show-phase-events': line.phase } },
+            { label: 'Focus Chapter', dataAttrs: { 'narrative-chapter-id': selectedChapter.id } },
+          ],
+          escapeHtml,
+        })
+      : '';
+
     return `
-            <p><strong>${roleLabel(line.role)} (Phase ${line.phase})</strong>: ${linkifyEncyclopediaText(line.text, starNameLinkData)} <span class="color-dim">[Evidence: ${evidenceCount}]</span></p>
+            <div class="encyclopedia-narrative-line">
+              <p><strong>${roleLabel(line.role)} (Phase ${line.phase})</strong>: ${linkifyEncyclopediaText(line.text, starNameLinkData)} <span class="color-dim">[Evidence: ${evidenceCount}]</span></p>
+              ${forensicHtml}
+            </div>
           `;
   }).join('');
 
@@ -108,7 +133,27 @@ export function buildEncyclopediaNarrativeChapterSummaryHtml(args: {
                       const rationaleSuffix = support.rationale.length > 0
                         ? ` <span class="color-dim">(${escapeHtml(support.rationale.join(' | '))})</span>`
                         : '';
-                      return `<p><strong>Phase ${support.phase}:</strong> ${rolePrefix}${linkifyEncyclopediaText(supportText, starNameLinkData)}${rationaleSuffix}</p>`;
+                      const supportType = support.event?.type ?? support.childEvents?.[0]?.type ?? support.kind;
+                      const supportForensicHtml = forensicEnabled
+                        ? buildForensicEvidenceBlockHtml({
+                            phase: support.phase,
+                            currentPhase,
+                            typeSeed: supportType,
+                            textSeed: support.description,
+                            evidenceLines: [
+                              `Evidence: selected ${support.kind} with ${support.eventCount} linked event(s)`,
+                              `Citation: support ranking rationale for chapter ${selectedChapter.id}`,
+                            ],
+                            pivots: [
+                              { label: 'Open Phase', dataAttrs: { 'link-phase': support.phase } },
+                              { label: 'All Phase Events', dataAttrs: { 'show-phase-events': support.phase } },
+                              { label: 'Focus Chapter', dataAttrs: { 'narrative-chapter-id': selectedChapter.id } },
+                              ...(supportType ? [{ label: 'Filter Similar', dataAttrs: { 'related-type': supportType } }] : []),
+                            ],
+                            escapeHtml,
+                          })
+                        : '';
+                      return `<div class="encyclopedia-narrative-support-item"><p><strong>Phase ${support.phase}:</strong> ${rolePrefix}${linkifyEncyclopediaText(supportText, starNameLinkData)}${rationaleSuffix}</p>${supportForensicHtml}</div>`;
                     }).join('')
                   : '<p class="encyclopedia-empty-copy">No supporting events available.</p>'
               }
@@ -117,3 +162,73 @@ export function buildEncyclopediaNarrativeChapterSummaryHtml(args: {
         </article>
       `;
 }
+
+export interface EncyclopediaNarrativeDocumentRecentEntry {
+  phase: number;
+  phaseEnd?: number;
+  lines: string[];
+}
+
+export interface EncyclopediaNarrativeDocumentLongLine {
+  phase: number;
+  phaseEnd?: number;
+  text: string;
+}
+
+export function buildEncyclopediaNarrativeDocumentHtml(args: {
+  starName: string;
+  recentEntries: EncyclopediaNarrativeDocumentRecentEntry[];
+  canonicalLines: string[];
+  longLines: EncyclopediaNarrativeDocumentLongLine[];
+  starNameLinkData: Array<{ id: string; name: string }>;
+  linkifyEncyclopediaText: (text: string, starNames: Array<{ id: string; name: string }>) => string;
+}): string {
+  const { starName, recentEntries, canonicalLines, longLines, starNameLinkData, linkifyEncyclopediaText } = args;
+
+  const recentHtml = recentEntries.length > 0
+    ? recentEntries.map((entry) => {
+        const label = entry.phaseEnd !== undefined && entry.phaseEnd !== entry.phase
+          ? `Phases ${entry.phaseEnd}-${entry.phase}`
+          : `Phase ${entry.phase}`;
+        const linesHtml = entry.lines.length > 0
+          ? entry.lines.map((line) => `<p>${linkifyEncyclopediaText(line, starNameLinkData)}</p>`).join('')
+          : '<p class="encyclopedia-empty-copy">No recent chronicle lines generated.</p>';
+        return `<article class="encyclopedia-narrative-doc-block"><h4>${label}</h4>${linesHtml}</article>`;
+      }).join('')
+    : '<p class="encyclopedia-empty-copy">No recent chronicle entries available.</p>';
+
+  const canonicalHtml = canonicalLines.length > 0
+    ? canonicalLines.map((line) => `<p>${linkifyEncyclopediaText(line, starNameLinkData)}</p>`).join('')
+    : '<p class="encyclopedia-empty-copy">No canonical report lines available.</p>';
+
+  const longHtml = longLines.length > 0
+    ? longLines.map((line) => {
+        const label = line.phaseEnd !== undefined && line.phaseEnd !== line.phase
+          ? `Phases ${line.phaseEnd}-${line.phase}`
+          : `Phase ${line.phase}`;
+        return `<article class="encyclopedia-narrative-doc-block"><h4>${label}</h4><p>${linkifyEncyclopediaText(line.text, starNameLinkData)}</p></article>`;
+      }).join('')
+    : '<p class="encyclopedia-empty-copy">No long archive lines available.</p>';
+
+  return `
+      <section class="encyclopedia-narrative-document">
+        <div class="encyclopedia-filter-summary">
+          <span>Document View</span>
+          <span>${starName}</span>
+        </div>
+        <div class="encyclopedia-narrative-doc-section">
+          <h3>Recent Chronicle</h3>
+          ${recentHtml}
+        </div>
+        <div class="encyclopedia-narrative-doc-section">
+          <h3>Canonical Report</h3>
+          <article class="encyclopedia-narrative-doc-block">${canonicalHtml}</article>
+        </div>
+        <div class="encyclopedia-narrative-doc-section">
+          <h3>Long Archive</h3>
+          ${longHtml}
+        </div>
+      </section>
+    `;
+}
+

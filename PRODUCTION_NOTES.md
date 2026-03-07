@@ -13,6 +13,18 @@ This document tracks the technical evolution, design decisions, and implementati
 **Status:** Not Started
 
 ### Hotfixes (2026-02-18)
+Update (2026-03-07):
+- Encyclopedia narrative/events enhancement pass (seldon-game/src/main.ts, seldon-game/src/ui/encyclopedia/encyclopedia-events-pane.ts, seldon-game/src/ui/encyclopedia/encyclopedia-narrative-pane.ts, seldon-game/src/ui/encyclopedia/encyclopedia-core-interactions.ts, seldon-game/src/ui/encyclopedia/encyclopedia-forensics.ts, seldon-game/src/styles/components/panel.css):
+  - Added a shared deterministic forensic-confidence helper and reusable evidence-block renderer for Encyclopedia UI surfaces.
+  - Added forensic evidence drawers + pivot actions (Filter Similar, Open Phase, Open Chapter) to both Events and Narrative panes.
+  - Wired previously unhandled data-related-* Encyclopedia actions so Similar Events and Star Detail controls now update filters/navigation as intended.
+  - Added Encyclopedia Narrative Chapter Arc vs Document View mode toggle with Document View sections for Recent Chronicle, Canonical Report, and Long Archive, sourced from deterministic NarrativeGenerator outputs for the selected narrative anchor star.
+  - Refactored Encyclopedia narrative document assembly into a dedicated data module (`seldon-game/src/ui/encyclopedia/encyclopedia-narrative-document-data.ts`) and added anchor-pin synchronization controls + regression smoke coverage (`seldon-game/tests/encyclopedia-narrative-mode-smoke.ts`).
+  - Added Option 3 drilldowns/cross-navigation in Encyclopedia: `All This Phase` event drilldowns, timeline/event-card `Narrative Arc` routing, and timeline phase-to-chapter synchronization in interaction handlers.
+  - Added phase-drilldown UX clarity controls in Encyclopedia shell: explicit Phase Drilldown badge styling and a one-click Clear Phase Drilldown action in the active filters strip.
+  - Extracted Encyclopedia view-state interaction reducers into seldon-game/src/ui/encyclopedia/encyclopedia-view-state-actions.ts and wired core handlers to use shared pure actions (	imeline event select, show phase events, open narrative chapter, clear phase drilldown) for DRY state transitions.
+  - Added interaction-level reducer smoke coverage in seldon-game/tests/encyclopedia-interactions-smoke.ts for deterministic timeline/chapter/phase drilldown state behavior.
+
 Update (2026-02-22):
 - Lineage history retention hotfix (`seldon-game/src/core/galaxy.ts`, `seldon-game/src/core/encyclopedia-entry.ts`, `seldon-game/src/utils/storage.ts`, `seldon-game/src/core/types.ts`):
   - Added per-star archival succession history (`dynastySuccessionArchiveByStar`) as a long-lived lineage source instead of relying only on the trimmed global `dynastySuccessionRecords` buffer.
@@ -929,4 +941,5 @@ Update (2026-02-21):
 
 **Document Maintained By:** Development Team
 **Last Review:** 2026-02-21
+
 

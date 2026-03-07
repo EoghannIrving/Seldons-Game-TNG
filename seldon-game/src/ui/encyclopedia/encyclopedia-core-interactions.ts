@@ -7,6 +7,13 @@ import type {
   JumpToSimulationOptions,
   SimulationNavigationContext,
 } from './encyclopedia-types';
+import { mapEventTypeToEncyclopediaCategory } from './encyclopedia-event-categories';
+import {
+  applyClearPhaseDrilldown,
+  applyOpenNarrativeChapter,
+  applyShowPhaseEvents,
+  applyTimelineEventSelection,
+} from './encyclopedia-view-state-actions';
 
 type EncyclopediaViewStateLike = Pick<
   EncyclopediaViewState,
@@ -15,6 +22,8 @@ type EncyclopediaViewStateLike = Pick<
   | 'displayMode'
   | 'activeTab'
   | 'eventsViewMode'
+  | 'narrativeViewMode'
+  | 'narrativePinAnchor'
   | 'searchText'
   | 'timelineClusterId'
   | 'selectedChapterId'
@@ -28,6 +37,8 @@ type EncyclopediaViewStateLike = Pick<
 
 interface NarrativeChapterLike {
   id: string;
+  startPhase: number;
+  endPhase: number;
   anchorPhase: number;
   anchorStarId: string | null;
 }
@@ -100,9 +111,13 @@ export function bindEncyclopediaCoreInteractions(args: {
   const navigatorTabBtn = workspace.querySelector('#encyclopediaNavigatorTabBtn') as HTMLButtonElement | null;
   const eventsListModeBtn = workspace.querySelector('#encyclopediaEventsListModeBtn') as HTMLButtonElement | null;
   const eventsTimelineModeBtn = workspace.querySelector('#encyclopediaEventsTimelineModeBtn') as HTMLButtonElement | null;
+  const narrativeChapterModeBtn = workspace.querySelector('#encyclopediaNarrativeChapterModeBtn') as HTMLButtonElement | null;
+  const narrativeDocumentModeBtn = workspace.querySelector('#encyclopediaNarrativeDocumentModeBtn') as HTMLButtonElement | null;
+  const narrativePinAnchorBtn = workspace.querySelector('#encyclopediaNarrativePinAnchorBtn') as HTMLButtonElement | null;
   const demographicMetricSelect = workspace.querySelector('#encyclopediaDemographicMetric') as HTMLSelectElement | null;
   const demographicsCanvas = workspace.querySelector('#encyclopediaDemographicsCanvas') as HTMLCanvasElement | null;
   const clearFilmstripBtn = workspace.querySelector('#encyclopediaClearFilmstripBtn') as HTMLButtonElement | null;
+  const clearPhaseDrilldownBtn = workspace.querySelector('#encyclopediaClearPhaseDrilldownBtn') as HTMLButtonElement | null;
 
   backBtn?.addEventListener('click', () => {
     returnToSimulationFromEncyclopedia();
@@ -113,12 +128,28 @@ export function bindEncyclopediaCoreInteractions(args: {
     renderEncyclopedia();
   });
 
+  const getChapterById = (chapterId: string | null): NarrativeChapterLike | null => {
+    if (!chapterId) return null;
+    return narrativeChapters.find((candidate) => candidate.id === chapterId) ?? null;
+  };
+
+  const getResolvedNarrativeChapter = (viewState: EncyclopediaViewStateLike): NarrativeChapterLike | null => {
+    const chapterId = viewState.selectedChapterId ?? selectedChapter?.id ?? narrativeChapters[0]?.id ?? null;
+    return getChapterById(chapterId);
+  };
+
   narrativeTabBtn?.addEventListener('click', () => {
-    setViewState((prev) => ({
-      ...prev,
-      activeTab: 'narrative',
-      selectedChapterId: selectedChapter?.id ?? narrativeChapters[0]?.id ?? null,
-    }));
+    setViewState((prev) => {
+      const chapter = getResolvedNarrativeChapter(prev);
+      const chapterId = chapter?.id ?? prev.selectedChapterId;
+      const resolvedStarId = prev.selectedStarId ?? chapter?.anchorStarId ?? prev.selectedStarId;
+      return {
+        ...prev,
+        activeTab: 'narrative',
+        selectedChapterId: chapterId,
+        selectedStarId: resolvedStarId,
+      };
+    });
     renderEncyclopedia();
   });
 
@@ -142,6 +173,46 @@ export function bindEncyclopediaCoreInteractions(args: {
     renderEncyclopedia();
   });
 
+  narrativeChapterModeBtn?.addEventListener('click', () => {
+    setViewState((prev) => {
+      const chapter = getResolvedNarrativeChapter(prev);
+      return {
+        ...prev,
+        narrativeViewMode: 'chapter',
+        selectedChapterId: chapter?.id ?? prev.selectedChapterId,
+        selectedStarId: prev.selectedStarId ?? chapter?.anchorStarId ?? prev.selectedStarId,
+      };
+    });
+    renderEncyclopedia();
+  });
+
+  narrativeDocumentModeBtn?.addEventListener('click', () => {
+    setViewState((prev) => {
+      const chapter = getResolvedNarrativeChapter(prev);
+      const anchoredStarId = chapter?.anchorStarId ?? prev.selectedStarId;
+      return {
+        ...prev,
+        narrativeViewMode: 'document',
+        selectedChapterId: chapter?.id ?? prev.selectedChapterId,
+        selectedStarId: prev.narrativePinAnchor ? anchoredStarId : (prev.selectedStarId ?? anchoredStarId),
+      };
+    });
+    renderEncyclopedia();
+  });
+
+  narrativePinAnchorBtn?.addEventListener('click', () => {
+    setViewState((prev) => {
+      const chapter = getResolvedNarrativeChapter(prev);
+      const nextPinState = !prev.narrativePinAnchor;
+      return {
+        ...prev,
+        narrativePinAnchor: nextPinState,
+        selectedChapterId: chapter?.id ?? prev.selectedChapterId,
+        selectedStarId: nextPinState ? (chapter?.anchorStarId ?? prev.selectedStarId) : prev.selectedStarId,
+      };
+    });
+    renderEncyclopedia();
+  });
   jumpToMapBtn?.addEventListener('click', () => {
     const viewState = getViewState();
     const fallbackEvent = filteredEvents[0] ?? null;
@@ -191,13 +262,10 @@ export function bindEncyclopediaCoreInteractions(args: {
     chapterBtn.addEventListener('click', () => {
       const chapterId = chapterBtn.dataset.chapterId;
       if (!chapterId) return;
-      const chapter = narrativeChapters.find((candidate) => candidate.id === chapterId);
-      setViewState((prev) => ({
-        ...prev,
-        activeTab: 'narrative',
-        selectedChapterId: chapterId,
-        selectedPhase: chapter?.anchorPhase ?? prev.selectedPhase,
-        selectedStarId: chapter?.anchorStarId ?? prev.selectedStarId,
+      setViewState((prev) => applyOpenNarrativeChapter({
+        prev,
+        chapterId,
+        chapters: narrativeChapters,
       }));
       renderEncyclopedia();
     });
@@ -290,6 +358,13 @@ export function bindEncyclopediaCoreInteractions(args: {
       activeTab: viewState.activeTab,
     });
   });
+  clearPhaseDrilldownBtn?.addEventListener('click', () => {
+    setViewState((prev) => applyClearPhaseDrilldown({
+      prev,
+      defaultVisibleCount,
+    }));
+    renderEncyclopedia();
+  });
 
   loadMoreBtn?.addEventListener('click', () => {
     setViewState((prev) => ({
@@ -332,10 +407,10 @@ export function bindEncyclopediaCoreInteractions(args: {
       if (Number.isNaN(idx)) return;
       const event = timelineEvents[idx];
       if (!event) return;
-      setViewState((prev) => ({
-        ...prev,
-        selectedPhase: event.phase,
-        selectedStarId: event.starId,
+      setViewState((prev) => applyTimelineEventSelection({
+        prev,
+        event,
+        chapters: narrativeChapters,
       }));
       renderEncyclopedia();
     });
@@ -414,5 +489,93 @@ export function bindEncyclopediaCoreInteractions(args: {
     });
   });
 
+
+  workspace.querySelectorAll<HTMLButtonElement>('[data-show-phase-events]').forEach((phaseBtn) => {
+    phaseBtn.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const phaseRaw = phaseBtn.dataset.showPhaseEvents;
+      const phase = phaseRaw ? Number.parseInt(phaseRaw, 10) : Number.NaN;
+      if (Number.isNaN(phase)) return;
+      setViewState((prev) => applyShowPhaseEvents({
+        prev,
+        phase,
+        chapters: narrativeChapters,
+        defaultVisibleCount,
+      }));
+      renderEncyclopedia();
+    });
+  });
+  workspace.querySelectorAll<HTMLButtonElement>('[data-narrative-chapter-id]').forEach((chapterBtn) => {
+    chapterBtn.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const chapterId = chapterBtn.dataset.narrativeChapterId;
+      if (!chapterId) return;
+      setViewState((prev) => applyOpenNarrativeChapter({
+        prev,
+        chapterId,
+        chapters: narrativeChapters,
+      }));
+      renderEncyclopedia();
+    });
+  });
+
+  workspace.querySelectorAll<HTMLButtonElement>('[data-related-star-id]').forEach((relatedBtn) => {
+    relatedBtn.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const relatedStarId = relatedBtn.dataset.relatedStarId;
+      if (!relatedStarId) return;
+      const relatedPhaseRaw = relatedBtn.dataset.relatedPhase;
+      const relatedPhase = relatedPhaseRaw ? Number.parseInt(relatedPhaseRaw, 10) : Number.NaN;
+      setViewState((prev) => ({
+        ...prev,
+        activeTab: 'events',
+        selectedStarId: relatedStarId,
+        starFilters: [relatedStarId],
+        selectedPhase: Number.isNaN(relatedPhase) ? prev.selectedPhase : relatedPhase,
+        phaseFilter: null,
+        timelineClusterId: null,
+        visibleCount: defaultVisibleCount,
+      }));
+      renderEncyclopedia();
+    });
+  });
+
+  workspace.querySelectorAll<HTMLButtonElement>('[data-related-type]').forEach((relatedBtn) => {
+    relatedBtn.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const relatedType = relatedBtn.dataset.relatedType;
+      if (!relatedType) return;
+      const category = mapEventTypeToEncyclopediaCategory(relatedType);
+      setViewState((prev) => ({
+        ...prev,
+        activeTab: 'events',
+        eventCategory: category,
+        searchText: '',
+        timelineClusterId: null,
+        phaseFilter: null,
+        selectedChapterId: null,
+        visibleCount: defaultVisibleCount,
+      }));
+      renderEncyclopedia();
+    });
+  });
   return { demographicsCanvas };
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+

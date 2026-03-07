@@ -18,6 +18,7 @@ export type DemographicMetricKey =
 export type EncyclopediaDisplayMode = 'atlas' | 'split';
 export type EncyclopediaActiveTab = 'events' | 'narrative' | 'demographics' | 'navigator';
 export type EncyclopediaEventsViewMode = 'list' | 'timeline';
+export type EncyclopediaNarrativeViewMode = 'chapter' | 'document';
 
 export interface EncyclopediaViewState {
   searchText: string;
@@ -29,6 +30,7 @@ export interface EncyclopediaViewState {
   displayMode: EncyclopediaDisplayMode;
   activeTab: EncyclopediaActiveTab;
   eventsViewMode: EncyclopediaEventsViewMode;
+  narrativeViewMode: EncyclopediaNarrativeViewMode;
   demographicsMetric: DemographicMetricKey;
   navigatorExpandedGroupIds: string[];
   selectedStarId: string | null;
@@ -47,3 +49,5 @@ export interface JumpToSimulationOptions {
   starId?: string | null;
   detailTab?: 'events' | 'demographics' | 'lineage' | 'narrative' | 'relations' | 'abstract' | 'entry';
 }
+
+

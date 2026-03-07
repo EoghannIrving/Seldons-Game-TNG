@@ -9,6 +9,8 @@
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
     "test:encyclopedia-entry": "tsx tests/encyclopedia-entry-smoke.ts",
+    "test:encyclopedia-narrative-mode": "tsx tests/encyclopedia-narrative-mode-smoke.ts",
+    "test:encyclopedia-interactions": "tsx tests/encyclopedia-interactions-smoke.ts",
     "test:detail-view-regression": "tsx tests/detail-view-regression-smoke.ts",
     "test:detail-view-phase0-baseline": "tsx tests/detail-view-phase0-baseline-smoke.ts",
     "test:detail-view-render-baseline": "tsx tests/detail-view-render-baseline-smoke.ts",
@@ -45,3 +47,7 @@
     "zustand": "^5.0.11"
   }
 }
+
+
+
+

@@ -767,6 +767,62 @@ body.encyclopedia-focus-mode .encyclopedia-content {
   color: #ffffff;
 }
 
+.encyclopedia-forensic-block {
+  margin-top: 6px;
+  border: 1px solid #2b4a62;
+  background: rgba(11, 24, 40, 0.8);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.encyclopedia-forensic-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.encyclopedia-forensic-confidence {
+  color: #b2daff;
+  font-size: 11px;
+  font-weight: bold;
+}
+
+.encyclopedia-forensic-evidence {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.encyclopedia-forensic-evidence p {
+  margin: 0;
+  font-size: 11px;
+  color: #9cbad1;
+  line-height: 1.4;
+}
+
+.encyclopedia-forensic-pivots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.encyclopedia-forensic-pivot-btn {
+  background: transparent;
+  border: 1px solid #345774;
+  color: #90bddf;
+  font-size: 11px;
+  padding: 2px 6px;
+  cursor: pointer;
+}
+
+.encyclopedia-forensic-pivot-btn:hover {
+  border-color: #66a3c8;
+  color: #ffffff;
+  background: rgba(20, 40, 60, 0.75);
+}
+
 .encyclopedia-focus-header {
   display: flex;
   flex-direction: column;
@@ -973,3 +1029,53 @@ body.encyclopedia-focus-mode .encyclopedia-content {
     flex-direction: column;
   }
 }
+
+
+
+.encyclopedia-narrative-document {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.encyclopedia-narrative-doc-section {
+  border: 1px solid #223344;
+  background: rgba(9, 20, 34, 0.76);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.encyclopedia-narrative-doc-section h3 {
+  margin: 0;
+  color: #b9dffd;
+  font-size: 12px;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+
+.encyclopedia-narrative-doc-block {
+  border: 1px solid #2a455b;
+  background: rgba(6, 14, 24, 0.72);
+  padding: 7px;
+}
+
+.encyclopedia-narrative-doc-block h4 {
+  margin: 0 0 6px 0;
+  color: #8fc0e0;
+  font-size: 11px;
+}
+
+.encyclopedia-narrative-doc-block p {
+  margin: 0 0 6px 0;
+  color: #d8e8f5;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.encyclopedia-narrative-doc-block p:last-child {
+  margin-bottom: 0;
+}
+
+
