@@ -117,6 +117,138 @@
   color: #ffffff;
 }
 
+.encyclopedia-investigations {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+
+.encyclopedia-investigation-summary {
+  border-bottom: 1px solid #23384d;
+  padding-bottom: 8px;
+}
+
+.encyclopedia-investigation-summary h3 {
+  margin: 0 0 4px;
+  color: #d8efff;
+  font-size: 15px;
+}
+
+.encyclopedia-investigation-summary p {
+  margin: 0;
+  color: #9ec3dd;
+  font-size: 12px;
+}
+
+.encyclopedia-investigation-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 10px;
+}
+
+.investigation-case {
+  border: 1px solid #2d455e;
+  border-radius: 6px;
+  background: rgba(10, 25, 41, 0.78);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.investigation-case header {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.investigation-case h4 {
+  margin: 0;
+  color: #e4f5ff;
+  font-size: 14px;
+}
+
+.investigation-case header span,
+.investigation-case p,
+.investigation-score small {
+  color: #9eb9ca;
+  font-size: 12px;
+}
+
+.investigation-case p {
+  margin: 0;
+  line-height: 1.4;
+}
+
+.investigation-tags,
+.investigation-stakes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.investigation-tags span,
+.investigation-stakes span {
+  border: 1px solid #31516d;
+  color: #b8ddf5;
+  background: #0c2134;
+  padding: 3px 6px;
+  font-size: 11px;
+}
+
+.investigation-stakes span {
+  color: #c8d4a4;
+  border-color: #4a5535;
+  background: #1b2418;
+}
+
+.investigation-evidence {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.investigation-evidence button {
+  border: 1px solid #294158;
+  background: #081827;
+  color: #9fd2ef;
+  text-align: left;
+  padding: 5px 7px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.investigation-evidence button:hover {
+  border-color: #5f98bf;
+  color: #ffffff;
+}
+
+.investigation-score-btn {
+  align-self: flex-start;
+}
+
+.investigation-score {
+  border-left: 3px solid #7ea0bc;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.investigation-score.strong {
+  border-left-color: #7ec98a;
+}
+
+.investigation-score.plausible {
+  border-left-color: #d0b462;
+}
+
+.investigation-score.weak {
+  border-left-color: #c97575;
+}
+
 @keyframes searchPanelPulse {
   0%,
   100% {

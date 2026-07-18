@@ -278,6 +278,90 @@ export interface ConquestRecord {
   mechanism: ConquestMechanism;
 }
 
+export type InvestigationCause =
+  | 'frontier_overstretch'
+  | 'conquest_legitimacy'
+  | 'succession_instability'
+  | 'crisis_aftermath'
+  | 'imperial_decay';
+
+export type InvestigationOutcome =
+  | 'successor_fragmentation'
+  | 'dark_age_shortened'
+  | 'knowledge_preserved'
+  | 'lock_in_risk';
+
+export interface EvidencePin {
+  id: string;
+  kind: 'event' | 'star' | 'phase' | 'metric';
+  label: string;
+  starId?: string;
+  phase?: number;
+  eventType?: EventType | string;
+  weight: number;
+}
+
+export interface CaseFile {
+  id: string;
+  title: string;
+  focusStarId: string;
+  focusStarName: string;
+  startPhase: number;
+  endPhase: number;
+  prompt: string;
+  recommendedCause: InvestigationCause;
+  recommendedOutcome: InvestigationOutcome;
+  evidencePins: EvidencePin[];
+  preservationStakes: string[];
+}
+
+export interface PlayerHypothesis {
+  caseId: string;
+  primaryCause: InvestigationCause;
+  expectedOutcome: InvestigationOutcome;
+  selectedEvidencePinIds: string[];
+}
+
+export interface HypothesisScore {
+  caseId: string;
+  total: number;
+  causeScore: number;
+  outcomeScore: number;
+  evidenceScore: number;
+  preservationScore: number;
+  verdict: 'weak' | 'plausible' | 'strong';
+  rationale: string[];
+}
+
+export interface SuccessorStateRecord {
+  rulerId: string;
+  rulerName: string;
+  phase: number;
+  recentBreakaways: number;
+  frontierBreakaways: number;
+}
+
+export interface EmpireLifecycleMetrics {
+  phase: number;
+  totalNonMinorStars: number;
+  leadingEmpireId: string | null;
+  leadingEmpireName: string | null;
+  leadingEmpireShare: number;
+  majorPolityCount: number;
+  polityTurnoverEvents: number;
+  borderFreezeScore: number;
+  currentDarkAgeRulers: number;
+  successorStates: SuccessorStateRecord[];
+}
+
+export interface CivilizationPreservationScore {
+  knowledgeContinuity: number;
+  darkAgeRecovery: number;
+  antiLockIn: number;
+  successorViability: number;
+  total: number;
+}
+
 // Core Star interface
 export interface Star {
   // Identity
@@ -384,6 +468,10 @@ export interface Star {
   empireHealth?: number;
   declineStress?: number;
   empireCohesion?: number; // Slow-moving imperial cohesion stock (0.0-1.0)
+  frontierLoyaltyDebt?: number;
+  conquestLegitimacyDebt?: number;
+  successionInstability?: number;
+  crisisAftermathStress?: number;
 }
 
 // Phase 5.5: Seldon Crises

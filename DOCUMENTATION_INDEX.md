@@ -1,19 +1,19 @@
 # Documentation Index - Seldon's Game TNG
 
-**Last Updated:** 2026-02-21
+**Last Updated:** 2026-07-18
 
-This index helps you navigate the documentation for Seldon's Game TNG. All documents are organized by purpose and current relevance.
+This index helps you navigate the documentation for Seldon's Game TNG. It is navigation only; active planning lives in `ROADMAP.md`, and implemented behavior lives in `PRODUCTION_NOTES.md`.
 
 ---
 
 ## 📋 Quick Start
 
 **New to the project?** Read these in order:
-1. `PRODUCTION_NOTES.md` - What's built and working now
-2. `ROADMAP.md` - What's planned for the future
-3. `Design Documents Archive/ARCHIVE_SCALABILITY_ASSESSMENT.md` - Archive scaling and lossless data strategy
-4. `Implementation History/PHASE_9B_COMPLETE.md` - Latest major feature details
-5. `DEMOGRAPHICS_RETENTION_IMPLEMENTATION_CHECKLIST.md` - Demographics retention implementation and validation plan
+1. `PRODUCTION_NOTES.md` - what is built and working now
+2. `ROADMAP.md` - canonical active plan and future direction
+3. `seldon-game/README.md` - application entrypoint and run context
+4. `seldon-game/DEPLOYMENT.md` - build and deployment notes
+5. `Implementation History/README.md` - historical phase notes
 
 ---
 
@@ -24,6 +24,7 @@ This index helps you navigate the documentation for Seldon's Game TNG. All docum
 **Audience:** Developers, users, stakeholders
 **Contents:**
 - All completed phases (0, 1, 2, 3, 5, 6, 7, 8, 9A, 9B) plus Population-Tech-Power tuning patch (2026-02-18)
+- Hybrid game-layer first slice: Encyclopedia `Investigations` tab, deterministic case files/scoring, lifecycle metrics, and structural rise-fall pressure stocks (2026-07-18)
 - Simulation overlay update: `Expansion Footprint` layer (stellar-tinted empire spread cloud) added to `VIEW OPTIONS` and renderer pass (2026-02-19)
 - WebUI Review delivery log through Phase G (navigator sitemap, progressive narrative disclosure, internal encyclopedia links, rotating factoids, relationship hover previews)
 - Narrative relevance Phase A/B/C/D/E delivery (deterministic support ranking, cluster rollups, role-aligned summary evidence mapping, chapter arc typing, and core extraction/memoization hardening)
@@ -42,11 +43,12 @@ This index helps you navigate the documentation for Seldon's Game TNG. All docum
 ---
 
 ### ROADMAP.md
-**Purpose:** Future development plans
+**Purpose:** Canonical active planning document
 **Audience:** Developers, contributors
 **Contents:**
-- Recently completed summary (Population-Tech-Power tuning, WebUI Review, Narrative Relevance)
-- Immediate priority: Phase 10 Government & Succession System
+- Planning source-of-truth rules
+- Current strategic direction: archivist/psychohistorian game loop
+- Active priorities: Investigation Gameplay v2, rise-fall balance harness, dynasty coherence
 - Planned: Phase 11 Advanced Relationships
 - Future phases: Audio (12), Visual Polish (13), Multiviewer (14), 3D View (15), Deep Narrative Encyclopedia (16), Content Variety & Naming (17)
 - Experimental concepts (ideation only)
@@ -107,7 +109,7 @@ This index helps you navigate the documentation for Seldon's Game TNG. All docum
 
 ---
 
-### DEMOGRAPHICS_RETENTION_IMPLEMENTATION_CHECKLIST.md
+### PRODUCTION_NOTES.md Demographics Retention Section
 **Purpose:** Execution checklist for long-run demographics retention and memory-safe history handling
 **Status:** Implemented (2026-02-21)
 **Contents:**
@@ -204,8 +206,8 @@ This index helps you navigate the documentation for Seldon's Game TNG. All docum
 
 ---
 
-### seldon-game/SETUP_INSTRUCTIONS.md
-**Purpose:** Detailed setup guide
+### Implementation History/SETUP_INSTRUCTIONS.md
+**Purpose:** Historical setup guide
 **Status:** ✅ Active
 **Contents:**
 - Installation steps

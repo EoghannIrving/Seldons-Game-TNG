@@ -29,7 +29,7 @@ Seldon's Game TNG is a modernized and considerably expanded recreation of Mike S
 ## Development Philosophy
 
 - **Solo Developer:** All code, design, and documentation are by Eoghann Mill Irving.
-- **Vibe-Coded:** I prioritize features and changes that feel right for the project's spirit. The [`ROADMAP.md`](./ROADMAP.md) is a guide, not a rulebook.
+- **Vibe-Coded:** I prioritize features and changes that feel right for the project's spirit. The [`ROADMAP.md`](./ROADMAP.md) is the canonical active plan, but it remains flexible.
 - **Open but Personal:** The code is open source, but this is a personal project. There's no formal contribution process.
 
 ---
@@ -58,10 +58,9 @@ If you want to run the simulation yourself:
 For those interested in the nitty-gritty, I maintain a few core documents:
 
 - [**`AGENTS.md`**](./AGENTS.md): Defines the rules and standards for AI agents working on this codebase.
-- [**`DOCUMENTATION_INDEX.md`**](./DOCUMENTATION_INDEX.md): A guide to all other docs.
+- [**`DOCUMENTATION_INDEX.md`**](./DOCUMENTATION_INDEX.md): Navigation for all active and historical docs.
 - [**`PRODUCTION_NOTES.md`**](./PRODUCTION_NOTES.md): What's currently working in the simulation.
-- [**`ROADMAP.md`**](./ROADMAP.md): A loose collection of future ideas.
-- [**`SECURITY_REVIEW.md`**](./SECURITY_REVIEW.md): A security review of the codebase.
+- [**`ROADMAP.md`**](./ROADMAP.md): Canonical active plan and future direction.
 - [**`seldon-game/README.md`**](./seldon-game/README.md): The README for the game itself.
 - [**`seldon-game/DEPLOYMENT.md`**](./seldon-game/DEPLOYMENT.md): Notes on how to deploy the game.
 - [**`Design Documents Archive/`**](./Design%20Documents%20Archive/): A collection of design documents.

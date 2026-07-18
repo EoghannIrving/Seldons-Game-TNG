@@ -56,8 +56,10 @@ import { bindEncyclopediaCoreInteractions } from './ui/encyclopedia/encyclopedia
 import { computeMiniMapPoints } from './ui/encyclopedia/encyclopedia-mini-map';
 import { buildEncyclopediaNarrativeChapterSummaryHtml, buildEncyclopediaNarrativeDocumentHtml, buildEncyclopediaNarrativeRailHtml } from './ui/encyclopedia/encyclopedia-narrative-pane';
 import { buildEncyclopediaNarrativeDocumentModel, selectNarrativePaneHtml } from './ui/encyclopedia/encyclopedia-narrative-document-data';
+import { buildEncyclopediaInvestigationsPaneHtml } from './ui/encyclopedia/encyclopedia-investigations-pane';
 import { buildEncyclopediaControlPanelHtml, buildEncyclopediaWorkspaceShellHtml } from './ui/encyclopedia/encyclopedia-shell-markup';
 import { getOrCreateEncyclopediaWorkspace, renderEncyclopediaLoadingStateUI } from './ui/encyclopedia/encyclopedia-workspace';
+import { buildDefaultHypothesis, generateCaseFiles, scoreHypothesis } from './core/investigations';
 import {
   hasSeenPulse,
   markPulseSeen,
@@ -230,6 +232,7 @@ const DEFAULT_ENCYCLOPEDIA_VIEW_STATE: EncyclopediaViewState = {
   selectedStarId: null,
   selectedPhase: null,
   selectedChapterId: null,
+  scoredInvestigationCaseIds: [],
 };
 
 let encyclopediaViewState: EncyclopediaViewState = { ...DEFAULT_ENCYCLOPEDIA_VIEW_STATE };
@@ -2401,6 +2404,14 @@ function renderEncyclopedia() {
       escapeHtml,
       resolveStarName: (starId) => galaxy.getStar(starId)?.name ?? starId,
     });
+    const investigationCaseFiles = generateCaseFiles(galaxy.state);
+    const investigationScores = investigationCaseFiles
+      .filter((caseFile) => encyclopediaViewState.scoredInvestigationCaseIds.includes(caseFile.id))
+      .map((caseFile) => scoreHypothesis(caseFile, buildDefaultHypothesis(caseFile)));
+    const investigationsPaneHtml = buildEncyclopediaInvestigationsPaneHtml({
+      caseFiles: investigationCaseFiles,
+      scores: investigationScores,
+    });
 
     const workspace = getEncyclopediaWorkspace();
     if (!workspace) return;
@@ -2437,6 +2448,7 @@ function renderEncyclopedia() {
       narrativeRailHtml,
       narrativePaneHtml,
       demographicsPaneHtml,
+      investigationsPaneHtml,
       navigatorHtml,
       filmstripHtml,
     });

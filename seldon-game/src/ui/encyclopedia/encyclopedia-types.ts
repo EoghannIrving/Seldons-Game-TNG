@@ -16,7 +16,7 @@ export type DemographicMetricKey =
   | 'activeCrises';
 
 export type EncyclopediaDisplayMode = 'atlas' | 'split';
-export type EncyclopediaActiveTab = 'events' | 'narrative' | 'demographics' | 'navigator';
+export type EncyclopediaActiveTab = 'events' | 'narrative' | 'demographics' | 'navigator' | 'investigations';
 export type EncyclopediaEventsViewMode = 'list' | 'timeline';
 export type EncyclopediaNarrativeViewMode = 'chapter' | 'document';
 
@@ -36,6 +36,7 @@ export interface EncyclopediaViewState {
   selectedStarId: string | null;
   selectedPhase: number | null;
   selectedChapterId: string | null;
+  scoredInvestigationCaseIds: string[];
 }
 
 export interface SimulationNavigationContext {

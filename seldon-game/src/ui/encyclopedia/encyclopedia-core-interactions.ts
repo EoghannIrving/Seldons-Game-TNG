@@ -33,6 +33,7 @@ type EncyclopediaViewStateLike = Pick<
   | 'visibleCount'
   | 'starFilters'
   | 'navigatorExpandedGroupIds'
+  | 'scoredInvestigationCaseIds'
 >;
 
 interface NarrativeChapterLike {
@@ -108,6 +109,7 @@ export function bindEncyclopediaCoreInteractions(args: {
   const eventsTabBtn = workspace.querySelector('#encyclopediaEventsTabBtn') as HTMLButtonElement | null;
   const narrativeTabBtn = workspace.querySelector('#encyclopediaNarrativeTabBtn') as HTMLButtonElement | null;
   const demographicsTabBtn = workspace.querySelector('#encyclopediaDemographicsTabBtn') as HTMLButtonElement | null;
+  const investigationsTabBtn = workspace.querySelector('#encyclopediaInvestigationsTabBtn') as HTMLButtonElement | null;
   const navigatorTabBtn = workspace.querySelector('#encyclopediaNavigatorTabBtn') as HTMLButtonElement | null;
   const eventsListModeBtn = workspace.querySelector('#encyclopediaEventsListModeBtn') as HTMLButtonElement | null;
   const eventsTimelineModeBtn = workspace.querySelector('#encyclopediaEventsTimelineModeBtn') as HTMLButtonElement | null;
@@ -155,6 +157,11 @@ export function bindEncyclopediaCoreInteractions(args: {
 
   demographicsTabBtn?.addEventListener('click', () => {
     setViewState((prev) => ({ ...prev, activeTab: 'demographics' }));
+    renderEncyclopedia();
+  });
+
+  investigationsTabBtn?.addEventListener('click', () => {
+    setViewState((prev) => ({ ...prev, activeTab: 'investigations' }));
     renderEncyclopedia();
   });
 
@@ -447,6 +454,22 @@ export function bindEncyclopediaCoreInteractions(args: {
         phaseFilter: null,
         activeTab: 'events',
         visibleCount: defaultVisibleCount,
+      }));
+      renderEncyclopedia();
+    });
+  });
+
+  workspace.querySelectorAll<HTMLButtonElement>('[data-score-case-id]').forEach((scoreBtn) => {
+    scoreBtn.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const caseId = scoreBtn.dataset.scoreCaseId;
+      if (!caseId) return;
+      setViewState((prev) => ({
+        ...prev,
+        scoredInvestigationCaseIds: prev.scoredInvestigationCaseIds.includes(caseId)
+          ? prev.scoredInvestigationCaseIds
+          : [...prev.scoredInvestigationCaseIds, caseId],
       }));
       renderEncyclopedia();
     });

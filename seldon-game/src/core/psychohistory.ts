@@ -1448,6 +1448,13 @@ export function updateAllLoyalty(galaxy: GalaxyState, galaxyInstance: Galaxy): v
   for (const s of galaxy.stars.values()) {
     if (s.tier !== StarTier.Minor) totalNonMinorStars++;
   }
+  for (const ruler of galaxy.stars.values()) {
+    if (ruler.ruler !== ruler.id) continue;
+    ruler.frontierLoyaltyDebt = (ruler.frontierLoyaltyDebt ?? 0) * 0.94;
+    ruler.conquestLegitimacyDebt = (ruler.conquestLegitimacyDebt ?? 0) * 0.96;
+    ruler.successionInstability = (ruler.successionInstability ?? 0) * 0.93;
+    ruler.crisisAftermathStress = (ruler.crisisAftermathStress ?? 0) * 0.97;
+  }
   const romanSignalByRuler = new Map<string, RomanArcSignal>();
 
   const getRomanSignal = (ruler: Star): RomanArcSignal => {
@@ -1558,6 +1565,33 @@ export function updateAllLoyalty(galaxy: GalaxyState, galaxyInstance: Galaxy): v
     //   150ph, norm=0.10: net = +0.008 - 0.060 = -0.052 → revolt from neutral in ~9 phases
     //   → cascade revolts fire meaningfully, empire collapses — but not in a single phase
     const rulershipPhases = (galaxy.phase - (star.rulershipStartPhase ?? galaxy.phase));
+    const claimForRuler = star.historicalClaims?.[ruler.id] ?? 0;
+    const frontierExposureStock = clamp01(
+      (normalizedDist * 0.62) +
+      ((1 - clamp01(claimForRuler / 100)) * 0.24) +
+      ((1 - clamp01(rulershipPhases / 220)) * 0.14)
+    );
+    if (frontierExposureStock > 0.18) {
+      ruler.frontierLoyaltyDebt = clamp01((ruler.frontierLoyaltyDebt ?? 0) + frontierExposureStock * 0.0022);
+    }
+    if (rulershipPhases < 90) {
+      const legitimacyGap = clamp01(1 - claimForRuler / 60);
+      ruler.conquestLegitimacyDebt = clamp01((ruler.conquestLegitimacyDebt ?? 0) + legitimacyGap * 0.0028);
+    }
+    const recentSuccessionCount = (ruler.history || []).filter((event) =>
+      event.phase >= galaxy.phase - 60 &&
+      (event.type === EventType.Succession || event.type === EventType.GovernmentTransition || event.type === EventType.LeaderDeath)
+    ).length;
+    if (recentSuccessionCount > 0) {
+      ruler.successionInstability = clamp01((ruler.successionInstability ?? 0) + Math.min(0.006, recentSuccessionCount * 0.0012));
+    }
+    const recentCrisisCount = (ruler.history || []).filter((event) =>
+      event.phase >= galaxy.phase - 100 &&
+      (event.type === EventType.CrisisStarted || event.type === EventType.CrisisResolved || event.type === EventType.DarkAge)
+    ).length;
+    if (recentCrisisCount > 0) {
+      ruler.crisisAftermathStress = clamp01((ruler.crisisAftermathStress ?? 0) + Math.min(0.005, recentCrisisCount * 0.001));
+    }
     const tenureBonus = rulershipPhases >= 300 ? 0.015   // Fully integrated province — deeply stable
                       : rulershipPhases >= 150 ? 0.008   // Established subject — resists mild crises
                       : rulershipPhases >= 75  ? 0.003   // Settling in — some stability
@@ -1692,11 +1726,17 @@ export function updateAllLoyalty(galaxy: GalaxyState, galaxyInstance: Galaxy): v
       0.0025 + (normalizedDist * 0.0045)
     ) * (0.25 + (0.75 * collapseStage));
     const cohesionLoyaltyBias = (rulerCohesion - 0.5) * (0.016 + (0.010 * Math.max(0, 1 - normalizedDist * 4.5)));
+    const structuralDeclineDrain = (
+      ((ruler.frontierLoyaltyDebt ?? 0) * (0.003 + normalizedDist * 0.010)) +
+      ((ruler.conquestLegitimacyDebt ?? 0) * (rulershipPhases < 120 ? 0.010 : 0.004)) +
+      ((ruler.successionInstability ?? 0) * 0.008) +
+      ((ruler.crisisAftermathStress ?? 0) * 0.007)
+    ) * (0.45 + (0.55 * clamp01((ruler.declineStress ?? 0) + (ruler.decadence ?? 0))));
 
     // Net change
     const loyaltyChange = distanceDecay - (adminStrain + momentumStrain) - cultureFriction + timeBonus
                         + trendModifier - centralizationResentment + affinityBonus + primeCohesionBonus + romanRiseBonus
-                        + cohesionLoyaltyBias - rulerHealthDrain - romanSenescenceDrain;
+                        + cohesionLoyaltyBias - rulerHealthDrain - romanSenescenceDrain - structuralDeclineDrain;
 
     // Apply change with clamping (-1.0 to +1.0)
     star.loyalty = Math.max(-1.0, Math.min(1.0, (star.loyalty || 0) + loyaltyChange));
@@ -2012,6 +2052,15 @@ export function checkRevolutionConditions(galaxy: GalaxyState): void {
         2.35,
         revolutionChanceMultiplier + (cumulativeDeclinePressure * 0.28 * maturity)
       );
+
+      const structuralPressure = clamp01(
+        ((rulerStar.frontierLoyaltyDebt ?? 0) * (0.35 + frontierExposure * 0.45)) +
+        ((rulerStar.conquestLegitimacyDebt ?? 0) * (rulershipPhasesRevolt < st.TENURE_FRESH_CUTOFF ? 0.55 : 0.18)) +
+        ((rulerStar.successionInstability ?? 0) * 0.34) +
+        ((rulerStar.crisisAftermathStress ?? 0) * 0.28)
+      );
+      revolutionThreshold += structuralPressure * 0.075 * maturity;
+      revolutionChanceMultiplier = Math.min(2.5, revolutionChanceMultiplier + structuralPressure * 0.20 * maturity);
     }
 
     // Roman-arc bias (non-guaranteed):

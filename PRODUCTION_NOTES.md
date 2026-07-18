@@ -1,18 +1,29 @@
 # Seldon's Game TNG - Production Notes
 
 **Version:** 0.9.0 (Phase 9 Complete)
-**Date:** 2026-02-18
+**Date:** 2026-07-18
 
 This document tracks the technical evolution, design decisions, and implementation details of the project. It serves as a knowledge base for current and future developers.
 
 ---
 
-## Current Status: Phase 10 (Next)
+## Current Status
 
-**Focus:** Government & Succession System
-**Status:** Not Started
+**Implemented focus:** Hybrid game-layer first slice, Encyclopedia investigations, lifecycle metrics, Phase 10 government/succession through 10F, demographics retention, narrative relevance, and population-tech-power tuning.
 
-### Hotfixes (2026-02-18)
+**Active planning source:** `ROADMAP.md`
+
+**Next work:** Investigation Gameplay v2 and long-run rise-fall balance harness. This document should record those only after implementation.
+
+### Updates
+Update (2026-07-18):
+- Hybrid game-layer first slice:
+  - Added deterministic empire lifecycle metrics (`seldon-game/src/core/empire-lifecycle.ts`) for leading share, polity turnover, border-freeze pressure, dark-age rulers, successor-state records, and preservation scoring.
+  - Added deterministic investigation case generation and scoring (`seldon-game/src/core/investigations.ts`) with `CaseFile`, `EvidencePin`, `PlayerHypothesis`, `HypothesisScore`, `EmpireLifecycleMetrics`, `SuccessorStateRecord`, and `CivilizationPreservationScore` interfaces.
+  - Added an Encyclopedia `Investigations` tab that surfaces preservation cases, evidence pins, and deterministic best-hypothesis scoring without direct empire control.
+  - Added structural-decline stocks in loyalty/revolt mechanics: frontier loyalty debt, conquest legitimacy debt, succession instability, and crisis aftermath stress. These create explainable rise-fall pressure without flat global revolt boosts.
+  - Added smoke coverage via `npm.cmd run test:empire-lifecycle` and `npm.cmd run test:investigations`.
+
 Update (2026-03-07):
 - Encyclopedia narrative/events enhancement pass (seldon-game/src/main.ts, seldon-game/src/ui/encyclopedia/encyclopedia-events-pane.ts, seldon-game/src/ui/encyclopedia/encyclopedia-narrative-pane.ts, seldon-game/src/ui/encyclopedia/encyclopedia-core-interactions.ts, seldon-game/src/ui/encyclopedia/encyclopedia-forensics.ts, seldon-game/src/styles/components/panel.css):
   - Added a shared deterministic forensic-confidence helper and reusable evidence-block renderer for Encyclopedia UI surfaces.
@@ -110,7 +121,7 @@ Update (2026-02-21):
 - Encyclopedia `Demographics` tab now includes ranked Top 10 empire charts for (a) longevity in phases (`dynastyAge`), (b) subject count, and (c) total current empire population (ruler + subjects), with clickable empire links.
 - Added a new Detail View `DEMOGRAPHICS` tab powered by `seldon-game/src/core/detail-demographics.ts`, including per-star trend series (population/tech/strength/subjects), current snapshot + deltas, global standing ranks, and empire-context Top 10 placement using the `>=5 subjects` major-empire threshold.
 - Detail demographics follow-up: `populationHistory` is now recorded per phase in `seldon-game/src/core/galaxy.ts`, and the Detail `DEMOGRAPHICS` tab suppresses the left-column star visual so metrics begin at the top of the column.
-- Demographics retention refactor completed from `DEMOGRAPHICS_RETENTION_IMPLEMENTATION_CHECKLIST.md`:
+- Demographics retention refactor completed:
   - Introduced compact columnar demographics storage and helpers in `seldon-game/src/core/demographics-series.ts`.
   - Removed the 500-row hard cap for canonical demographics history; long simulations now retain full phase coverage.
   - Updated snapshot behavior to avoid deep-copying full demographics history on every snapshot.

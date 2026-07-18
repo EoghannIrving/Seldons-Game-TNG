@@ -89,13 +89,14 @@ export function buildEncyclopediaWorkspaceShellHtml(args: {
   narrativeRailHtml: string;
   narrativePaneHtml: string;
   demographicsPaneHtml: string;
+  investigationsPaneHtml: string;
   navigatorHtml: string;
   filmstripHtml: string;
 }): string {
   const {
     activeTab, eventsViewMode, narrativeViewMode, narrativePinAnchor, phaseFilter, selectedCluster, starFilterLabel,
     displayedEventsCount, filteredEventsCount, eventsPaneHtml, narrativeRailHtml,
-    narrativePaneHtml, demographicsPaneHtml, navigatorHtml, filmstripHtml,
+    narrativePaneHtml, demographicsPaneHtml, investigationsPaneHtml, navigatorHtml, filmstripHtml,
   } = args;
   return `
       <section class="encyclopedia-workspace-shell">
@@ -105,6 +106,7 @@ export function buildEncyclopediaWorkspaceShellHtml(args: {
             <button id="encyclopediaEventsTabBtn" class="encyclopedia-tab-btn ${activeTab === 'events' ? 'active' : ''}" type="button">Events</button>
             <button id="encyclopediaNarrativeTabBtn" class="encyclopedia-tab-btn ${activeTab === 'narrative' ? 'active' : ''}" type="button">Narrative</button>
             <button id="encyclopediaDemographicsTabBtn" class="encyclopedia-tab-btn ${activeTab === 'demographics' ? 'active' : ''}" type="button">Demographics</button>
+            <button id="encyclopediaInvestigationsTabBtn" class="encyclopedia-tab-btn ${activeTab === 'investigations' ? 'active' : ''}" type="button">Investigations</button>
             <button id="encyclopediaNavigatorTabBtn" class="encyclopedia-tab-btn ${activeTab === 'navigator' ? 'active' : ''}" type="button">Navigator</button>
           </div>
         </div>
@@ -150,7 +152,11 @@ export function buildEncyclopediaWorkspaceShellHtml(args: {
                 `
                 : `
                   <div class="encyclopedia-workspace-content">
-                    ${activeTab === 'demographics' ? demographicsPaneHtml : navigatorHtml}
+                    ${activeTab === 'demographics'
+                      ? demographicsPaneHtml
+                      : activeTab === 'investigations'
+                        ? investigationsPaneHtml
+                        : navigatorHtml}
                   </div>
                 `
             }

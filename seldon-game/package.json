@@ -29,6 +29,8 @@
     "test:demographics-retention": "tsx tests/demographics-retention-smoke.ts",
     "test:population-tuning": "tsx tests/population-tuning-smoke.ts",
     "test:tech-drift": "tsx tests/tech-drift-smoke.ts",
+    "test:empire-lifecycle": "tsx tests/empire-lifecycle-smoke.ts",
+    "test:investigations": "tsx tests/investigations-smoke.ts",
     "test:perf": "tsx tests/performance-harness.ts",
     "test:perf:gate": "set PERF_ENFORCE=1&& set PERF_STAR_COUNT=1000&& set PERF_PHASES=3000&& set PERF_ITERS=10&& tsx tests/performance-harness.ts",
     "diag:tuning": "tsx tests/diag-tuning.ts"

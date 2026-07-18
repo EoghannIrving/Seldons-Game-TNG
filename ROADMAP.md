@@ -1,7 +1,76 @@
-# Development Roadmap - Future Features
+# Seldon's Game TNG Roadmap
 
-**Last Updated:** 2026-02-22
-**Current Version:** v0.9.0 (Phase 9 + Population-Tech-Power Tuning Complete)
+**Last Updated:** 2026-07-18
+**Current Version:** v0.9.0
+**Planning Status:** Canonical active planning document
+
+---
+
+## Planning Source of Truth
+
+Use this file for active and planned work. `PRODUCTION_NOTES.md` records implemented behavior. `DOCUMENTATION_INDEX.md` is navigation only. Documents under `Design Documents Archive/` and `Implementation History/` are historical references unless this file explicitly promotes an item back into active scope.
+
+When plans change:
+- Update this roadmap for planned, deferred, or removed work.
+- Update `PRODUCTION_NOTES.md` only after behavior is implemented.
+- Update `DOCUMENTATION_INDEX.md` only when navigation/status changes.
+
+---
+
+## Current Strategic Direction
+
+Seldon's Game is moving from pure autonomous simulation toward a hybrid game loop:
+- **Player role:** archivist/psychohistorian, not empire ruler.
+- **First playable layer:** investigations in the Encyclopedia.
+- **Success fantasy:** preserve civilization through understanding, prediction, and eventually limited Foundation-style interventions.
+- **Simulation target:** empires should rise, hold long enough to matter, overextend, fracture into successor states, and sometimes recover. Avoid both permanent lock-in and constant churn.
+
+---
+
+## Active Priorities
+
+### Priority 1: Investigation Gameplay v2
+**Status:** NEXT
+**Goal:** Turn the current deterministic `Investigations` tab from a proof of plumbing into an actual player decision loop.
+
+Planned work:
+- Add real hypothesis controls: choose cause, expected outcome, and evidence pins.
+- Persist scored cases and selected evidence in UI/save state.
+- Add case varieties for lock-in risk, frontier revolt, dark-age recovery, succession fracture, knowledge preservation, and successor states.
+- Add scoring copy that explains why a hypothesis was strong or weak without exposing all hidden model values.
+- Keep direct empire control out of scope.
+
+Acceptance checks:
+- Player can submit a wrong or partial hypothesis and receive a different score.
+- Evidence pin choices affect score.
+- Cases remain deterministic for a fixed seed and phase.
+- `npm.cmd run build`, `npm.cmd run test:investigations`, and relevant Encyclopedia interaction tests pass.
+
+### Priority 2: Rise-Fall Balance Harness
+**Status:** NEXT
+**Goal:** Prove the simulation produces readable rise-fall cycles over long deterministic runs.
+
+Planned work:
+- Replace ad hoc Roman diagnostics with a maintained lifecycle harness.
+- Measure emergence, sustained hegemony duration, decline duration, successor-state formation, border-freeze score, polity turnover, and dark-age recovery.
+- Run fixed seed suites at 1000-2000 phases.
+- Use the harness to tune structural pressure stocks conservatively.
+
+Acceptance checks:
+- At least one fixed suite produces a major empire, meaningful hold period, decline, and successor fragmentation.
+- Border-freeze score identifies lock-in runs.
+- Churn-heavy runs are flagged separately from healthy rise-fall cycles.
+- `npm.cmd run build`, `npm.cmd run test:empire-lifecycle`, and `npm.cmd run test:determinism` pass.
+
+### Priority 3: Dynasty Family Tree Coherence
+**Status:** PLANNED
+**Goal:** Finish the still-valid Phase 10G work: biologically plausible lifespans, naming fixes, and descendant views.
+
+Planned work:
+- Tech-scaled lifespan and succession timing.
+- Proper Roman numeral naming and spouse names.
+- Descendant-first family tree rendering.
+- Optional dynasty characteristics after the core fixes.
 
 ---
 
@@ -29,16 +98,13 @@ This document contains features and enhancements that are planned but not yet im
 
 ---
 
-## Recently Completed (2026-02-17 to 2026-02-21)
+## Recently Completed
 
+- **Hybrid Game Layer v1** (2026-07-18): investigation-first playable Encyclopedia layer with deterministic case files, evidence pins, best-hypothesis scoring, lifecycle metrics, preservation scoring, and structural rise-fall pressure stocks. Direct empire control remains out of scope.
 - **Population-Tech-Power Model** (Phases 1-6 + tuning patch): canonical population field, logistic carrying-capacity growth, deterministic war/plague shocks, occupancy-driven capital urbanization tiers, demographic scale retuning. See `PRODUCTION_NOTES.md` and `Design Documents Archive/POPULATION_TECH_POWER_AND_CAPITAL_VISUAL_PLAN.md`.
 - **WebUI Review** (Phases A-G): architecture correction, core navigation, encyclopedia focus mode, mini galaxy, demographics charts, events timeline, search autocomplete, navigator tab, narrative disclosure rails, rotating factoids, relationship hover previews. See `PRODUCTION_NOTES.md`.
 - **Narrative Relevance Rollout** (Phases A-E): deterministic relevance ranking, clustering rollups, role alignment, arc typing, core extraction to `narrative-support.ts`. See `PRODUCTION_NOTES.md` and `Design Documents Archive/Narrative_Relevance_and_Arc_Design.md`.
-- **Demographics Retention Refactor** (2026-02-21): compact columnar demographics storage, removal of 500-row truncation, snapshot memory decoupling, legacy migration, and chart downsampling with phase-accurate interactions. See `DEMOGRAPHICS_RETENTION_IMPLEMENTATION_CHECKLIST.md`.
-
----
-
-## Immediate Priorities (Next Sprint)
+- **Demographics Retention Refactor** (2026-02-21): compact columnar demographics storage, removal of 500-row truncation, snapshot memory decoupling, legacy migration, and chart downsampling with phase-accurate interactions. See `PRODUCTION_NOTES.md`.
 
 ### Phase 10: Government & Succession System
 **Status:** COMPLETE (2026-02-22)
@@ -51,10 +117,8 @@ Sub-phases delivered:
 - **10E:** Great Leader titles derived from government type.
 - **10F:** Theocracy peaceful conversion (Religious Conquest). Ideology pressure + hard government flip. Converter/target history events, narrative `religious_conversion` templates, "Faith of:" display in LINEAGE and encyclopedia, notifications.
 
----
-
 ### Phase 10G: Dynasty Family Tree
-**Status:** NEXT
+**Status:** PLANNED
 **Concept:** Make the dynasty system biologically coherent and visually readable as a true multi-generational family tree, with ruler lifespans scaled to tech level and a descendant-first display.
 
 #### Design Constraints
