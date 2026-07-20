@@ -30,10 +30,16 @@
     "test:population-tuning": "tsx tests/population-tuning-smoke.ts",
     "test:tech-drift": "tsx tests/tech-drift-smoke.ts",
     "test:empire-lifecycle": "tsx tests/empire-lifecycle-smoke.ts",
+    "test:rise-fall:baseline": "tsx tests/rise-fall-baseline-smoke.ts",
+    "test:rise-fall:scenarios": "tsx tests/rise-fall-scenarios-smoke.ts",
+    "test:rise-fall:gate": "tsx tests/empire-lifecycle-smoke.ts",
     "test:investigations": "tsx tests/investigations-smoke.ts",
     "test:perf": "tsx tests/performance-harness.ts",
     "test:perf:gate": "set PERF_ENFORCE=1&& set PERF_STAR_COUNT=1000&& set PERF_PHASES=3000&& set PERF_ITERS=10&& tsx tests/performance-harness.ts",
-    "diag:tuning": "tsx tests/diag-tuning.ts"
+    "diag:tuning": "tsx tests/diag-tuning.ts",
+    "diag:rise-fall": "tsx tests/diag-rise-fall.ts",
+    "diag:rise-fall:scenarios": "tsx tests/diag-rise-fall.ts --suite scenarios",
+    "diag:rise-fall:discover": "tsx tests/rise-fall-discovery-sweep.ts"
   },
   "devDependencies": {
     "terser": "^5.46.0",

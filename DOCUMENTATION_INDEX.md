@@ -48,7 +48,7 @@ This index helps you navigate the documentation for Seldon's Game TNG. It is nav
 **Contents:**
 - Planning source-of-truth rules
 - Current strategic direction: archivist/psychohistorian game loop
-- Active priorities: Investigation Gameplay v2, rise-fall balance harness, dynasty coherence
+- Active priorities: Rise-Fall Balance Harness, Rise-Fall Tuning Pass, Investigation Gameplay v2, dynasty coherence
 - Planned: Phase 11 Advanced Relationships
 - Future phases: Audio (12), Visual Polish (13), Multiviewer (14), 3D View (15), Deep Narrative Encyclopedia (16), Content Variety & Naming (17)
 - Experimental concepts (ideation only)

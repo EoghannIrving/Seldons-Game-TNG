@@ -12,12 +12,20 @@ import { getCombinedModifiers } from './star-properties';
 import { getAllianceDefense } from './diplomacy';
 import { getTradeBonus, getWarEffects } from './trade-war';
 import { DEFAULT_CONQUEST_RECOVERY, DEFAULT_STABILITY, DEFAULT_RESISTANCE, computeRevoltProtection, computeDarkAgeFactor } from './stability-config';
+import type { RevoltProtectionProfile } from './stability-config';
 import { calculateDistanceLoyalty, calculateAdministrativeLoad, calculateExpansionMomentum } from './decay';
 import { pickFounderName, pickHeirName, pickSpouseName, buildHouseName } from '../data/personal-names';
 import type { Galaxy } from './galaxy';
 
 const DOMINANCE_RUNWAY_SUBJECTS = 12;
 const DOMINANCE_RUNWAY_PHASES = 100;
+
+const MATURE_HEGEMON_SUCCESSOR_PROTECTION: RevoltProtectionProfile = {
+  basePhases: 24,
+  overextensionScale: 70,
+  severeDarkAgeBonus: 30,
+  fadingWindowPhases: 10,
+};
 
 function getCollapsePressureScale(star: Star, phase: number): number {
   if (star.ruler !== star.id) return 1.0;
@@ -298,6 +306,7 @@ export function determineRuler(
     // Identify former ruler via historicalClaims (strongest claim = most recent ruler).
     let formerRulerAdminLoad = 0;
     let formerRulerSevereDarkAge = false;
+    let protectionProfile: RevoltProtectionProfile | undefined;
     if (star.historicalClaims) {
       let maxClaim = 0;
       let maxClaimRulerId: string | null = null;
@@ -312,6 +321,14 @@ export function determineRuler(
         if (formerRuler && formerRuler.ruler === formerRuler.id) {
           formerRulerAdminLoad = calculateAdministrativeLoad(formerRuler, galaxy);
           formerRulerSevereDarkAge = formerRuler.severeDarkAge ?? false;
+          const nonMinorStars = Array.from(galaxy.stars.values()).filter((candidate) => candidate.tier !== StarTier.Minor);
+          const formerRulerShare = getNonMinorControlledCount(formerRuler, galaxy) / Math.max(1, nonMinorStars.length);
+          const hegemonyAge = formerRuler.hegemonyStartPhase !== undefined
+            ? Math.max(0, galaxy.phase - formerRuler.hegemonyStartPhase)
+            : 0;
+          if (formerRulerShare >= 0.50 && hegemonyAge >= 140) {
+            protectionProfile = MATURE_HEGEMON_SUCCESSOR_PROTECTION;
+          }
         }
       }
     }
@@ -319,7 +336,8 @@ export function determineRuler(
     const { totalPhases, protectionStrength } = computeRevoltProtection(
       phasesSinceRevolt,
       formerRulerAdminLoad,
-      formerRulerSevereDarkAge
+      formerRulerSevereDarkAge,
+      protectionProfile
     );
 
     if (phasesSinceRevolt <= totalPhases) {

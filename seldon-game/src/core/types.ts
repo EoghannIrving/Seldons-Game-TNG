@@ -348,10 +348,82 @@ export interface EmpireLifecycleMetrics {
   leadingEmpireName: string | null;
   leadingEmpireShare: number;
   majorPolityCount: number;
+  phaseTurnoverEvents: number;
   polityTurnoverEvents: number;
   borderFreezeScore: number;
   currentDarkAgeRulers: number;
   successorStates: SuccessorStateRecord[];
+}
+
+export type LifecycleClassification =
+  | 'healthy_lifecycle'
+  | 'no_emergence'
+  | 'permanent_lock_in'
+  | 'constant_churn'
+  | 'cliff_collapse'
+  | 'unresolved_decline';
+
+export interface LifecycleRunConfig {
+  seed: number;
+  stars: number;
+  shape: GalaxyShape;
+  phases: number;
+  sampleInterval?: number;
+  width?: number;
+  height?: number;
+  interactionFactor?: number;
+  label?: string;
+}
+
+export interface LifecyclePhaseSample {
+  phase: number;
+  leadingEmpireShare: number;
+  leadingEmpireName: string | null;
+  majorPolityCount: number;
+  phaseTurnoverEvents: number;
+  rollingTurnoverEvents: number;
+  borderFreezeScore: number;
+  currentDarkAgeRulers: number;
+  successorEventCount: number;
+  frontierBreakawayCount: number;
+}
+
+export interface LifecycleRunResult {
+  config: LifecycleRunConfig;
+  classification: LifecycleClassification;
+  peakLeaderShare: number;
+  peakLeaderPhase: number;
+  peakLeaderName: string | null;
+  finalLeaderShare: number;
+  first30Phase: number | null;
+  first40Phase: number | null;
+  first50Phase: number | null;
+  longestRun30: number;
+  longestRun40: number;
+  longestRun50: number;
+  declinePhase: number | null;
+  declineDepth: number;
+  declineDuration: number | null;
+  declineObservationWindow: number;
+  successorRichDecline: boolean;
+  latePeakRisk: boolean;
+  successorEventCount: number;
+  frontierBreakawayCount: number;
+  avgBorderFreezeScore: number;
+  maxBorderFreezeScore: number;
+  churnScore: number;
+  darkAgePhaseCount: number;
+  darkAgeRecoveryEvents: number;
+  samples: LifecyclePhaseSample[];
+}
+
+export interface LifecycleSuiteSummary {
+  label: string;
+  runs: LifecycleRunResult[];
+  classificationCounts: Record<LifecycleClassification, number>;
+  medianPeakLeaderShare: number;
+  medianLongestRun40: number;
+  healthyLifecycleCount: number;
 }
 
 export interface CivilizationPreservationScore {

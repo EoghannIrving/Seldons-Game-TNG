@@ -1,6 +1,6 @@
 import { Galaxy } from '../src/core/galaxy.js';
-import { computeEmpireLifecycleMetrics } from '../src/core/empire-lifecycle.js';
-import { EventType, GalaxyShape, GalaxyState, GovernmentType, Star, StarTier, StarType, Trait } from '../src/core/types.js';
+import { analyzeLifecycleSamples, computeEmpireLifecycleMetrics, lifecycleSampleFromMetrics } from '../src/core/empire-lifecycle.js';
+import { EventType, GalaxyShape, GalaxyState, GovernmentType, LifecycleClassification, LifecyclePhaseSample, Star, StarTier, StarType, Trait } from '../src/core/types.js';
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -110,5 +110,50 @@ const fixture: GalaxyState = {
 const fixtureMetrics = computeEmpireLifecycleMetrics(fixture);
 assert(fixtureMetrics.leadingEmpireShare >= 0.5, 'Expected crafted fixture to show hegemon emergence');
 assert(fixtureMetrics.successorStates.length === 1, 'Expected crafted fixture to show successor fragmentation');
+const fixtureSample = lifecycleSampleFromMetrics(fixtureMetrics);
+assert(fixtureSample.successorEventCount === 2, 'Expected lifecycle sample to preserve successor event counts');
+
+function sample(phase: number, share: number, options: Partial<LifecyclePhaseSample> = {}): LifecyclePhaseSample {
+  return {
+    phase,
+    leadingEmpireShare: share,
+    leadingEmpireName: 'Test Empire',
+    majorPolityCount: 4,
+    phaseTurnoverEvents: 0,
+    rollingTurnoverEvents: 0,
+    borderFreezeScore: 0.2,
+    currentDarkAgeRulers: 0,
+    successorEventCount: 0,
+    frontierBreakawayCount: 0,
+    ...options,
+  };
+}
+
+function assertClassification(name: string, samples: LifecyclePhaseSample[], expected: LifecycleClassification): void {
+  const result = analyzeLifecycleSamples({ seed: 1, stars: 100, shape: GalaxyShape.Random, phases: samples.length, label: name }, samples);
+  assert(result.classification === expected, `${name}: expected ${expected}, got ${result.classification}`);
+}
+
+assertClassification('no emergence fixture', Array.from({ length: 80 }, (_, i) => sample(i + 1, 0.18)), 'no_emergence');
+assertClassification('constant churn fixture', Array.from({ length: 80 }, (_, i) => sample(i + 1, i % 2 === 0 ? 0.34 : 0.12, { phaseTurnoverEvents: 2 })), 'constant_churn');
+assertClassification('cliff collapse fixture', [
+  sample(1, 0.50),
+  sample(2, 0.48),
+  sample(3, 0.34),
+  ...Array.from({ length: 30 }, (_, i) => sample(i + 4, 0.25)),
+], 'cliff_collapse');
+assertClassification('permanent lock-in fixture', Array.from({ length: 300 }, (_, i) => sample(i + 1, 0.46, { borderFreezeScore: 0.6 })), 'permanent_lock_in');
+assertClassification('healthy lifecycle fixture', [
+  ...Array.from({ length: 100 }, (_, i) => sample(i + 1, 0.36)),
+  ...Array.from({ length: 100 }, (_, i) => sample(i + 101, 0.50 - (i * 0.001))),
+  ...Array.from({ length: 120 }, (_, i) => sample(i + 201, 0.34, { successorEventCount: 3, frontierBreakawayCount: 2 })),
+], 'healthy_lifecycle');
+assertClassification('successor rich resolved decline fixture', [
+  ...Array.from({ length: 100 }, (_, i) => sample(i + 1, 0.36)),
+  ...Array.from({ length: 20 }, (_, i) => sample(i + 101, 0.50)),
+  ...Array.from({ length: 40 }, (_, i) => sample(i + 121, 0.49 - (i * 0.002))),
+  ...Array.from({ length: 160 }, (_, i) => sample(i + 161, 0.34, { successorEventCount: 12, frontierBreakawayCount: 6 })),
+], 'healthy_lifecycle');
+assertClassification('unresolved decline fixture', Array.from({ length: 180 }, (_, i) => sample(i + 1, i < 90 ? 0.36 : 0.32)), 'unresolved_decline');
 
 console.log('[PASS] empire-lifecycle-smoke');

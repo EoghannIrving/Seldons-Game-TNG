@@ -1,6 +1,6 @@
 # Seldon's Game TNG Roadmap
 
-**Last Updated:** 2026-07-18
+**Last Updated:** 2026-07-19
 **Current Version:** v0.9.0
 **Planning Status:** Canonical active planning document
 
@@ -29,14 +29,69 @@ Seldon's Game is moving from pure autonomous simulation toward a hybrid game loo
 
 ## Active Priorities
 
-### Priority 1: Investigation Gameplay v2
-**Status:** NEXT
-**Goal:** Turn the current deterministic `Investigations` tab from a proof of plumbing into an actual player decision loop.
+### Priority 1: Rise-Fall Balance Harness
+**Status:** IMPLEMENTED
+**Goal:** Prove the simulation produces readable rise-fall cycles over long deterministic runs before further gameplay is built on top of it.
+
+Implemented work:
+- Replaced ad hoc Roman diagnostics with a maintained lifecycle harness.
+- Measures emergence, sustained hegemony duration, decline duration, successor-state formation, border-freeze score, polity turnover, and dark-age recovery.
+- Runs fixed seed suites at 1000-2000 phases through `npm.cmd run diag:rise-fall`.
+- Classifies runs as `healthy_lifecycle`, `no_emergence`, `permanent_lock_in`, `constant_churn`, `cliff_collapse`, or `unresolved_decline`.
+
+Acceptance checks:
+- `npm.cmd run diag:rise-fall` prints a compact long-run scorecard.
+- `npm.cmd run test:empire-lifecycle` covers classification fixtures.
+- `npm.cmd run build` and `npm.cmd run test:determinism` pass.
+
+### Priority 2: Rise-Fall Tuning Pass
+**Status:** ACTIVE
+**Goal:** Use the harness results to reduce lock-in without creating noisy churn.
+
+Planned work:
+- Use `diag:rise-fall` as the balance decision engine.
+- Tune one scenario branch at a time; first `unresolved_decline` pass found a successor-rich classifier/window issue and added mature-hegemon successor protection.
+- Broaden the informative scenario suite before the next tuning pass so healthy references are not the only long-run coverage.
+- Use `npm.cmd run diag:rise-fall:discover` to search fixed seed/shape/star-count sweeps for missing scenario categories before promoting new baselines.
+- Keep the maintained baseline suite in `seldon-game/tests/rise-fall-baselines.ts` current as classifications change.
+- Promote improved seeds to regression coverage only after the behavior stabilizes.
+- Use the harness to tune structural pressure stocks conservatively.
+- Preserve the target arc: emergence, meaningful hold, overextension, fracture, successor states, and possible recovery.
+- Avoid flat global revolt boosts unless the harness shows a narrow need.
+- Do not advance Investigation Gameplay v2 until the default rise-fall suite produces more reliable healthy or explainable failure outputs.
+
+Scenario playbook:
+- `no_emergence`: strengthen early/mid empire formation; likely levers are contender projection, lower pre-hegemon revolt pressure, and softer early size falloff for 10-40 subject empires. Guard against one permanent empire.
+- `unresolved_decline`: make late decline resolve into legible successor states or recovery; likely levers are frontier breakaway pressure, successor protection, successor event surfacing, and clearer post-collapse recovery detection. Guard against cliff collapse.
+- `permanent_lock_in`: add late structural senescence at the frontier; likely levers are high-tenure overextension debt, lower deep-integration loyalty floors under decadence, and stronger late-hegemon decline stress. Guard the meaningful hold period.
+- `constant_churn`: damp early volatility and protect newly formed polities; likely levers are post-handover inertia, fresh-conquest revolt chance, phase-level flip throughput, and core stability. Guard against recreated lock-in.
+- `cliff_collapse`: slow fragmentation and stage it through the frontier first; likely levers are revolt loss budgets, dark-age revolt ramp, and first-collapse core shielding. Guard successor emergence within the long-run window.
+- `healthy_lifecycle`: preserve as reference behavior; add stable seeds to the baseline set and avoid changes that regress them.
+
+Current maintained baselines:
+- `42 / Spiral / 120 stars / 1000 phases`: `healthy_lifecycle`; resolved successor-rich decline reference.
+- `1771415222623 / Cluster / 200 stars / 1000 phases`: `healthy_lifecycle`; reference behavior to preserve.
+
+Current scenario coverage:
+- Represented: `healthy_lifecycle`, `no_emergence`, `unresolved_decline` with `latePeakRisk`.
+- Missing seed coverage: `permanent_lock_in`, `constant_churn`, `cliff_collapse`.
+- `npm.cmd run diag:rise-fall` remains the strict healthy baseline scorecard; `npm.cmd run diag:rise-fall:scenarios` is the broader informative suite.
+- Discovery sweeps should promote candidates only after repeated fixed runs confirm stable classification.
+
+Acceptance checks:
+- At least one fixed suite produces a major empire, meaningful hold period, decline, and successor fragmentation.
+- Border-freeze score identifies lock-in runs.
+- Churn-heavy runs are flagged separately from healthy rise-fall cycles.
+- `npm.cmd run build`, `npm.cmd run test:empire-lifecycle`, `npm.cmd run test:rise-fall:baseline`, `npm.cmd run test:rise-fall:scenarios`, `npm.cmd run test:determinism`, `npm.cmd run diag:rise-fall`, and `npm.cmd run diag:rise-fall:scenarios` pass.
+
+### Priority 3: Investigation Gameplay v2
+**Status:** PLANNED
+**Goal:** Turn the current deterministic `Investigations` tab from a proof of plumbing into an actual player decision loop after the simulation produces stronger historical arcs.
 
 Planned work:
 - Add real hypothesis controls: choose cause, expected outcome, and evidence pins.
 - Persist scored cases and selected evidence in UI/save state.
-- Add case varieties for lock-in risk, frontier revolt, dark-age recovery, succession fracture, knowledge preservation, and successor states.
+- Add case varieties driven by harness-backed lifecycle patterns.
 - Add scoring copy that explains why a hypothesis was strong or weak without exposing all hidden model values.
 - Keep direct empire control out of scope.
 
@@ -46,23 +101,7 @@ Acceptance checks:
 - Cases remain deterministic for a fixed seed and phase.
 - `npm.cmd run build`, `npm.cmd run test:investigations`, and relevant Encyclopedia interaction tests pass.
 
-### Priority 2: Rise-Fall Balance Harness
-**Status:** NEXT
-**Goal:** Prove the simulation produces readable rise-fall cycles over long deterministic runs.
-
-Planned work:
-- Replace ad hoc Roman diagnostics with a maintained lifecycle harness.
-- Measure emergence, sustained hegemony duration, decline duration, successor-state formation, border-freeze score, polity turnover, and dark-age recovery.
-- Run fixed seed suites at 1000-2000 phases.
-- Use the harness to tune structural pressure stocks conservatively.
-
-Acceptance checks:
-- At least one fixed suite produces a major empire, meaningful hold period, decline, and successor fragmentation.
-- Border-freeze score identifies lock-in runs.
-- Churn-heavy runs are flagged separately from healthy rise-fall cycles.
-- `npm.cmd run build`, `npm.cmd run test:empire-lifecycle`, and `npm.cmd run test:determinism` pass.
-
-### Priority 3: Dynasty Family Tree Coherence
+### Priority 4: Dynasty Family Tree Coherence
 **Status:** PLANNED
 **Goal:** Finish the still-valid Phase 10G work: biologically plausible lifespans, naming fixes, and descendant views.
 

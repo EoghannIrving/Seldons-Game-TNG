@@ -16,6 +16,34 @@ This document tracks the technical evolution, design decisions, and implementati
 **Next work:** Investigation Gameplay v2 and long-run rise-fall balance harness. This document should record those only after implementation.
 
 ### Updates
+Update (2026-07-19):
+- Rise-Fall Tuning Scenario Plan:
+  - Added `seldon-game/tests/rise-fall-baselines.ts` as the maintained default suite source for rise-fall diagnostics and scenario tracking.
+  - Added `npm.cmd run test:rise-fall:baseline` to assert current known seed classifications remain deterministic while tuning is still in progress.
+  - Updated `ROADMAP.md` with the scenario playbook for `no_emergence`, `unresolved_decline`, `permanent_lock_in`, `constant_churn`, `cliff_collapse`, and `healthy_lifecycle`.
+  - Marked `unresolved_decline` as the first active tuning target and kept Investigation Gameplay v2 behind more reliable harness-backed source material.
+- Unresolved Decline Branch:
+  - Added `--trace` mode to `diag:rise-fall` with compact lifecycle rows around emergence, peak, decline, and final samples.
+  - Added `declineObservationWindow`, `successorRichDecline`, and `latePeakRisk` to lifecycle run analysis.
+  - Classified successor-rich declines as healthy only when the post-peak observation window is long enough and the peak is not late in the run.
+  - Added mature-hegemon successor protection after revolts from 50%+ hegemons with at least 140 phases of hegemony age.
+  - Promoted `42 / Spiral / 120 / 1000` from `unresolved_decline` to a resolved successor-rich `healthy_lifecycle` baseline while keeping late-peak longer runs diagnostic-only.
+- Rise-Fall Scenario Suite Expansion:
+  - Split rise-fall coverage into strict healthy baselines and a broader informative scenario suite.
+  - Added `--suite baseline|scenarios|all` to `diag:rise-fall`; explicit `--seed` runs still override suite selection.
+  - Added `npm.cmd run diag:rise-fall:scenarios` and `npm.cmd run test:rise-fall:scenarios`.
+  - Scenario coverage now includes `healthy_lifecycle`, `no_emergence`, and late-peak `unresolved_decline`; missing `permanent_lock_in`, `constant_churn`, and `cliff_collapse` seeds are reported without failing.
+- Rise-Fall Scenario Discovery:
+  - Added `npm.cmd run diag:rise-fall:discover` for deterministic fixed seed/shape/star-count sweeps.
+  - Discovery output groups candidates by lifecycle classification and prints compact metrics for promotion review.
+  - Missing categories remain informative until a repeated run confirms stable seed coverage.
+- Rise-Fall Balance Harness:
+  - Promoted `computeEmpireLifecycleMetrics()` into a shared analyzer in `seldon-game/src/core/empire-lifecycle.ts`.
+  - Added lifecycle run/suite analysis for emergence thresholds, sustained dominance, decline timing/depth, successor-state signals, border freeze, churn, dark-age recovery, and run classification.
+  - Added `diag:rise-fall` as the maintained long-run diagnostic entrypoint; deprecated `diag_roman7.ts` and `diag:tuning` now route through the same analyzer.
+  - Routed `empire-dominance-smoke.ts` through the shared analyzer to avoid duplicate polity/share logic.
+  - Expanded `test:empire-lifecycle` with crafted classification fixtures for no emergence, permanent lock-in, constant churn, cliff collapse, healthy lifecycle, and unresolved decline.
+
 Update (2026-07-18):
 - Hybrid game-layer first slice:
   - Added deterministic empire lifecycle metrics (`seldon-game/src/core/empire-lifecycle.ts`) for leading share, polity turnover, border-freeze pressure, dark-age rulers, successor-state records, and preservation scoring.
